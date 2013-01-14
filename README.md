@@ -1,11 +1,9 @@
 
-# net-snmp - [Homepage](http://re-tool.org)
+# net-snmp - [homepage](http://re-tool.org)
 
 This module implements version 1 of the [Simple Network Management Protocol
 (SNMP)](http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol).
 Version 2c support will be available shortly.
-
-
 
 This module is installed using [Node Package Manager
 (NPM)](https://npmjs.org/):
