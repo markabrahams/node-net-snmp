@@ -6,6 +6,9 @@
   "directories": {
     "example": "example"
   },
+  "dependencies": {
+    "asn1": "*"
+  },
   "repository": "",
   "keywords": [
     "snmp"
