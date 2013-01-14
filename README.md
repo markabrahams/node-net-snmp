@@ -1,10 +1,11 @@
 
-# net-snmp
+# net-snmp - [Homepage](http://re-tool.org)
 
 This module implements version 1 of the [Simple Network Management Protocol
 (SNMP)](http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol).
-
 Version 2c support will be available shortly.
+
+
 
 This module is installed using [Node Package Manager
 (NPM)](https://npmjs.org/):
@@ -190,7 +191,7 @@ is an object, and can contain the following items:
 
  * `retries` - Number of times to re-send a request, defaults to 1
  * `timeout` - Number of milliseconds to wait for a response before re-trying
- or failing, defaults to 5000
+               or failing, defaults to 5000
  * `port` - UDP port to send requests too, defaults to 161
  * `trapPort` - UDP port to send traps too, defaults to 162
 
@@ -206,7 +207,7 @@ The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
- occurred
+             occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the OID
@@ -268,7 +269,7 @@ The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
- occurred
+             occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the
@@ -342,7 +343,11 @@ of the local host:
 	valid
 	
 	var varbinds = [
-		{oid: "1.3.6.1.2.1.1.5.0", type: snmp.Type.OctetString, value: "host1"}
+		{
+			oid: "1.3.6.1.2.1.1.5.0",
+			type: snmp.Type.OctetString,
+			value: "host1"
+		}
 	];
 	
 	dns.lookup (os.hostname (), function (error, agentAddress) {
