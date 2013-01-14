@@ -1,7 +1,7 @@
 
 // Copyright 2013 Stephen Vickers
 
-var snmp = require ("node-snmp-client");
+var snmp = require ("../");
 
 if (process.argv.length < 7) {
 	console.log ("usage: snmp-set <target> <community> <oid> <type> <value>");

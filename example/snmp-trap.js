@@ -3,7 +3,7 @@
 
 var dns = require ("dns");
 var os = require ("os");
-var snmp = require ("node-snmp-client");
+var snmp = require ("../");
 
 if (process.argv.length < 5) {
 	console.log ("usage: node snmp-get <target> <community> <typeOrOid>");
