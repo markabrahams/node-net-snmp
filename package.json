@@ -1,0 +1,15 @@
+{
+  "name": "net-snmp",
+  "version": "1.0.0",
+  "description": "Native implementation of the Simple Network Management Protocol (SNMP)",
+  "main": "index.js",
+  "directories": {
+    "example": "example"
+  },
+  "repository": "",
+  "keywords": [
+    "snmp"
+  ],
+  "author": "Stephen Vickers <stephen.vickers.sv@gmail.com>",
+  "license": "GPL"
+}
