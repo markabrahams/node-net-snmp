@@ -9,7 +9,16 @@
   "dependencies": {
     "asn1": "*"
   },
-  "repository": "",
+  "contributors": [ 
+    {
+      "name": "Stephen Vickers",
+      "email": "stephen.vickers.sv@gmail.com"
+    } 
+  ],
+  "repository": {
+    "type": "mercurial",
+    "url": "https://bitbucket.org/stephenwvickers/node-net-snmp"
+  },
   "keywords": [
     "snmp"
   ],
