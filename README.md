@@ -189,7 +189,7 @@ is an object, and can contain the following items:
 
  * `retries` - Number of times to re-send a request, defaults to 1
  * `timeout` - Number of milliseconds to wait for a response before re-trying
-               or failing, defaults to 5000
+   or failing, defaults to 5000
  * `port` - UDP port to send requests too, defaults to 161
  * `trapPort` - UDP port to send traps too, defaults to 162
 
@@ -205,7 +205,7 @@ The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
-             occurred
+   occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the OID
@@ -235,7 +235,7 @@ The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
-             occurred
+   occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the OID
@@ -267,7 +267,7 @@ The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
-             occurred
+   occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the
@@ -330,7 +330,7 @@ The `callback` function is called once the trap has been sent, or an error
 occurred.  The following arguments will be passed to the `callback` function:
 
  * `error` - Instance of the Error class or a sub-class, or `null` if no error
- occurred
+   occurred
 
 The following example sends an enterprise specific trap to a remote host, and
 includes the sysName (1.3.6.1.2.1.1.5.0) varbind in the trap.  Before the trap
@@ -385,7 +385,7 @@ walking a single OID is provided:
 			// with the error-index field set to NoSuchName, this will be passed
 			// to this callback as a RequestFailedError with status set to the
 			// constant snmp.ErrorStatus.NoSuchName, this indicates we can stop
-			// the performing get-next-requests:
+			// performing get-next-requests:
 			if (error instanceof snmp.RequestFailedError) {
 				if (error.status != snmp.ErrorStatus.NoSuchName) {
 					console.error (error.toString ());
@@ -398,7 +398,6 @@ walking a single OID is provided:
 			for (var i = 0; i < varbinds.length; i++) {
 				console.log (varbinds[i].oid + "|" + varbinds[i].type + "|"
 						+ varbinds[i].value);
-						
 				// Use the varbinds returned to work out which OIDs to specify in
 				// the next get-next-request:
 				oids.push (varbinds[i].oid);
@@ -407,22 +406,22 @@ walking a single OID is provided:
 		}
 	}
 	
-	function walk (oid, responseCb) {
+	function walk (oids, responseCb) {
 		// We only support a single OID so the first call to this function will
 		// be performed using an OID string, the getNext() method wants an array
 		// so we'll implicitly convert it here for the initial request, all
 		// other requests made by the responseCb() callback above will be
 		// performed using OID arrays
-		if (typeof oid == "string")
-			oid = [oid];
-		session.getNext (oid, responseCb);
+		if (typeof oids == "string")
+			oids = [oids];
+		session.getNext (oids, responseCb);
 	}
 	
 	walk (oid, responseCb);
 
 # Example Programs
 
-Example programs are included under the modules `bin` directory.
+Example programs are included under the modules `example` directory.
 
 # Bugs & Known Issues
 
