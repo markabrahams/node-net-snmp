@@ -128,6 +128,19 @@ util.inherits (RequestTimedOutError, Error);
  ** OID and varbind helper functions
  **/
 
+function isVarbindError (varbind) {
+	if (varbind.type == ObjectType.NoSuchObject
+			|| varbind.type == ObjectType.NoSuchInstance
+			|| varbind.type == ObjectType.EndOfMibView)
+		return true;
+	else
+		return false;
+}
+
+function varbindError (varbind) {
+	return (ObjectType[varbind.type] || "NotAnError") + ": " + varbind.oid;
+}
+
 function oidFollowsOid (oidString, nextString) {
 	var oid = oidString.split (".");
 	var next = nextString.split (".");
@@ -802,6 +815,9 @@ exports.Session = Session;
 exports.createSession = function (target, community, version, options) {
 	return new Session (target, community, version, options);
 };
+
+exports.isVarbindError = isVarbindError;
+exports.varbindError = varbindError;
 
 exports.Version1 = Version1;
 exports.Version2c = Version2c;
