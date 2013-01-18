@@ -5,21 +5,17 @@ var ber = require ('asn1').Ber;
 var dgram = require ("dgram");
 var util = require ("util");
 
-/**
- ** To help with navigation and parsing this module is organised as follows:
- **
- **  - Constants
- **  - Exception class definitions
- **  - OID and varbind helper functions
- **  - PDU class definitions
- **  - Message class definitions
- **  - Session class definition
- **  - Exports
- **/
-
 /*****************************************************************************
  ** Constants
  **/
+
+function _expandConstantObject (object) {
+	var keys = [];
+	for (key in object)
+		keys.push (key);
+	for (var i = 0; i < keys.length; i++)
+		object[object[keys[i]]] = parseInt (keys[i]);
+}
 
 var ErrorStatus = {
 	0: "NoError",
@@ -27,18 +23,23 @@ var ErrorStatus = {
 	2: "NoSuchName",
 	3: "BadValue",
 	4: "ReadOnly",
-	5: "GeneralError"
+	5: "GeneralError",
+	6: "NoAccess",
+	7: "WrongType",
+	8: "WrongLength",
+	9: "WrongEncoding",
+	10: "WrongValue",
+	11: "NoCreation",
+	12: "InconsistentValue",
+	13: "ResourceUnavailable",
+	14: "CommitFailed",
+	15: "UndoFailed",
+	16: "AuthorizationError",
+	17: "NotWritable",
+	18: "InconsistentName"
 };
 
-var TrapType = {
-	0: "ColdStart",
-	1: "WarmStart",
-	2: "LinkDown",
-	3: "LinkUp",
-	4: "AuthenticationFailure",
-	5: "EgpNeighborLoss",
-	6: "EnterpriseSpecific"
-};
+_expandConstantObject (ErrorStatus);
 
 var ObjectType = {
 	1: "Boolean",
@@ -50,18 +51,49 @@ var ObjectType = {
 	65: "Counter",
 	66: "Gauge",
 	67: "TimeTicks",
-	68: "Opaque"
+	68: "Opaque",
+	70: "Counter64",
+	128: "NoSuchObject",
+	129: "NoSuchInstance",
+	130: "EndOfMibView"
 };
+
+_expandConstantObject (ObjectType);
+
+ObjectType.Integer32 = ObjectType.Integer;
+ObjectType.Counter32 = ObjectType.Counter;
+ObjectType.Gauge32 = ObjectType.Gauge;
+ObjectType.Unsigned32 = ObjectType.Gauge32;
+ObjectType.Counter32 = ObjectType.Counter;
 
 var PduType = {
 	160: "GetRequest",
 	161: "GetNextRequest",
 	162: "GetResponse",
 	163: "SetRequest",
-	164: "Trap"
+	164: "Trap",
+	165: "GetBulkRequest",
+	166: "InformRequest",
+	167: "TrapV2",
+	168: "Report"
 };
 
+_expandConstantObject (PduType);
+
+var TrapType = {
+	0: "ColdStart",
+	1: "WarmStart",
+	2: "LinkDown",
+	3: "LinkUp",
+	4: "AuthenticationFailure",
+	5: "EgpNeighborLoss",
+	6: "EnterpriseSpecific"
+};
+
+_expandConstantObject (TrapType);
+
 var Version1 = 0;
+var Version2c = 1;
 
 /*****************************************************************************
  ** Exception class definitions
@@ -95,19 +127,6 @@ util.inherits (RequestTimedOutError, Error);
 /*****************************************************************************
  ** OID and varbind helper functions
  **/
-
-function expandConstantObject (object) {
-	var keys = [];
-	for (key in object)
-		keys.push (key);
-	for (var i = 0; i < keys.length; i++)
-		object[object[keys[i]]] = parseInt (keys[i]);
-}
-
-expandConstantObject (ErrorStatus);
-expandConstantObject (TrapType);
-expandConstantObject (ObjectType);
-expandConstantObject (PduType);
 
 function oidFollowsOid (oidString, nextString) {
 	var oid = oidString.split (".");
@@ -207,6 +226,18 @@ function readVarbinds (buffer, varbinds) {
 			value = readInt (buffer);
 		} else if (type == ObjectType.Opaque) {
 			value = buffer.readString (ObjectType.Opaque, true);
+		} else if (type == ObjectType.NoSuchObject) {
+			buffer.readByte ();
+			buffer.readByte ();
+			value = null;
+		} else if (type == ObjectType.NoSuchInstance) {
+			buffer.readByte ();
+			buffer.readByte ();
+			value = null;
+		} else if (type == ObjectType.EndOfMibView) {
+			buffer.readByte ();
+			buffer.readByte ();
+			value = null;
 		} else {
 			throw new ResponseInvalidError ("Unknown type '" + type
 					+ "' in response");
@@ -357,6 +388,42 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.endSequence ();
 };
 
+var TrapV2Pdu = function (id, typeOrOid, varbinds) {
+	this.type = PduType.TrapV2;
+
+	this.id = id;
+
+	if (typeof typeOrOid != "string")
+		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+	varbinds.unshift (
+		{
+			oid: "1.3.6.1.2.1.1.3.0",
+			type: ObjectType.TimeTicks,
+			value: process.uptime () * 100
+		},
+		{
+			oid: "1.3.6.1.6.3.1.1.4.1.0",
+			type: ObjectType.OID,
+			value: typeOrOid
+		}
+	);
+
+	this.varbinds = varbinds;
+};
+
+TrapV2Pdu.prototype.toBuffer = function (buffer) {	
+	buffer.startSequence (this.type);
+	
+	buffer.writeInt (this.id);
+	buffer.writeInt (0);
+	buffer.writeInt (0);
+	
+	writeVarbinds (buffer, this.varbinds);
+	
+	buffer.endSequence ();
+};
+
 /*****************************************************************************
  ** Message class definitions
  **/
@@ -409,11 +476,11 @@ var ResponseMessage = function (buffer) {
  ** Session class definition
  **/
 
-var Session = function (target, community, version, options) {
+var Session = function (target, community, options) {
 	this.target = target || "127.0.0.1";
 	this.community = community || "public";
 	
-	this.version = (version && version == Version2c) ? Version2c : Version1;
+	this.version = (options && options.version) ? options.version : Version1;
 	
 	this.port = (options && options.port ) ? options.port : 161;
 	this.trapPort = (options && options.trapPort ) ? options.trapPort : 162;
@@ -423,6 +490,10 @@ var Session = function (target, community, version, options) {
 	
 	this.reqs   = {};
 };
+
+function _generateId () {
+	return Math.floor (Math.random () + Math.random () * 10000000)
+}
 
 Session.prototype.get = function (oids, responseCb) {
 	function feedCb (req, message) {
@@ -464,10 +535,6 @@ Session.prototype.get = function (oids, responseCb) {
 	
 	return this;
 };
-
-function _generateId () {
-	return Math.floor (Math.random () + Math.random () * 10000000)
-}
 
 Session.prototype.getNext = function (oids, responseCb) {
 	function feedCb (req, message) {
@@ -697,7 +764,14 @@ Session.prototype.trap = function () {
 			responseCb = arguments[1];
 		}
 
-		var pdu = new TrapPdu (typeOrOid, varbinds, agentAddr);
+		var pdu;
+
+		if (this.version == Version2c) {
+			pdu = new TrapV2Pdu (_generateId (), typeOrOid, varbinds);
+		} else {
+			pdu = new TrapPdu (typeOrOid, varbinds, agentAddr);
+		}
+
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
@@ -730,6 +804,7 @@ exports.createSession = function (target, community, version, options) {
 };
 
 exports.Version1 = Version1;
+exports.Version2c = Version2c;
 
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;

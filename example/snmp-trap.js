@@ -5,18 +5,20 @@ var dns = require ("dns");
 var os = require ("os");
 var snmp = require ("../");
 
-if (process.argv.length < 5) {
-	console.log ("usage: node snmp-get <target> <community> <typeOrOid>");
+if (process.argv.length < 6) {
+	console.log ("usage: node snmp-get <target> <community> <version> <typeOrOid>");
 	process.exit (1);
 }
 
 var target = process.argv[2];
 var community = process.argv[3];
-var typeOrOid = process.argv[4];
+var version = (process.argv[4] == "2c") ? snmp.Version2c : snmp.Version1;
+
+var typeOrOid = process.argv[5];
 
 var hostname = "hostname-" + new Date ().getTime ().toString ();
 
-var session = snmp.createSession (target, community);
+var session = snmp.createSession (target, community, {version: version});
 
 dns.lookup (os.hostname (), function (error, address) {
 	if (error) {
