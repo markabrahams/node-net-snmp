@@ -560,7 +560,9 @@ Session.prototype.getNext = function (oids, responseCb) {
 					+ "match response OIDs"));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
+				if (isVarbindError (pdu.varbinds[i])) {
+					varbinds.push (pdu.varbinds[i]);
+				} else if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
 						pdu.varbinds[i].oid)) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
