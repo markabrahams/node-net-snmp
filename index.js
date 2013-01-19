@@ -373,6 +373,13 @@ var GetRequestPdu = function () {
 
 util.inherits (GetRequestPdu, SimplePdu);
 
+var InformRequestPdu = function () {
+	this.type = PduType.InformRequest;
+	InformRequestPdu.super_.apply (this, arguments);
+};
+
+util.inherits (InformRequestPdu, SimplePdu);
+
 var SetRequestPdu = function () {
 	this.type = PduType.SetRequest;
 	SetRequestPdu.super_.apply (this, arguments);
@@ -413,41 +420,12 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.endSequence ();
 };
 
-var TrapV2Pdu = function (id, typeOrOid, varbinds) {
+var TrapV2Pdu = function () {
 	this.type = PduType.TrapV2;
-
-	this.id = id;
-
-	if (typeof typeOrOid != "string")
-		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
-
-	varbinds.unshift (
-		{
-			oid: "1.3.6.1.2.1.1.3.0",
-			type: ObjectType.TimeTicks,
-			value: process.uptime () * 100
-		},
-		{
-			oid: "1.3.6.1.6.3.1.1.4.1.0",
-			type: ObjectType.OID,
-			value: typeOrOid
-		}
-	);
-
-	this.varbinds = varbinds;
+	TrapV2Pdu.super_.apply (this, arguments);
 };
 
-TrapV2Pdu.prototype.toBuffer = function (buffer) {	
-	buffer.startSequence (this.type);
-	
-	buffer.writeInt (this.id);
-	buffer.writeInt (0);
-	buffer.writeInt (0);
-	
-	writeVarbinds (buffer, this.varbinds);
-	
-	buffer.endSequence ();
-};
+util.inherits (TrapV2Pdu, SimplePdu);
 
 /*****************************************************************************
  ** Message class definitions
@@ -523,7 +501,6 @@ function _generateId () {
 Session.prototype.get = function (oids, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
-		var oids = {};
 		var varbinds = [];
 		
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
@@ -583,7 +560,6 @@ Session.prototype.getBulk = function () {
 
 	function feedCb (req, message) {
 		var pdu = message.pdu;
-		var oids = {};
 		var varbinds = [];
 		var i = 0;
 		
@@ -613,7 +589,7 @@ Session.prototype.getBulk = function () {
 		var repeaters = req.message.pdu.varbinds.length - nonRepeaters;
 		
 		// secondly walk through and grab repeaters
-		if (pdu.varbinds.length % (oids.length - nonRepeaters)) {
+		if (pdu.varbinds.length % (repeaters)) {
 			req.responseCb (new ResponseInvalidError ("Varbind count in "
 					+ "response '" + pdu.varbinds.length + "' is not a "
 					+ "multiple of repeaters '" + repeaters
@@ -659,13 +635,13 @@ Session.prototype.getBulk = function () {
 		pduVarbinds.push (varbind);
 	}
 	
-	var pduOptions = {
+	var options = {
 		nonRepeaters: nonRepeaters,
 		maxRepetitions: maxRepetitions
 	};
 
 	this.simpleGet (GetBulkRequestPdu, feedCb, pduVarbinds, responseCb,
-			pduOptions);
+			options);
 	
 	return this;
 };
@@ -673,7 +649,6 @@ Session.prototype.getBulk = function () {
 Session.prototype.getNext = function (oids, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
-		var oids = {};
 		var varbinds = [];
 		
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
@@ -714,6 +689,77 @@ Session.prototype.getNext = function (oids, responseCb) {
 	return this;
 };
 
+Session.prototype.inform = function () {
+	var typeOrOid = arguments[0];;
+	var varbinds, responseCb;
+
+	if (arguments.length >= 3) {
+		varbinds = arguments[1];
+		responseCb = arguments[2];
+	} else {
+		varbinds = [];
+		responseCb = arguments[1];
+	}
+
+	function feedCb (req, message) {
+		var pdu = message.pdu;
+		var varbinds = [];
+		
+		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
+			req.responseCb (new ResponseInvalidError ("Inform OIDs do not "
+					+ "match response OIDs"));
+		} else {
+			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
+				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+					req.responseCb (new ResponseInvalidError ("OID '"
+							+ req.message.pdu.varbinds[i].oid
+							+ "' in inform at positiion '" + i + "' does not "
+							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'"));
+					return;
+				} else {
+					varbinds.push (pdu.varbinds[i]);
+				}
+			}
+			
+			req.responseCb (null, varbinds);
+		}
+	};
+	
+	if (typeof typeOrOid != "string")
+		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+	var pduVarbinds = [
+		{
+			oid: "1.3.6.1.2.1.1.3.0",
+			type: ObjectType.TimeTicks,
+			value: process.uptime () * 100
+		},
+		{
+			oid: "1.3.6.1.6.3.1.1.4.1.0",
+			type: ObjectType.OID,
+			value: typeOrOid
+		}
+	];
+	
+	for (var i = 0; i < varbinds.length; i++) {
+		var varbind = {
+			oid: varbinds[i].oid,
+			type: varbinds[i].type,
+			value: varbinds[i].value
+		};
+		pduVarbinds.push (varbind);
+	}
+	
+	var options = {
+		port: this.trapPort
+	};
+
+	this.simpleGet (InformRequestPdu, feedCb, pduVarbinds, responseCb, options);
+	
+	return this;
+};
+
 Session.prototype.onMsg = function (req, buffer, remote) {
 	try {
 		clearTimeout (req.timer);
@@ -727,7 +773,11 @@ Session.prototype.onMsg = function (req, buffer, remote) {
 			req.responseCb (error);
 		};
 		
-		if (message.version != req.message.version) {
+		if (message.pdu.id != req.message.pdu.id) {
+			cbError (req, new ResponseInvalidError ("ID in request '"
+					+ req.message.pdu.id + "' does not match ID in "
+					+ "response '" + message.pdu.id));
+		} else if (message.version != req.message.version) {
 			cbError (req, new ResponseInvalidError ("Version in request '"
 					+ req.message.version + "' does not match version in "
 					+ "response '" + message.version));
@@ -803,7 +853,6 @@ Session.prototype.send = function (req, noWait) {
 Session.prototype.set = function (varbinds, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
-		var oids = {};
 		var varbinds = [];
 		
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
@@ -844,11 +893,11 @@ Session.prototype.set = function (varbinds, responseCb) {
 };
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
-		responseCb, pduOptions) {
+		responseCb, options) {
 	var req = {}
 		
 	try {
-		var pdu = new pduClass (_generateId (), varbinds, pduOptions);	
+		var pdu = new pduClass (_generateId (), varbinds, options);	
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
@@ -858,7 +907,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			timeout: this.timeout,
 			onResponse: this.onSimpleGetResponse,
 			feedCb: feedCb,
-			port: this.port
+			port: (options && options.port) ? options.port : this.port
 		};
 
 		var me = this;
@@ -903,7 +952,23 @@ Session.prototype.trap = function () {
 		var pdu;
 
 		if (this.version == Version2c) {
-			pdu = new TrapV2Pdu (_generateId (), typeOrOid, varbinds);
+			if (typeof typeOrOid != "string")
+				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+			varbinds.unshift (
+				{
+					oid: "1.3.6.1.2.1.1.3.0",
+					type: ObjectType.TimeTicks,
+					value: process.uptime () * 100
+				},
+				{
+					oid: "1.3.6.1.6.3.1.1.4.1.0",
+					type: ObjectType.OID,
+					value: typeOrOid
+				}
+			);
+
+			pdu = new TrapV2Pdu (_generateId (), varbinds);
 		} else {
 			pdu = new TrapPdu (typeOrOid, varbinds, agentAddr);
 		}
