@@ -3,25 +3,26 @@
 
 var snmp = require ("../");
 
-if (process.argv.length < 8) {
-	console.log ("usage: snmp-get-next <target> <community> <version> "
-			+ "<non-rpts> <max-reps> <oids>");
+if (process.argv.length < 7) {
+	console.log ("usage: snmp-get-bulk <target> <community> <non-rpts> "
+			+ "<max-reps> <oid> [<oid>...]");
 	process.exit (1);
 }
 
 var target = process.argv[2];
 var community = process.argv[3];
-var version = (process.argv[4] == "2c") ? snmp.Version2c : snmp.Version1;
 
-var nonRepeaters = parseInt (process.argv[5])
-var maxRepetitions = parseInt (process.argv[6]);
+var nonRepeaters = parseInt (process.argv[4])
+var maxRepetitions = parseInt (process.argv[5]);
 
 var oids = [];
 
-for (var i = 7; i < process.argv.length; i++)
+for (var i = 6; i < process.argv.length; i++)
 	oids.push (process.argv[i]);
 
-var session = snmp.createSession (target, community, {version: version});
+var options = {version: snmp.Version2c};
+
+var session = snmp.createSession (target, community, options);
 
 session.getBulk (oids, nonRepeaters, maxRepetitions, function (error,
 		varbinds) {
