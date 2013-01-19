@@ -949,13 +949,22 @@ Session.prototype.trap = function () {
 			responseCb = arguments[1];
 		}
 
-		var pdu;
+		var pdu, pduVarbinds = [];
+
+		for (var i = 0; i < varbinds.length; i++) {
+			var varbind = {
+				oid: varbinds[i].oid,
+				type: varbinds[i].type,
+				value: varbinds[i].value
+			};
+			pduVarbinds.push (varbind);
+		}
 
 		if (this.version == Version2c) {
 			if (typeof typeOrOid != "string")
 				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
 
-			varbinds.unshift (
+			pduVarbinds.unshift (
 				{
 					oid: "1.3.6.1.2.1.1.3.0",
 					type: ObjectType.TimeTicks,
@@ -968,9 +977,9 @@ Session.prototype.trap = function () {
 				}
 			);
 
-			pdu = new TrapV2Pdu (_generateId (), varbinds);
+			pdu = new TrapV2Pdu (_generateId (), pduVarbinds);
 		} else {
-			pdu = new TrapPdu (typeOrOid, varbinds, agentAddr);
+			pdu = new TrapPdu (typeOrOid, pduVarbinds, agentAddr);
 		}
 
 		var message = new RequestMessage (this.version, this.community, pdu);
