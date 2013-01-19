@@ -315,22 +315,34 @@ function writeVarbinds (buffer, varbinds) {
  ** PDU class definitions
  **/
 
-var SimplePdu = function (id, varbinds) {
+var SimplePdu = function (id, varbinds, options) {
 	this.id = id;
 	this.varbinds = varbinds;
+	this.options = options || {};
 };
 
 SimplePdu.prototype.toBuffer = function (buffer) {	
 	buffer.startSequence (this.type);
 	
 	buffer.writeInt (this.id);
-	buffer.writeInt (0);
-	buffer.writeInt (0);
+	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+			? (this.options.nonRepeaters || 0)
+			: 0);
+	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+			? (this.options.maxRepetitions || 0)
+			: 0);
 	
 	writeVarbinds (buffer, this.varbinds);
 	
 	buffer.endSequence ();
 };
+
+var GetBulkRequestPdu = function () {
+	this.type = PduType.GetBulkRequest;
+	GetBulkRequestPdu.super_.apply (this, arguments);
+};
+
+util.inherits (GetBulkRequestPdu, SimplePdu);
 
 var GetNextRequestPdu = function () {
 	this.type = PduType.GetNextRequest;
@@ -549,6 +561,115 @@ Session.prototype.get = function (oids, responseCb) {
 	return this;
 };
 
+Session.prototype.getBulk = function () {
+	var oids, nonRepeaters, maxRepetitions, responseCb;
+
+	if (arguments.length >= 4) {
+		oids = arguments[0];
+		nonRepeaters = arguments[1];
+		maxRepetitions = arguments[2];
+		responseCb = arguments[3];
+	} else if (arguments.length >= 3) {
+		oids = arguments[0];
+		nonRepeaters = arguments[1];
+		maxRepetitions = 10;
+		responseCb = arguments[2];
+	} else {
+		oids = arguments[0];
+		nonRepeaters = 0;
+		maxRepetitions = 10;
+		responseCb = arguments[1];
+	}
+
+	function feedCb (req, message) {
+		var pdu = message.pdu;
+		var oids = {};
+		var varbinds = [];
+		var i = 0;
+		
+		// first walk through and grab non-repeaters
+		if (pdu.varbinds.length < nonRepeaters) {
+			req.responseCb (new ResponseInvalidError ("Varbind count in "
+					+ "response '" + pdu.varbinds.length + "' is less than "
+					+ "non-repeaters '" + nonRepeaters + "' in request"));
+		} else {
+			for ( ; i < nonRepeaters; i++) {
+				if (isVarbindError (pdu.varbinds[i])) {
+					varbinds.push (pdu.varbinds[i]);
+				} else if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
+						pdu.varbinds[i].oid)) {
+					req.responseCb (new ResponseInvalidError ("OID '"
+							+ req.message.pdu.varbinds[i].oid + "' in request at "
+							+ "positiion '" + i + "' does not precede "
+							+ "OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'"));
+					return;
+				} else {
+					varbinds.push (pdu.varbinds[i]);
+				}
+			}
+		}
+		
+		var repeaters = req.message.pdu.varbinds.length - nonRepeaters;
+		
+		// secondly walk through and grab repeaters
+		if (pdu.varbinds.length % (oids.length - nonRepeaters)) {
+			req.responseCb (new ResponseInvalidError ("Varbind count in "
+					+ "response '" + pdu.varbinds.length + "' is not a "
+					+ "multiple of repeaters '" + repeaters
+					+ "' plus non-repeaters '" + nonRepeaters + "' in request"));
+		} else {
+			while (i < pdu.varbinds.length) {
+				for (var j = 0; j < repeaters; j++, i++) {
+					var reqIndex = nonRepeaters + j;
+					var respIndex = i;
+
+					if (isVarbindError (pdu.varbinds[respIndex])) {
+						if (! varbinds[reqIndex])
+							varbinds[reqIndex] = [];
+						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
+					} else if (! oidFollowsOid (
+							req.message.pdu.varbinds[reqIndex].oid,
+							pdu.varbinds[respIndex].oid)) {
+						req.responseCb (new ResponseInvalidError ("OID '"
+								+ req.message.pdu.varbinds[reqIndex].oid
+								+ "' in request at positiion '" + (reqIndex)
+								+ "' does not precede OID '"
+								+ pdu.varbinds[respIndex].oid
+								+ "' in response at position '" + (respIndex) + "'"));
+						return;
+					} else {
+						if (! varbinds[reqIndex])
+							varbinds[reqIndex] = [];
+						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
+					}
+				}
+			}
+		}
+		
+		req.responseCb (null, varbinds);
+	};
+	
+	var pduVarbinds = [];
+	
+	for (var i = 0; i < oids.length; i++) {
+		var varbind = {
+			oid: oids[i]
+		};
+		pduVarbinds.push (varbind);
+	}
+	
+	var pduOptions = {
+		nonRepeaters: nonRepeaters,
+		maxRepetitions: maxRepetitions
+	};
+
+	this.simpleGet (GetBulkRequestPdu, feedCb, pduVarbinds, responseCb,
+			pduOptions);
+	
+	return this;
+};
+
 Session.prototype.getNext = function (oids, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
@@ -723,11 +844,11 @@ Session.prototype.set = function (varbinds, responseCb) {
 };
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
-		responseCb) {
+		responseCb, pduOptions) {
 	var req = {}
 		
 	try {
-		var pdu = new pduClass (_generateId (), varbinds);	
+		var pdu = new pduClass (_generateId (), varbinds, pduOptions);	
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
