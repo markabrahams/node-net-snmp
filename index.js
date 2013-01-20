@@ -64,7 +64,6 @@ ObjectType.Integer32 = ObjectType.Integer;
 ObjectType.Counter32 = ObjectType.Counter;
 ObjectType.Gauge32 = ObjectType.Gauge;
 ObjectType.Unsigned32 = ObjectType.Gauge32;
-ObjectType.Counter32 = ObjectType.Counter;
 
 var PduType = {
 	160: "GetRequest",
@@ -180,6 +179,15 @@ function oidFollowsOid (oidString, nextString) {
  **/
 
 function readInt (buffer) {
+	var value = readUint (buffer);
+	
+	if (value & 0x80000000)
+		value = 0 - (value & 0x7fffffff);
+	
+	return value;
+}
+
+function readUint (buffer) {
 	buffer.readByte ();
 	var length = buffer.readByte ();
 
@@ -188,6 +196,7 @@ function readInt (buffer) {
 	} else if (length == 5) {
 		if (buffer.readByte () !== 0)
 			throw new RangeError ("Integer too long '" + length + "'");
+		length = 4;
 	}
 
 	value = 0;
@@ -195,6 +204,16 @@ function readInt (buffer) {
 		value *= 256;
 		value += buffer.readByte ();
 	}
+	
+	return value;
+}
+
+function readUint64 (buffer) {
+	var value = buffer.readString (ObjectType.Counter64, true);
+	
+	if (value.length > 8)
+		throw new RequestInvalidError ("64 bit unsigned integer too long '"
+				+ value.length + "'")
 	
 	return value;
 }
@@ -232,13 +251,15 @@ function readVarbinds (buffer, varbinds) {
 						+ "' is not 4");
 			value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
 		} else if (type == ObjectType.Counter) {
-			value = readInt (buffer);
+			value = readUint (buffer);
 		} else if (type == ObjectType.Gauge) {
-			value = readInt (buffer);
+			value = readUint (buffer);
 		} else if (type == ObjectType.TimeTicks) {
-			value = readInt (buffer);
+			value = readUint (buffer);
 		} else if (type == ObjectType.Opaque) {
 			value = buffer.readString (ObjectType.Opaque, true);
+		} else if (type == ObjectType.Counter64) {
+			value = readUint64 (buffer);
 		} else if (type == ObjectType.NoSuchObject) {
 			buffer.readByte ();
 			buffer.readByte ();
@@ -264,6 +285,19 @@ function readVarbinds (buffer, varbinds) {
 	}
 }
 
+function writeUint (buffer, type, value) {
+	var b = new Buffer (4);
+	b.writeUInt32BE (value);
+	buffer.writeBuffer (b, type);
+}
+
+function writeUint64 (buffer, value) {
+	if (value.length > 8)
+		throw new RequestInvalidError ("64 bit unsigned integer too long '"
+				+ value.length + "'")
+	buffer.writeBuffer (value, ObjectType.Counter64);
+}
+
 function writeVarbinds (buffer, varbinds) {
 	buffer.startSequence ();
 	for (var i = 0; i < varbinds.length; i++) {
@@ -276,7 +310,7 @@ function writeVarbinds (buffer, varbinds) {
 		
 			if (type == ObjectType.Boolean) {
 				buffer.writeBoolean (value ? true : false);
-			} else if (type == ObjectType.Integer) {
+			} else if (type == ObjectType.Integer) { // also Integer32
 				buffer.writeInt (value);
 			} else if (type == ObjectType.OctetString) {
 				buffer.writeString (value);
@@ -290,14 +324,16 @@ function writeVarbinds (buffer, varbinds) {
 					throw new RequestInvalidError ("Invalid IP address '"
 							+ value + "'");
 				buffer.writeBuffer (new Buffer (bytes), 64);
-			} else if (type == ObjectType.Counter) {
-				buffer.writeInt (value, ObjectType.Counter);
-			} else if (type == ObjectType.Gauge) {
-				buffer.writeInt (value, ObjectType.Gauge);
+			} else if (type == ObjectType.Counter) { // also Counter32
+				writeUint (buffer, ObjectType.Counter, value);
+			} else if (type == ObjectType.Gauge) { // also Gauge32 & Unsigned32
+				writeUint (buffer, ObjectType.Gauge, value);
 			} else if (type == ObjectType.TimeTicks) {
-				buffer.writeInt (value, ObjectType.TimeTicks);
+				writeUint (buffer, ObjectType.TimeTicks, value);
 			} else if (type == ObjectType.Opaque) {
 				buffer.writeBuffer (value, ObjectType.Opaque);
+			} else if (type == ObjectType.Counter64) {
+				writeUint64 (buffer, value);
 			} else {
 				throw new RequestInvalidError ("Unknown type '" + type
 						+ "' in request");
