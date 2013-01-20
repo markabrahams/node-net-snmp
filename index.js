@@ -313,7 +313,10 @@ function writeVarbinds (buffer, varbinds) {
 			} else if (type == ObjectType.Integer) { // also Integer32
 				buffer.writeInt (value);
 			} else if (type == ObjectType.OctetString) {
-				buffer.writeString (value);
+				if (typeof value == "string")
+					buffer.writeString (value);
+				else
+					buffer.writeBuffer (value, ObjectType.OctetString);
 			} else if (type == ObjectType.Null) {
 				buffer.writeNull ();
 			} else if (type == ObjectType.OID) {
