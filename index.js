@@ -1,5 +1,5 @@
 
-// Copyright 2013 Stephen Vickers
+// Copyright 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
 var ber = require ('asn1').Ber;
 var dgram = require ("dgram");

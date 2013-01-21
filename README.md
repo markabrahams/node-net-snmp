@@ -814,11 +814,15 @@ Please report bugs to <stephen.vickers.sv@gmail.com>.
 
 # Changes
 
-## Version 1.1.0
+## Version 1.0.0 - 14/01/2013
+
+ * Initial release including only SNMP version 1 support
+
+## Version 1.1.0 - 20/01/2013
 
  * Implement SNMP version 2c support
 
-## Version 1.1.1
+## Version 1.1.1 - 21/01/2013
 
  * Correct name used in example `require()` call to include this module
 
