@@ -10,7 +10,7 @@ This module is installed using [Node Package Manager (NPM)][NPM]:
 
 It is loaded using the `require()` function:
 
-    var snmp = require ("snmp");
+    var snmp = require ("net-snmp");
 
 Sessions to remote hosts can then be created and used to perform SNMP requests
 and send SNMP traps or informs:
@@ -811,6 +811,16 @@ Example programs are included under the modules `example` directory.
 None, yet!
 
 Please report bugs to <stephen.vickers.sv@gmail.com>.
+
+# Changes
+
+## Version 1.1.0
+
+ * Implement SNMP version 2c support
+
+## Version 1.1.1
+
+ * Correct name used in example `require()` call to include this module
 
 # Roadmap
 
