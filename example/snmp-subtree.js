@@ -4,7 +4,7 @@
 var snmp = require ("../");
 
 if (process.argv.length < 6) {
-	console.log ("usage: snmp-walk <target> <community> <version> <oid>");
+	console.log ("usage: snmp-subtree <target> <community> <version> <oid>");
 	process.exit (1);
 }
 
@@ -34,4 +34,4 @@ var maxRepetitions = 20;
 
 // The maxRepetitions argument is optional, and will be ignored unless using
 // SNMP verison 2c
-session.walk (oid, maxRepetitions, feedCb, doneCb);
+session.subtree (oid, maxRepetitions, feedCb, doneCb);
