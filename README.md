@@ -661,6 +661,10 @@ The following arguments will be passed to the `doneCallback` function:
 Once the `doneCallback` function has been called the request is complete and
 the `requestCallback` function will no longer be called.
 
+If the `feedCallback` function returns a `true` value when called no more
+`get()` or `getBulk()` method calls will be made and the `doneCallback` will
+be called.
+
 The following example fetches all OIDS under the system (`1.3.6.1.2.1.1`) OID:
 
     var oid = "1.3.6.1.2.1.1";
@@ -931,6 +935,10 @@ passed to the `doneCallback` function:
 Once the `doneCallback` function has been called the request is complete and
 the `requestCallback` function will no longer be called.
 
+If the `feedCallback` function returns a `true` value when called no more
+`get()` or `getBulk()` method calls will be made and the `doneCallback` will
+be called.
+
 The following example walks to the end of the MIB tree starting from the
 ifTable (`1.3.6.1.2.1.2.2`) OID:
 
@@ -991,6 +999,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Fix some typos and grammar errors in README.md
  * Example `snmp-table` program had `snmp-subtree` in its usage message
  * Implement example `snmp-tail` program to constantly poll for an OIDs value
+ * Add note to README.md about the ability to stop the `walk()` and `subtree`
+   methods by returning `true`
 
 # Roadmap
 
