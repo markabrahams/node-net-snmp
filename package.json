@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Native implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
@@ -20,7 +20,15 @@
     "url": "https://bitbucket.org/stephenwvickers/node-net-snmp"
   },
   "keywords": [
-    "snmp"
+    "snmp",
+    "snmpv1",
+    "snmpv2",
+    "snmpv2c",
+    "net",
+    "network",
+    "mon",
+    "monitor",
+    "monitoring"
   ],
   "author": "Stephen Vickers <stephen.vickers.sv@gmail.com>",
   "license": "GPL"
