@@ -4,7 +4,7 @@
 var snmp = require ("../");
 
 if (process.argv.length < 6) {
-	console.log ("usage: snmp-subtree <target> <community> <version> <oid>");
+	console.log ("usage: snmp-table <target> <community> <version> <oid>");
 	process.exit (1);
 }
 

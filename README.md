@@ -964,7 +964,7 @@ Example programs are included under the modules `example` directory.
 
 None, yet!
 
-Please report bugs to <stephen.vickers.sv@gmail.com>.
+Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
 # Changes
 
@@ -983,17 +983,24 @@ Please report bugs to <stephen.vickers.sv@gmail.com>.
 ## Version 1.1.2 - 22/01/2013
 
  * Implement `subtree()`, `table()` and `walk()` methods
- * Support IPv6 (added `udp6` transport option to the `createSession()`)
+ * Support IPv6 (added `transport` option to the `createSession()` function)
  * Re-order some methods in README.md
+
+## Version 1.1.3 - ?
+
+ * Fix some typos and grammar errors in README.md
+ * Example `snmp-table` program had `snmp-subtree` in its usage message
+ * Implement example `snmp-tail` program to constantly poll for an OIDs value
 
 # Roadmap
 
 In no particular order:
 
+ * Support fetching specific columns in the `table()` method
  * Extensible SNMP agent
  * SNMP version 3
 
-If you have any other suggestions or requirements please let me know.
+Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
 
 # License
 
