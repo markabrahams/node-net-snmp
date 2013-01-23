@@ -167,6 +167,21 @@ function oidFollowsOid (oidString, nextString) {
 	}
 };
 
+function oidInSubtree (oidString, nextString) {
+	var oid = oidString.split (".");
+	var next = nextString.split (".");
+	
+	if (oid.length > next.length)
+		return false;
+	
+	for (var i = 0; i < oid.length; i++) {
+		if (next[i] != oid[i])
+			return false;
+	}
+	
+	return true;
+}
+
 /**
  ** Some SNMP agents produce integers on the wire such as 00 ff ff ff ff.
  ** The ASN.1 BER parser we use throws an error when parsing this, which we
@@ -522,13 +537,26 @@ var Session = function (target, community, options) {
 	this.target = target || "127.0.0.1";
 	this.community = community || "public";
 	
-	this.version = (options && options.version) ? options.version : Version1;
+	this.version = (options && options.version)
+			? options.version
+			: Version1;
 	
-	this.port = (options && options.port ) ? options.port : 161;
-	this.trapPort = (options && options.trapPort ) ? options.trapPort : 162;
+	this.transport = (options && options.transport)
+			? options.transport
+			: "udp4";
+	this.port = (options && options.port )
+			? options.port
+			: 161;
+	this.trapPort = (options && options.trapPort )	
+			? options.trapPort
+			: 162;
 	
-	this.retries = (options && options.retries) ? options.retries : 1;
-	this.timeout = (options && options.timeout) ? options.timeout : 5000;
+	this.retries = (options && options.retries)
+			? options.retries
+			: 1;
+	this.timeout = (options && options.timeout)
+			? options.timeout
+			: 5000;
 	
 	this.reqs   = {};
 };
@@ -962,6 +990,106 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 	}
 };
 
+function subtreeCb (req, varbinds) {
+	var done = 0;
+	
+	for (var i = varbinds.length; i > 0; i--) {
+		if (! oidInSubtree (req.baseOid, varbinds[i - 1].oid)) {
+			done = 1;
+			varbinds.pop ();
+		}
+	}
+	
+	if (varbinds.length > 0)
+		req.feedCb (varbinds);
+	
+	if (done)
+		return true;
+}
+
+Session.prototype.subtree  = function (oid, maxRepetitions, feedCb, doneCb) {
+	var me = this;
+	var oid = arguments[0];
+	var maxRepetitions, feedCb, doneCb;
+
+	if (arguments.length < 4) {
+		maxRepetitions = 20;
+		feedCb = arguments[1];
+		doneCb = arguments[2];
+	} else {
+		maxRepetitions = arguments[1];
+		feedCb = arguments[2];
+		doneCb = arguments[3];
+	}
+
+	var req = {
+		feedCb: feedCb,
+		doneCb: doneCb,
+		maxRepetitions: maxRepetitions,
+		baseOid: oid
+	};
+	
+	this.walk (oid, maxRepetitions, subtreeCb.bind (me, req), doneCb);
+	
+	return this;
+}
+
+function tableResponseCb (req, error) {
+	if (error)
+		req.responseCb (error);
+	else if (req.error)
+		req.responseCb (req.error);
+	else
+		req.responseCb (null, req.table);
+}
+
+function tableFeedCb (req, varbinds) {
+	for (var i = 0; i < varbinds.length; i++) {
+		if (isVarbindError (varbinds[i])) {
+			req.error = new RequestFailedError (varbindError (varbind[i]));
+			return true;
+		}
+	
+		var oid = varbinds[i].oid.replace (req.rowOid, "")
+		if (oid && oid != varbinds[i].oid) {
+			var match = oid.match (/^(\d+)\.(.+)$/);
+			if (match && match[1] > 0) {
+				if (! req.table[match[2]])
+					req.table[match[2]] = {};
+				req.table[match[2]][match[1]] = varbinds[i].value;
+			}
+		}
+	}
+}
+
+Session.prototype.table  = function (oid, maxRepetitions, responseCb) {
+	var me = this;
+
+	var oid = arguments[0];
+	var maxRepetitions, responseCb;
+
+	if (arguments.length < 3) {
+		maxRepetitions = 20;
+		responseCb = arguments[1];
+	} else {
+		maxRepetitions = arguments[1];
+		responseCb = arguments[2];
+	}
+
+	var req = {
+		responseCb: responseCb,
+		maxRepetitions: maxRepetitions,
+		baseOid: oid,
+		rowOid: oid + ".1.",
+		table: {}
+	};
+	
+	this.subtree (oid, maxRepetitions, tableFeedCb.bind (me, req),
+			tableResponseCb.bind (me, req));
+	
+	return this;
+}
+
 Session.prototype.trap = function () {
 	var req = {};
 	
@@ -1041,6 +1169,83 @@ Session.prototype.trap = function () {
 	
 	return this;
 };
+
+function walkCb (req, error, varbinds) {
+	var done = 0;
+	var oid;
+	
+	if (error) {
+		if (error instanceof RequestFailedError) {
+			if (error.status != ErrorStatus.NoSuchName) {
+				req.doneCb (error);
+				return;
+			} else {
+				// signal the version 1 walk code below that it should stop
+				done = 1;
+			}
+		} else {
+			req.doneCb (error);
+			return;
+		}
+	}
+	
+	if (this.version == Version2c) {
+		for (var i = varbinds[0].length; i > 0; i--) {
+			if (varbinds[0][i - 1].type == ObjectType.EndOfMibView) {
+				varbinds[0].pop ();
+				done = 1;
+			}
+		}
+		if (req.feedCb (varbinds[0]))
+			done = 1;
+		if (! done)
+			oid = varbinds[0][varbinds[0].length - 1].oid;
+	} else {
+		if (! done) {
+			if (req.feedCb (varbinds)) {
+				done = 1;
+			} else {
+				oid = varbinds[0].oid;
+			}
+		}
+	}
+	
+	if (done)
+		req.doneCb (null);
+	else
+		this.walk (oid, req.maxRepetitions, req.feedCb, req.doneCb,
+				req.baseOid);
+}
+
+Session.prototype.walk  = function () {
+	var me = this;
+	var oid = arguments[0];
+	var maxRepetitions, feedCb, doneCb, baseOid;
+	
+	if (arguments.length < 4) {
+		maxRepetitions = 20;
+		feedCb = arguments[1];
+		doneCb = arguments[2];
+	} else {
+		maxRepetitions = arguments[1];
+		feedCb = arguments[2];
+		doneCb = arguments[3];
+	}
+	
+	var req = {
+		maxRepetitions: maxRepetitions,
+		feedCb: feedCb,
+		doneCb: doneCb
+	};
+	
+	if (this.version == Version2c)
+		this.getBulk ([oid], 0, maxRepetitions,
+				walkCb.bind (me, req));
+	else
+		this.getNext ([oid], walkCb.bind (me, req));
+	
+	return this;
+}
 
 /*****************************************************************************
  ** Exports

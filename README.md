@@ -40,7 +40,7 @@ and send SNMP traps or informs:
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
 [NPM]: https://npmjs.org/ "NPM"
 
-# RFC & Standards Compliance
+# Standards Compliance
 
 This module aims to be fully compliant with the following RFCs:
 
@@ -207,8 +207,8 @@ error occurred this parameter will be "null" indicating no error, e.g.:
         }
     }
 
-When defined, the error parameter is always an instance of the Error class, or
-a sub-class described in one of the sub-sections contained in this section.
+When defined, the error parameter is always an instance of the `Error` class,
+or a sub-class described in one of the sub-sections contained in this section.
 
 The semantics of error handling is slightly different between SNMP version
 1 and 2c.  In SNMP version 1 if an error occurs when calculating the value for
@@ -323,12 +323,14 @@ instances of the `Session` class.
 The `createSession()` function instantiates and returns an instance of the
 `Session` class:
 
+    // Default options
     var options = {
-        version: snmp.Version1,
+        port: 161,
         retries: 1,
         timeout: 5000,
-        port: 161,
-        trapPort: 162
+        transport: "udp4",
+        trapPort: 162,
+        version: snmp.Version1
     };
     
     var session = snmp.createSession ("127.0.0.1", "public", options);
@@ -337,24 +339,27 @@ The optional `target` parameter defaults to `127.0.0.1`.  The optional
 `community` parameter defaults to `public`.  The optional `options` parameter
 is an object, and can contain the following items:
 
- * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
-   `snmp.Version1`
+
+ * `port` - UDP port to send requests too, defaults to `161`
  * `retries` - Number of times to re-send a request, defaults to `1`
  * `timeout` - Number of milliseconds to wait for a response before re-trying
    or failing, defaults to `5000`
- * `port` - UDP port to send requests too, defaults to `161`
+ * `transport` - Specify the transport to use, can be either `udp4` or `udp6`,
+   defaults to `udp4`
  * `trapPort` - UDP port to send traps and informs too, defaults to `162`
+ * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
+   `snmp.Version1`
 
 ## session.get (oids, callback)
 
-The `get()` method fetches the value for one or more OIDs from a remote host.
+The `get()` method fetches the value for one or more OIDs.
 
 The `oids` parameter is an array of OID strings.  The `callback` function is
 called once the request is complete.  The following arguments will be passed
 to the `callback` function:
 
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the OID
@@ -385,54 +390,10 @@ sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
         }
     });
 
-## session.getNext (oids, callback)
-
-The `getNext()` method fetches the value for the OIDs lexicographically
-following one or more OIDs in the MIB tree from a remote host.
-
-The `oids` parameter is an array of OID strings.  The `callback` function is
-called once the request is complete.  The following arguments will be passed
-to the `callback` function:
-
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
- * `varbinds` - Array of varbinds, will not be provided if an error occurred
-
-The varbind in position N in the `varbinds` array will correspond to the OID
-in position N in the `oids` array in the request.
-
-Each varbind must be checked for an error condition using the
-`snmp.isVarbindError()` function when using SNMP version 2c.
-
-The following example fetches values for the next OIDs following the
-sysObjectID (`1.3.6.1.2.1.1.1.0`) and sysName (`1.3.6.1.2.1.1.4.0`) OIDs:
-
-    var oids = [
-        "1.3.6.1.2.1.1.1.0",
-        "1.3.6.1.2.1.1.4.0"
-    ];
-    
-    session.getNext (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            for (var i = 0; i < varbinds.length; i++) {
-                // for version 1 we can assume all OIDs were successful
-                console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            
-                // for version 2c we must check each OID for an error condition
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]));
-                else
-                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            }
-        }
-    });
-
 ## session.getBulk (oids, [nonRepeaters], [maxRepetitions], callback)
 
 The `getBulk()` method fetches the value for the OIDs lexicographically
-following one or more OIDs in the MIB tree from a remote host.
+following one or more OIDs in the MIB tree.
 
 The `oids` parameter is an array of OID strings.  The optional `nonRepeaters`
 parameter specifies the number of OIDs in the `oids` parameter for which only
@@ -444,8 +405,8 @@ fetched, and defaults to `20`.
 The `callback` function is called once the request is complete.  The following
 arguments will be passed to the `callback` function:
 
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the OID
@@ -501,16 +462,126 @@ first 20 OIDs in the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifType
         }
     });
 
+## session.getNext (oids, callback)
+
+The `getNext()` method fetches the value for the OIDs lexicographically
+following one or more OIDs in the MIB tree.
+
+The `oids` parameter is an array of OID strings.  The `callback` function is
+called once the request is complete.  The following arguments will be passed
+to the `callback` function:
+
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
+ * `varbinds` - Array of varbinds, will not be provided if an error occurred
+
+The varbind in position N in the `varbinds` array will correspond to the OID
+in position N in the `oids` array in the request.
+
+Each varbind must be checked for an error condition using the
+`snmp.isVarbindError()` function when using SNMP version 2c.
+
+The following example fetches values for the next OIDs following the
+sysObjectID (`1.3.6.1.2.1.1.1.0`) and sysName (`1.3.6.1.2.1.1.4.0`) OIDs:
+
+    var oids = [
+        "1.3.6.1.2.1.1.1.0",
+        "1.3.6.1.2.1.1.4.0"
+    ];
+    
+    session.getNext (oids, function (error, varbinds) {
+        if (error) {
+            console.error (error.toString ());
+        } else {
+            for (var i = 0; i < varbinds.length; i++) {
+                // for version 1 we can assume all OIDs were successful
+                console.log (varbinds[i].oid + "|" + varbinds[i].value);
+            
+                // for version 2c we must check each OID for an error condition
+                if (snmp.isVarbindError (varbinds[i]))
+                    console.error (snmp.varbindError (varbinds[i]));
+                else
+                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
+            }
+        }
+    });
+
+## session.inform (typeOrOid, [varbinds], callback)
+
+The `inform()` method sends a SNMP inform.
+
+The `typeOrOid` parameter can be one of two types; one of the constants
+defined in the `snmp.TrapType` object (excluding the
+`snmp.TrapType.EnterpriseSpecific` constant), or an OID string.
+
+The first varbind to be placed in the request message will be for the
+`sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
+be the value returned by the `process.uptime ()` function multiplied by 100.
+This will be followed by a second varbind for the `snmpTrapOID.0` OID
+(`1.3.6.1.6.3.1.1.4.1.0`).  The value for this will depend on the `typeOrOid`
+parameter. If a constant is specified the trap OID for the constant will be
+used as supplied for the varbinds value, otherwise the OID string specified
+will be used as is for the value of the varbind.
+
+The optional `varbinds` parameter is an array of varbinds to include in the
+inform request, and defaults to the empty array `[]`.
+
+The `callback` function is called once the trap has been sent, or an error
+occurred.  The following arguments will be passed to the `callback` function:
+
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
+ * `varbinds` - Array of varbinds, will not be provided if an error occurred
+
+The varbind in position N in the `varbinds` array will correspond to the
+varbind in position N in the `varbinds` array in the request.  The remote host
+should echo back varbinds and their values as specified in the request, and
+the `varbinds` array will contain each varbind as sent back by the remote host.
+
+Normally there is no reason to use the contents of the `varbinds` parameter
+since the varbinds are as they were sent in the request.
+
+The following example sends a generic cold-start inform to a remote host,
+it does not include any varbinds:
+
+    session.inform (snmp.TrapType.ColdStart, function (error) {
+        if (error)
+            console.error (error);
+    });
+
+The following example sends an enterprise specific inform to a remote host,
+and includes two enterprise specific varbinds:
+
+    var informOid = "1.3.6.1.4.1.2000.1";
+    
+    var varbinds = [
+        {
+            oid: "1.3.6.1.4.1.2000.2",
+            type: snmp.Type.OctetString,
+            value: "Periodic hardware self-check"
+        },
+        {
+            oid: "1.3.6.1.4.1.2000.3",
+            type: snmp.Type.OctetString,
+            value: "hardware-ok"
+        }
+    ];
+    
+    session.inform (informOid, varbinds, function (error) {
+        if (error)
+            console.error (error);
+    });
+
 ## session.set (varbinds, callback)
 
-The `set()` method sets the value of one or more OIDs on a remote host.
+The `set()` method sets the value of one or more OIDs.
 
 The `varbinds` parameter is an array of varbind objects. The `callback`
 function is called once the request is complete.  The following arguments will
 be passed to the `callback` function:
 
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
  * `varbinds` - Array of varbinds, will not be provided if an error occurred
 
 The varbind in position N in the `varbinds` array will correspond to the
@@ -554,9 +625,172 @@ sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
         }
     });
 
+## session.subtree (oid, [maxRepetitions], feedCallback, doneCallback)
+
+The `subtree()` method fetches the value for all OIDs lexicographically
+following a specified OID in the MIB tree which have the specified OID as
+there base.  For example, the OIDs sysName (`1.3.6.1.2.1.1.5.0`) and
+sysLocation (`1.3.6.1.2.1.1.6.0`) both have the same base system
+(`1.3.6.1.2.1.1`) OID.
+
+For SNMP version 1 repeated `get()` calls are made until the one of the
+returned OIDs does not use the specified OID as its base.  For SNMP version
+2c repeated `getBulk()` calls are made until the one of the returned OIDs
+does no used the specified OID as its base.
+
+The `oid` parameter is an OID string.  The optional `maxRepetitions` parameter
+is passed to `getBulk()` requests when SNMP version 2c is being used.
+
+This method will not call a single callback once all OID values are fetched.
+Instead the `feedCallback` function will be called each time a response is
+received from the remote host.  The following arguments will be passed to the
+`feedCallback` function:
+
+ * `varbinds` - Array of varbinds, and will contain at least one varbind
+
+Each varbind must be checked for an error condition using the
+`snmp.isVarbindError()` function when using SNMP version 2c.
+
+Once at least one of the returned OIDs does not use the specified OID as its
+base, or an error has occurred, the `doneCallback` function will be called.
+The following arguments will be passed to the `doneCallback` function:
+
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
+
+Once the `doneCallback` function has been called the request is complete and
+the `requestCallback` function will no longer be called.
+
+The following example fetches all OIDS under the system (`1.3.6.1.2.1.1`) OID:
+
+    var oid = "1.3.6.1.2.1.1";
+    
+    function doneCb (error) {
+        if (error)
+            console.error (error.toString ());
+    }
+    
+    function feedCb (varbinds) {
+        for (var i = 0; i < varbinds.length; i++) {
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
+                console.log (varbinds[i].oid + "|" + varbinds[i].value);
+        }
+    }
+    
+    var maxRepetitions = 20;
+    
+    // The maxRepetitions argument is optional, and will be ignored unless using
+    // SNMP verison 2c
+    session.subtree (oid, maxRepetitions, feedCb, doneCb);
+
+## session.table (oid, [maxRepetitions], callback)
+
+The `table()` method fetches the value for all OIDs lexicographically
+following a specified OID in the MIB tree which have the specified OID as
+there base, much like the `subtree()` method.
+
+This method is designed to fetch conceptial tables, for example the ifTable
+(`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will structured
+into objects to represent conceptual rows.  Each row is then placed into an
+object with the rows index being the key, e.g.:
+
+    var table = {
+        // Rows keyed by ifIndex (1 and 2 are shown)
+        1: {
+            // ifDescr (column 2) and ifType (columnd 3) are shown
+            2: "interface-1",
+            3: 6,
+            ...
+        },
+        2: {
+            2: "interface-2",
+            3: 6,
+            ...
+        },
+        ...
+    }
+
+Internally this method calls the `subtree()` method to obtain the subtree of
+the specified table.
+
+The `oid` parameter is an OID string.  If an OID string is passed which does
+not represent a table the resulting object produced to hold table data will be
+empty, i.e. it will contain no indexes and rows.  The optional
+`maxRepetitions` parameter is passed to the `subtree()` request.
+
+The `callback` function will be called once the entire table has been fetched.
+The following arguments will be passed to the `callback` function:
+
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
+ * `varbinds` - Object containing object references representing conceptual
+   rows keyed by index (e.g. for the ifTable table rows are keyed by ifIndex),
+   each row object will contain values keyed by column number, will not be
+   provided if an error occurred
+
+If an error occurs with any varbind returned by `subtree()` no table will be
+passed to the `callback` function.  The reason for failure, and the related
+OID string (as returned from a call to the `snmp.varbindError()` function),
+will be passed to the `callback` function in the `error` argument as an
+instance of the `RequestFailedError` class.
+
+The following example fetches the ifTable (`1.3.6.1.2.1.2.2`) table:
+
+    var oid = "1.3.6.1.2.1.2.2";
+    
+    function sortInt (a, b) {
+        if (a > b)
+            return 1;
+        else if (b > a)
+            return -1;
+        else
+            return 0;
+    }
+    
+    function responseCb (error, table) {
+        if (error) {
+            console.error (error.toString ());
+        } else {
+            // This code is purely used to print rows out in index order,
+            // ifIndex's are integers so we'll sort them numerically using
+            // the sortInt() function above
+            var indexes = [];
+            for (index in table)
+                indexes.push (parseInt (index));
+            indexes.sort (sortInt);
+            
+            // Use the sorted indexes we've calculated to walk through each
+            // row in order
+            for (var i = 0; i < indexes.length; i++) {
+                // Like indexes we sort by column, so use the same trick here,
+                // some rows may not have the same columns as other rows, so
+                // we calculate this per row
+                var columns = [];
+                for (column in table[indexes[i]])
+                    columns.push (parseInt (column));
+                columns.sort (sortInt);
+                
+                // Print index, then each column indented under the index
+                console.log ("row for index = " + indexes[i]);
+                for (var j = 0; j < columns.length; j++) {
+                    console.log ("   column " + columns[j] + " = "
+                            + table[indexes[i]][columns[j]]);
+                }
+            }
+        }
+    }
+    
+    var maxRepetitions = 20;
+    
+    // The maxRepetitions argument is optional, and will be ignored unless using
+    // SNMP verison 2c
+    session.table (oid, maxRepetitions, responseCb);
+
 ## session.trap (typeOrOid, [varbinds], [agentAddr], callback)
 
-The `trap()` method sends a SNMP trap to a remote host.
+The `trap()` method sends a SNMP trap.
 
 The `typeOrOid` parameter can be one of two types; one of the constants
 defined in the `snmp.TrapType` object (excluding the
@@ -602,8 +836,8 @@ since version 2c trap messages do not have an agent-addr field.
 The `callback` function is called once the trap has been sent, or an error
 occurred.  The following arguments will be passed to the `callback` function:
 
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
 
 The following example sends an enterprise specific trap to a remote host using
 a SNMP version 1 trap, and includes the sysName (`1.3.6.1.2.1.1.5.0`) varbind
@@ -665,142 +899,62 @@ a SNMP version 2c trap, and includes two enterprise specific varbinds:
             console.error (error);
     });
 
-## session.inform (typeOrOid, [varbinds], callback)
+## session.walk (oid, [maxRepetitions], feedCallback, doneCallback)
 
-The `inform()` method sends a SNMP inform to a remote host.
+The `walk()` method fetches the value for all OIDs lexicographically following
+a specified OID in the MIB tree.
 
-The `typeOrOid` parameter can be one of two types; one of the constants
-defined in the `snmp.TrapType` object (excluding the
-`snmp.TrapType.EnterpriseSpecific` constant), or an OID string.
+For SNMP version 1 repeated `get()` calls are made until the end of the MIB
+tree is reached.  For SNMP version 2c repeated `getBulk()` calls are made
+until the end of the MIB tree is reached.
 
-The first varbind to be placed in the request message will be for the
-`sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
-be the value returned by the `process.uptime ()` function multiplied by 100.
-This will be followed by a second varbind for the `snmpTrapOID.0` OID
-(`1.3.6.1.6.3.1.1.4.1.0`).  The value for this will depend on the `typeOrOid`
-parameter. If a constant is specified the trap OID for the constant will be
-used as supplied for the varbinds value, otherwise the OID string specified
-will be used as is for the value of the varbind.
+The `oid` parameter is an OID string.  The optional `maxRepetitions` parameter
+is passed to `getBulk()` requests when SNMP version 2c is being used.
 
-The optional `varbinds` parameter is an array of varbinds to include in the
-inform request, and defaults to the empty array `[]`.
+This method will not call a single callback once all OID values are fetched.
+Instead the `feedCallback` function will be called each time a response is
+received from the remote host.  The following arguments will be passed to the
+`feedCallback` function:
 
-The `callback` function is called once the trap has been sent, or an error
-occurred.  The following arguments will be passed to the `callback` function:
+ * `varbinds` - Array of varbinds, and will contain at least one varbind
 
- * `error` - Instance of the Error class or a sub-class, or `null` if no error
-   occurred
- * `varbinds` - Array of varbinds, will not be provided if an error occurred
+Each varbind must be checked for an error condition using the
+`snmp.isVarbindError()` function when using SNMP version 2c.
 
-The varbind in position N in the `varbinds` array will correspond to the
-varbind in position N in the `varbinds` array in the request.  The remote host
-should echo back varbinds and their values as specified in the request, and
-the `varbinds` array will contain each varbind as sent back by the remote host.
+Once the end of the MIB tree has been reached, or an error has occurred, the
+`doneCallback` function will be called.  The following arguments will be
+passed to the `doneCallback` function:
 
-Normally there is no reason to use the contents of the `varbinds` parameter
-since the varbinds are as they were sent in the request.
+ * `error` - Instance of the `Error` class or a sub-class, or `null` if no
+   error occurred
 
-The following example sends a generic cold-start inform to a remote host,
-it does not include any varbinds:
+Once the `doneCallback` function has been called the request is complete and
+the `requestCallback` function will no longer be called.
 
-    session.inform (snmp.TrapType.ColdStart, function (error) {
+The following example walks to the end of the MIB tree starting from the
+ifTable (`1.3.6.1.2.1.2.2`) OID:
+
+    var oid = "1.3.6.1.2.1.2.2";
+    
+    function doneCb (error) {
         if (error)
-            console.error (error);
-    });
-
-The following example sends an enterprise specific inform to a remote host,
-and includes two enterprise specific varbinds:
-
-    var informOid = "1.3.6.1.4.1.2000.1";
-    
-    var varbinds = [
-        {
-            oid: "1.3.6.1.4.1.2000.2",
-            type: snmp.Type.OctetString,
-            value: "Periodic hardware self-check"
-        },
-        {
-            oid: "1.3.6.1.4.1.2000.3",
-            type: snmp.Type.OctetString,
-            value: "hardware-ok"
-        }
-    ];
-    
-    session.inform (informOid, varbinds, function (error) {
-        if (error)
-            console.error (error);
-    });
-
-## session.walk (oids, callback)
-
-This `walk()` method is not actually implemented by this module.  The main
-reason being that the semantics of the callback function when more than one
-OID is specified in the request is ambiguous.
-
-Instead an example implementation which supports walking a single OID using
-both SNMP version 1 and 2c is provided, with comments:
-
-    var oid = "1.3.6.1";
-    
-    function responseCb (error, varbinds) {
-        if (error) {
-            // When we reach the end of the MIB view the remote host will
-            // respond with the error-index field set to NoSuchName, this
-            // will be passed to this callback as a RequestFailedError with
-            // status set to the constant snmp.ErrorStatus.NoSuchName, this
-            // indicates we can stop performing get-next-requests, this will
-            // work for version 1 only, for version 2c we will end the walk by
-            // looking for a varbind with a value of type
-            // `snmp.ObjectType.EndOfMibView` which will be checked later:
-            if (error instanceof snmp.RequestFailedError) {
-                if (error.status != snmp.ErrorStatus.NoSuchName) {
-                    console.error (error.toString ());
-                }
-            } else {
-                console.error (error.toString ());
-            }
-        } else {
-            var oids;
-            if (session.version == snmp.Version2c) {
-                // Use the last varbind returned to work out which OID to
-                // specify in the next get-bulk-request, remember the
-                // semantics of the getBulk() callback, our first and only
-                // varbind item will be an array of varbinds:
-                if (! snmp.isVarbindError (varbinds[0][varbinds[0].length - 0]))
-                    oids = varbinds[0][varbinds[0].length - 0].oid;
-                
-                for (var i = 0; i < varbinds[0].length; i++) {
-                    console.log (varbinds[0][i].oid + "|" + varbinds[0][i].type
-                            + "|" + varbinds[0][i].value);
-                }
-            } else {
-                // Use the only varbind returned to work out which OID to
-                // specify in the next get-next-request:
-                oids = [varbinds[0].oid];
-                
-                console.log (varbinds[0].oid + "|" + varbinds[0].type + "|"
-                        + varbinds[0].value);
-            }
-        }
-        
-        walk (oids, cb);
+            console.error (error.toString ());
     }
     
-    function walk (version, oids, responseCb) {
-        // We only support a single OID so the first call to this function will
-        // be performed using an OID string, the getNext() and getBulk()
-        // methods want an arrays so we'll implicitly convert it here for the
-        // initial request, all other requests made by the responseCb()
-        // callback above will be performed using OID arrays
-        if (typeof oids == "string")
-            oids = [oids];
-        if (session.version == snmp.Version2c)
-            session.getBulk (oids, 0, 20, responseCb);
-        else
-            session.getNext (oids, responseCb);
+    function feedCb (varbinds) {
+        for (var i = 0; i < varbinds.length; i++) {
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
+                console.log (varbinds[i].oid + "|" + varbinds[i].value);
+        }
     }
     
-    walk (oid, responseCb);
+    var maxRepetitions = 20;
+    
+    // The maxRepetitions argument is optional, and will be ignored unless using
+    // SNMP verison 2c
+    session.walk (oid, maxRepetitions, feedCb, doneCb);
 
 # Example Programs
 
@@ -826,13 +980,20 @@ Please report bugs to <stephen.vickers.sv@gmail.com>.
 
  * Correct name used in example `require()` call to include this module
 
+## Version 1.1.2 - 22/01/2013
+
+ * Implement `subtree()`, `table()` and `walk()` methods
+ * Support IPv6 (added `udp6` transport option to the `createSession()`)
+ * Re-order some methods in README.md
+
 # Roadmap
 
 In no particular order:
 
- * Helper functions (`getTable()`, `getSubtree()`, `walk()`)
  * Extensible SNMP agent
  * SNMP version 3
+
+If you have any other suggestions or requirements please let me know.
 
 # License
 
