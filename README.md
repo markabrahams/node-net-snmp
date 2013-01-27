@@ -49,8 +49,8 @@ This module aims to be fully compliant with the following RFCs:
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
  * [3416][3416] - Simple Network Management Protocol (SNMP) (version 2c)
 
-However, this module does not implement or export any method to help implement
-the report request type.
+However, this module does not implement, or export any method that might help
+to implement, the SNMP version 2c report request type.
 
 [1065]: https://tools.ietf.org/rfc/rfc1065.txt "RFC 1065"
 [1067]: https://tools.ietf.org/rfc/rfc1067.txt "RFC 1067"
@@ -71,7 +71,7 @@ this module should be used.
 This object contains constants for all valid values the error-status field in
 response PDUs can hold.  If when parsing a PDU the error-index field contains
 a value not defined in this object the constant `snmp.ErrorStatus.GeneralError`
-will be used instead of the value of the error-status field.  The following
+will be used instead of the value in the error-status field.  The following
 constants are defined in this object:
 
  * `NoError`
@@ -169,7 +169,7 @@ Since JavaScript does not offer full 64 bit integer support objects with type
 `Counter64` cannot be supported in the same way as other integer types,
 instead [Node.js][nodejs] `Buffer` objects are used.  Users are responsible for
 producing (i.e. for `set()` requests) and consuming (i.e. the varbinds passed
-to callback functions) `Buffer` objects.  That is, this module does no work
+to callback functions) `Buffer` objects.  That is, this module does not work
 with 64 bit integers, it simply treats them as opaque `Buffer` objects.
 
 Dotted decimal strings are used for the values of varbinds with type `OID`,
@@ -696,7 +696,7 @@ following a specified OID in the MIB tree which have the specified OID as
 there base, much like the `subtree()` method.
 
 This method is designed to fetch conceptial tables, for example the ifTable
-(`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will structured
+(`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will be structured
 into objects to represent conceptual rows.  Each row is then placed into an
 object with the rows index being the key, e.g.:
 
@@ -994,12 +994,12 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Support IPv6 (added `transport` option to the `createSession()` function)
  * Re-order some methods in README.md
 
-## Version 1.1.3 - ?
+## Version 1.1.3 - 27/01/2013
 
  * Fix some typos and grammar errors in README.md
  * Example `snmp-table` program had `snmp-subtree` in its usage message
  * Implement example `snmp-tail` program to constantly poll for an OIDs value
- * Add note to README.md about the ability to stop the `walk()` and `subtree`
+ * Add note to README.md about the ability to stop the `walk()` and `subtree()`
    methods by returning `true`
 
 # Roadmap
