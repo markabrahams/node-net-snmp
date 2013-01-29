@@ -4,7 +4,7 @@
 This module implements version 1 and 2c of the [Simple Network Management
 Protocol (SNMP)][SNMP].
 
-This module is installed using [Node Package Manager (NPM)][NPM]:
+This module is installed using [node package manager (npm)][npm]:
 
     npm install net-snmp
 
@@ -38,7 +38,7 @@ and send SNMP traps or informs:
 
 [homepage]: http://re-tool.org "Homepage"
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
-[NPM]: https://npmjs.org/ "NPM"
+[npm]: https://npmjs.org/ "npm"
 
 # Standards Compliance
 
@@ -1001,6 +1001,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Implement example `snmp-tail` program to constantly poll for an OIDs value
  * Add note to README.md about the ability to stop the `walk()` and `subtree()`
    methods by returning `true`
+
+## Version 1.1.4 - 29/01/2013
+
+ * Fix incorrect usage of the term "NPM" in README.md, should be "npm"
 
 # Roadmap
 
