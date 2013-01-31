@@ -1,1 +1,4 @@
-TODO 
+TODO
+.hgignore
+.hgtags
+node_modules
