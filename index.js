@@ -978,7 +978,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		};
 
 		var me = this;
-		req.dgram = dgram.createSocket ("udp4");
+		req.dgram = dgram.createSocket (this.transport);
 		req.dgram.on ("message", me.onMsg.bind (me, req));
 
 		this.send (req);

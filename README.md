@@ -1006,12 +1006,14 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
  * Fix incorrect usage of the term "NPM" in README.md, should be "npm"
 
+## Version 1.1.5 - 05/01/2013
+
+ * The `transport` option to `createSession()` was not used
+
 # Roadmap
 
 In no particular order:
 
- * Support fetching specific columns in the `table()` method
- * Extensible SNMP agent
  * SNMP version 3
 
 Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
