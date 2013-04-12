@@ -1080,12 +1080,12 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Implement `tableColumns()` method
  * Added example program `snmp-table-columns.js`
  * Correct name of the `table` parameter to the `table()` callback
+ * Slight OID comparison performance enhancement
 
 # Roadmap
 
 In no particular order:
 
- * Make OID comparisons much faster
  * SNMP version 3
 
 Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
