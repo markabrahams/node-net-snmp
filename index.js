@@ -1007,7 +1007,7 @@ function subtreeCb (req, varbinds) {
 		return true;
 }
 
-Session.prototype.subtree  = function (oid, maxRepetitions, feedCb, doneCb) {
+Session.prototype.subtree  = function () {
 	var me = this;
 	var oid = arguments[0];
 	var maxRepetitions, feedCb, doneCb;
@@ -1030,7 +1030,78 @@ Session.prototype.subtree  = function (oid, maxRepetitions, feedCb, doneCb) {
 	};
 	
 	this.walk (oid, maxRepetitions, subtreeCb.bind (me, req), doneCb);
-	
+
+	return this;
+}
+
+function tableColumnsResponseCb (req, error) {
+	if (error) {
+		req.responseCb (error);
+	} else if (req.error) {
+		req.responseCb (req.error);
+	} else {
+		if (req.columns.length > 0) {
+			var column = req.columns.pop ();
+			var me = this;
+			this.subtree (req.rowOid + column, req.maxRepetitions,
+					tableColumnsFeedCb.bind (me, req),
+					tableColumnsResponseCb.bind (me, req));
+		} else {
+			req.responseCb (null, req.table);
+		}
+	}
+}
+
+function tableColumnsFeedCb (req, varbinds) {
+	for (var i = 0; i < varbinds.length; i++) {
+		if (isVarbindError (varbinds[i])) {
+			req.error = new RequestFailedError (varbindError (varbind[i]));
+			return true;
+		}
+
+		var oid = varbinds[i].oid.replace (req.rowOid, "")
+		if (oid && oid != varbinds[i].oid) {
+			var match = oid.match (/^(\d+)\.(.+)$/);
+			if (match && match[1] > 0) {
+				if (! req.table[match[2]])
+					req.table[match[2]] = {};
+				req.table[match[2]][match[1]] = varbinds[i].value;
+			}
+		}
+	}
+}
+
+Session.prototype.tableColumns = function () {
+	var me = this;
+
+	var oid = arguments[0];
+	var columns = arguments[1];
+	var maxRepetitions, responseCb;
+
+	if (arguments.length < 4) {
+		responseCb = arguments[2];
+		maxRepetitions = 20;
+	} else {
+		maxRepetitions = arguments[2];
+		responseCb = arguments[3];
+	}
+
+	var req = {
+		responseCb: responseCb,
+		maxRepetitions: maxRepetitions,
+		baseOid: oid,
+		rowOid: oid + ".1.",
+		columns: columns,
+		table: {}
+	};
+
+	if (req.columns.length > 0) {
+		var column = req.columns.pop ();
+		this.subtree (req.rowOid + column, maxRepetitions,
+				tableColumnsFeedCb.bind (me, req),
+				tableColumnsResponseCb.bind (me, req));
+	}
+
 	return this;
 }
 
@@ -1062,15 +1133,15 @@ function tableFeedCb (req, varbinds) {
 	}
 }
 
-Session.prototype.table  = function (oid, maxRepetitions, responseCb) {
+Session.prototype.table = function () {
 	var me = this;
 
 	var oid = arguments[0];
 	var maxRepetitions, responseCb;
 
 	if (arguments.length < 3) {
-		maxRepetitions = 20;
 		responseCb = arguments[1];
+		maxRepetitions = 20;
 	} else {
 		maxRepetitions = arguments[1];
 		responseCb = arguments[2];
