@@ -141,44 +141,55 @@ function varbindError (varbind) {
 }
 
 function oidFollowsOid (oidString, nextString) {
-	var oid = oidString.split (".");
-	var next = nextString.split (".");
-	var i = 0;
-	
+	var oid = {str: oidString, len: oidString.length, idx: 0};
+	var next = {str: nextString, len: nextString.length, idx: 0};
+	var dotCharCode = ".".charCodeAt (0);
+
+	function getNumber (item) {
+		var n = 0;
+		if (item.idx >= item.len)
+			return null;
+		while (item.idx < item.len) {
+			var charCode = item.str.charCodeAt (item.idx++);
+			if (charCode == dotCharCode)
+				return n;
+			n = (n ? (n * 10) : n) + (charCode - 48);
+		}
+		return n;
+	}
+
 	while (1) {
-		if (oid.length > i) {
-			if (next.length > i) {
-				var oid_i = parseInt (oid[i]);
-				var next_i = parseInt (next[i]);
-				if (next_i > oid_i) {
+		var oidNumber = getNumber (oid);
+		var nextNumber = getNumber (next);
+
+		if (oidNumber !== null) {
+			if (nextNumber !== null) {
+				if (nextNumber > oidNumber) {
 					return true;
-				} else if (next_i < oid_i) {
+				} else if (nextNumber < oidNumber) {
 					return false;
 				}
 			} else {
-				return false;
+				return true;
 			}
-		} else if (next.length > i) {
-			return true;
 		} else {
-			return false;
+			return true;
 		}
-		i++;
 	}
-};
+}
 
 function oidInSubtree (oidString, nextString) {
 	var oid = oidString.split (".");
 	var next = nextString.split (".");
-	
+
 	if (oid.length > next.length)
 		return false;
-	
+
 	for (var i = 0; i < oid.length; i++) {
 		if (next[i] != oid[i])
 			return false;
 	}
-	
+
 	return true;
 }
 
@@ -195,10 +206,10 @@ function oidInSubtree (oidString, nextString) {
 
 function readInt (buffer) {
 	var value = readUint (buffer);
-	
+
 	if (value & 0x80000000)
 		value = 0 - (value & 0x7fffffff);
-	
+
 	return value;
 }
 
@@ -219,33 +230,33 @@ function readUint (buffer) {
 		value *= 256;
 		value += buffer.readByte ();
 	}
-	
+
 	return value;
 }
 
 function readUint64 (buffer) {
 	var value = buffer.readString (ObjectType.Counter64, true);
-	
+
 	if (value.length > 8)
 		throw new RequestInvalidError ("64 bit unsigned integer too long '"
 				+ value.length + "'")
-	
+
 	return value;
 }
 
 function readVarbinds (buffer, varbinds) {
 	buffer.readSequence ();
-	
+
 	while (1) {
 		buffer.readSequence ();
 		var oid = buffer.readOID ();
 		var type = buffer.peek ();
-		
+
 		if (type == null)
 			break;
-		
+
 		var value;
-		
+
 		if (type == ObjectType.Boolean) {
 			value = buffer.readBoolean ();
 		} else if (type == ObjectType.Integer) {
@@ -291,7 +302,7 @@ function readVarbinds (buffer, varbinds) {
 			throw new ResponseInvalidError ("Unknown type '" + type
 					+ "' in response");
 		}
-		
+
 		varbinds.push ({
 			oid: oid,
 			type: type,
@@ -318,11 +329,11 @@ function writeVarbinds (buffer, varbinds) {
 	for (var i = 0; i < varbinds.length; i++) {
 		buffer.startSequence ();
 		buffer.writeOID (varbinds[i].oid);
-		
+
 		if (varbinds[i].type && varbinds[i].value) {
 			var type = varbinds[i].type;
 			var value = varbinds[i].value;
-		
+
 			if (type == ObjectType.Boolean) {
 				buffer.writeBoolean (value ? true : false);
 			} else if (type == ObjectType.Integer) { // also Integer32
@@ -359,7 +370,7 @@ function writeVarbinds (buffer, varbinds) {
 		} else {
 			buffer.writeNull ();
 		}
-		
+
 		buffer.endSequence ();
 	};
 	buffer.endSequence ();
@@ -375,9 +386,9 @@ var SimplePdu = function (id, varbinds, options) {
 	this.options = options || {};
 };
 
-SimplePdu.prototype.toBuffer = function (buffer) {	
+SimplePdu.prototype.toBuffer = function (buffer) {
 	buffer.startSequence (this.type);
-	
+
 	buffer.writeInt (this.id);
 	buffer.writeInt ((this.type == PduType.GetBulkRequest)
 			? (this.options.nonRepeaters || 0)
@@ -385,9 +396,9 @@ SimplePdu.prototype.toBuffer = function (buffer) {
 	buffer.writeInt ((this.type == PduType.GetBulkRequest)
 			? (this.options.maxRepetitions || 0)
 			: 0);
-	
+
 	writeVarbinds (buffer, this.varbinds);
-	
+
 	buffer.endSequence ();
 };
 
@@ -409,14 +420,14 @@ var GetResponsePdu = function (buffer) {
 	this.type = PduType.GetResponse;
 
 	buffer.readSequence (this.type);
-	
+
 	this.id = buffer.readInt ();
-	
+
 	this.errorStatus = buffer.readInt ();
 	this.errorIndex = buffer.readInt ();
-	
+
 	this.varbinds = [];
-	
+
 	readVarbinds (buffer, this.varbinds);
 };
 
@@ -443,9 +454,9 @@ util.inherits (SetRequestPdu, SimplePdu);
 
 var TrapPdu = function (typeOrOid, varbinds, agentAddr) {
 	this.type = PduType.Trap;
-	
+
 	this.agentAddr = agentAddr || "127.0.0.1";
-	
+
 	if (typeof typeOrOid == "string") {
 		this.generic = TrapType.EnterpriseSpecific;
 		this.specific = parseInt (typeOrOid.match (/\.(\d+)$/)[1]);
@@ -455,22 +466,22 @@ var TrapPdu = function (typeOrOid, varbinds, agentAddr) {
 		this.specific = 0;
 		this.enterprise = "1.3.6.1.4.1";
 	}
-	
+
 	this.varbinds = varbinds;
 };
 
-TrapPdu.prototype.toBuffer = function (buffer) {	
+TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.startSequence (this.type);
-	
+
 	buffer.writeOID (this.enterprise);
 	buffer.writeBuffer (new Buffer (this.agentAddr.split (".")),
 			ObjectType.IpAddress);
 	buffer.writeInt (this.generic);
 	buffer.writeInt (this.specific);
 	buffer.writeInt (process.uptime () * 100, ObjectType.TimeTicks);
-	
+
 	writeVarbinds (buffer, this.varbinds);
-	
+
 	buffer.endSequence ();
 };
 
@@ -496,31 +507,31 @@ RequestMessage.prototype.toBuffer = function () {
 		return this.buffer;
 
 	var writer = new ber.Writer ();
-	
+
 	writer.startSequence ();
-	
+
 	writer.writeInt (this.version);
 	writer.writeString (this.community);
-	
+
 	this.pdu.toBuffer (writer);
-	
+
 	writer.endSequence ();
-	
+
 	this.buffer = writer.buffer;
-	
+
 	return this.buffer;
 };
 
 var ResponseMessage = function (buffer) {
 	var reader = new ber.Reader (buffer);
-	
+
 	reader.readSequence ();
-	
+
 	this.version = reader.readInt ();
 	this.community = reader.readString ();
-	
+
 	var type = reader.peek ();
-	
+
 	if (type == PduType.GetResponse) {
 		this.pdu = new GetResponsePdu (reader);
 	} else {
@@ -536,28 +547,28 @@ var ResponseMessage = function (buffer) {
 var Session = function (target, community, options) {
 	this.target = target || "127.0.0.1";
 	this.community = community || "public";
-	
+
 	this.version = (options && options.version)
 			? options.version
 			: Version1;
-	
+
 	this.transport = (options && options.transport)
 			? options.transport
 			: "udp4";
 	this.port = (options && options.port )
 			? options.port
 			: 161;
-	this.trapPort = (options && options.trapPort )	
+	this.trapPort = (options && options.trapPort )
 			? options.trapPort
 			: 162;
-	
+
 	this.retries = (options && options.retries)
 			? options.retries
 			: 1;
 	this.timeout = (options && options.timeout)
 			? options.timeout
 			: 5000;
-	
+
 	this.reqs   = {};
 };
 
@@ -569,7 +580,7 @@ Session.prototype.get = function (oids, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
-		
+
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
 					+ "match response OIDs"));
@@ -586,13 +597,13 @@ Session.prototype.get = function (oids, responseCb) {
 					varbinds.push (pdu.varbinds[i]);
 				}
 			}
-			
+
 			req.responseCb (null, varbinds);
 		}
 	};
 
 	var pduVarbinds = [];
-	
+
 	for (var i = 0; i < oids.length; i++) {
 		var varbind = {
 			oid: oids[i]
@@ -601,7 +612,7 @@ Session.prototype.get = function (oids, responseCb) {
 	}
 
 	this.simpleGet (GetRequestPdu, feedCb, pduVarbinds, responseCb);
-	
+
 	return this;
 };
 
@@ -629,7 +640,7 @@ Session.prototype.getBulk = function () {
 		var pdu = message.pdu;
 		var varbinds = [];
 		var i = 0;
-		
+
 		// first walk through and grab non-repeaters
 		if (pdu.varbinds.length < nonRepeaters) {
 			req.responseCb (new ResponseInvalidError ("Varbind count in "
@@ -652,9 +663,9 @@ Session.prototype.getBulk = function () {
 				}
 			}
 		}
-		
+
 		var repeaters = req.message.pdu.varbinds.length - nonRepeaters;
-		
+
 		// secondly walk through and grab repeaters
 		if (pdu.varbinds.length % (repeaters)) {
 			req.responseCb (new ResponseInvalidError ("Varbind count in "
@@ -689,19 +700,19 @@ Session.prototype.getBulk = function () {
 				}
 			}
 		}
-		
+
 		req.responseCb (null, varbinds);
 	};
-	
+
 	var pduVarbinds = [];
-	
+
 	for (var i = 0; i < oids.length; i++) {
 		var varbind = {
 			oid: oids[i]
 		};
 		pduVarbinds.push (varbind);
 	}
-	
+
 	var options = {
 		nonRepeaters: nonRepeaters,
 		maxRepetitions: maxRepetitions
@@ -709,7 +720,7 @@ Session.prototype.getBulk = function () {
 
 	this.simpleGet (GetBulkRequestPdu, feedCb, pduVarbinds, responseCb,
 			options);
-	
+
 	return this;
 };
 
@@ -717,7 +728,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
-		
+
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
 					+ "match response OIDs"));
@@ -737,13 +748,13 @@ Session.prototype.getNext = function (oids, responseCb) {
 					varbinds.push (pdu.varbinds[i]);
 				}
 			}
-			
+
 			req.responseCb (null, varbinds);
 		}
 	};
-	
+
 	var pduVarbinds = [];
-	
+
 	for (var i = 0; i < oids.length; i++) {
 		var varbind = {
 			oid: oids[i]
@@ -752,7 +763,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 	}
 
 	this.simpleGet (GetNextRequestPdu, feedCb, pduVarbinds, responseCb);
-	
+
 	return this;
 };
 
@@ -771,7 +782,7 @@ Session.prototype.inform = function () {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
-		
+
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Inform OIDs do not "
 					+ "match response OIDs"));
@@ -788,11 +799,11 @@ Session.prototype.inform = function () {
 					varbinds.push (pdu.varbinds[i]);
 				}
 			}
-			
+
 			req.responseCb (null, varbinds);
 		}
 	};
-	
+
 	if (typeof typeOrOid != "string")
 		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
 
@@ -808,7 +819,7 @@ Session.prototype.inform = function () {
 			value: typeOrOid
 		}
 	];
-	
+
 	for (var i = 0; i < varbinds.length; i++) {
 		var varbind = {
 			oid: varbinds[i].oid,
@@ -817,13 +828,13 @@ Session.prototype.inform = function () {
 		};
 		pduVarbinds.push (varbind);
 	}
-	
+
 	var options = {
 		port: this.trapPort
 	};
 
 	this.simpleGet (InformRequestPdu, feedCb, pduVarbinds, responseCb, options);
-	
+
 	return this;
 };
 
@@ -833,13 +844,13 @@ Session.prototype.onMsg = function (req, buffer, remote) {
 		delete req.timer;
 
 		var message = new ResponseMessage (buffer);
-		
+
 		function cbError (req, error) {
 			if (req.dgram && req.dgram.fd)
 				req.dgram.close ();
 			req.responseCb (error);
 		};
-		
+
 		if (message.pdu.id != req.message.pdu.id) {
 			cbError (req, new ResponseInvalidError ("ID in request '"
 					+ req.message.pdu.id + "' does not match ID in "
@@ -865,15 +876,15 @@ Session.prototype.onMsg = function (req, buffer, remote) {
 
 Session.prototype.onSimpleGetResponse = function (req, message) {
 	req.dgram.close ();
-	
+
 	var pdu = message.pdu;
-	
+
 	if (pdu.errorStatus > 0) {
 		var statusString = ErrorStatus[pdu.errorStatus]
 				|| ErrorStatus.GeneralError;
 		var statusCode = ErrorStatus[statusString]
 				|| ErrorStatus[ErrorStatus.GeneralError];
-		
+
 		if (pdu.errorIndex <= 0 || pdu.errorIndex > pdu.varbinds.length) {
 			req.responseCb (new RequestFailedError (statusString, statusCode));
 		} else {
@@ -889,9 +900,9 @@ Session.prototype.onSimpleGetResponse = function (req, message) {
 
 Session.prototype.send = function (req, noWait) {
 	var session = this;
-	
+
 	var buffer = req.message.toBuffer ();
-	
+
 	req.dgram.send (buffer, 0, buffer.length, req.port, this.target,
 			function (error, bytes) {
 		if (error) {
@@ -913,7 +924,7 @@ Session.prototype.send = function (req, noWait) {
 			}
 		}
 	});
-	
+
 	return this;
 };
 
@@ -921,7 +932,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
-		
+
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
 					+ "match response OIDs"));
@@ -938,13 +949,13 @@ Session.prototype.set = function (varbinds, responseCb) {
 					varbinds.push (pdu.varbinds[i]);
 				}
 			}
-			
+
 			req.responseCb (null, varbinds);
 		}
 	};
 
 	var pduVarbinds = [];
-	
+
 	for (var i = 0; i < varbinds.length; i++) {
 		var varbind = {
 			oid: varbinds[i].oid,
@@ -955,16 +966,16 @@ Session.prototype.set = function (varbinds, responseCb) {
 	}
 
 	this.simpleGet (SetRequestPdu, feedCb, pduVarbinds, responseCb);
-	
+
 	return this;
 };
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
 	var req = {}
-		
+
 	try {
-		var pdu = new pduClass (_generateId (), varbinds, options);	
+		var pdu = new pduClass (_generateId (), varbinds, options);
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
@@ -992,17 +1003,17 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 
 function subtreeCb (req, varbinds) {
 	var done = 0;
-	
+
 	for (var i = varbinds.length; i > 0; i--) {
 		if (! oidInSubtree (req.baseOid, varbinds[i - 1].oid)) {
 			done = 1;
 			varbinds.pop ();
 		}
 	}
-	
+
 	if (varbinds.length > 0)
 		req.feedCb (varbinds);
-	
+
 	if (done)
 		return true;
 }
@@ -1028,7 +1039,7 @@ Session.prototype.subtree  = function () {
 		maxRepetitions: maxRepetitions,
 		baseOid: oid
 	};
-	
+
 	this.walk (oid, maxRepetitions, subtreeCb.bind (me, req), doneCb);
 
 	return this;
@@ -1120,7 +1131,7 @@ function tableFeedCb (req, varbinds) {
 			req.error = new RequestFailedError (varbindError (varbind[i]));
 			return true;
 		}
-	
+
 		var oid = varbinds[i].oid.replace (req.rowOid, "")
 		if (oid && oid != varbinds[i].oid) {
 			var match = oid.match (/^(\d+)\.(.+)$/);
@@ -1154,20 +1165,20 @@ Session.prototype.table = function () {
 		rowOid: oid + ".1.",
 		table: {}
 	};
-	
+
 	this.subtree (oid, maxRepetitions, tableFeedCb.bind (me, req),
 			tableResponseCb.bind (me, req));
-	
+
 	return this;
 }
 
 Session.prototype.trap = function () {
 	var req = {};
-	
+
 	try {
 		var typeOrOid = arguments[0];
 		var varbinds, agentAddr, responseCb;
-	
+
 		if (arguments.length >= 4) {
 			varbinds = arguments[1];
 			agentAddr = arguments[2];
@@ -1237,14 +1248,14 @@ Session.prototype.trap = function () {
 		if (req.responseCb)
 			req.responseCb (error);
 	}
-	
+
 	return this;
 };
 
 function walkCb (req, error, varbinds) {
 	var done = 0;
 	var oid;
-	
+
 	if (error) {
 		if (error instanceof RequestFailedError) {
 			if (error.status != ErrorStatus.NoSuchName) {
@@ -1259,7 +1270,7 @@ function walkCb (req, error, varbinds) {
 			return;
 		}
 	}
-	
+
 	if (this.version == Version2c) {
 		for (var i = varbinds[0].length; i > 0; i--) {
 			if (varbinds[0][i - 1].type == ObjectType.EndOfMibView) {
@@ -1280,7 +1291,7 @@ function walkCb (req, error, varbinds) {
 			}
 		}
 	}
-	
+
 	if (done)
 		req.doneCb (null);
 	else
@@ -1292,7 +1303,7 @@ Session.prototype.walk  = function () {
 	var me = this;
 	var oid = arguments[0];
 	var maxRepetitions, feedCb, doneCb, baseOid;
-	
+
 	if (arguments.length < 4) {
 		maxRepetitions = 20;
 		feedCb = arguments[1];
@@ -1302,19 +1313,19 @@ Session.prototype.walk  = function () {
 		feedCb = arguments[2];
 		doneCb = arguments[3];
 	}
-	
+
 	var req = {
 		maxRepetitions: maxRepetitions,
 		feedCb: feedCb,
 		doneCb: doneCb
 	};
-	
+
 	if (this.version == Version2c)
 		this.getBulk ([oid], 0, maxRepetitions,
 				walkCb.bind (me, req));
 	else
 		this.getNext ([oid], walkCb.bind (me, req));
-	
+
 	return this;
 }
 
