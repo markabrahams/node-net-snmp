@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
@@ -31,5 +31,5 @@
     "monitoring"
   ],
   "author": "Stephen Vickers <stephen.vickers.sv@gmail.com>",
-  "license": "GPL"
+  "license": "MIT"
 }
