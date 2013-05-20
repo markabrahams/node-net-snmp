@@ -1086,6 +1086,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
  * Use MIT license instead of GPL
 
+## Version 1.1.8 - ?
+
+ * Added the example program `cisco-device-inventory.js`
+
 # Roadmap
 
 In no particular order:
