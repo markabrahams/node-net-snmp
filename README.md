@@ -1086,9 +1086,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
  * Use MIT license instead of GPL
 
-## Version 1.1.8 - ?
+## Version 1.1.8 - 22/06/2013
 
  * Added the example program `cisco-device-inventory.js`
+ * Receive `Trap failed: TypeError: value is out of bounds` when sending
+   traps using SNMP version 2c
 
 # Roadmap
 
