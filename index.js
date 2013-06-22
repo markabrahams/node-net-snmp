@@ -313,7 +313,7 @@ function readVarbinds (buffer, varbinds) {
 
 function writeUint (buffer, type, value) {
 	var b = new Buffer (4);
-	b.writeUInt32BE (value);
+	b.writeUInt32BE (value, 0);
 	buffer.writeBuffer (b, type);
 }
 
@@ -478,7 +478,7 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 			ObjectType.IpAddress);
 	buffer.writeInt (this.generic);
 	buffer.writeInt (this.specific);
-	buffer.writeInt (process.uptime () * 100, ObjectType.TimeTicks);
+	buffer.writeInt (Math.floor (process.uptime () * 100, ObjectType.TimeTicks));
 
 	writeVarbinds (buffer, this.varbinds);
 
@@ -811,7 +811,7 @@ Session.prototype.inform = function () {
 		{
 			oid: "1.3.6.1.2.1.1.3.0",
 			type: ObjectType.TimeTicks,
-			value: process.uptime () * 100
+			value: Math.floor (process.uptime () * 100)
 		},
 		{
 			oid: "1.3.6.1.6.3.1.1.4.1.0",
@@ -1217,7 +1217,7 @@ Session.prototype.trap = function () {
 				{
 					oid: "1.3.6.1.2.1.1.3.0",
 					type: ObjectType.TimeTicks,
-					value: process.uptime () * 100
+					value: Math.floor (process.uptime () * 100)
 				},
 				{
 					oid: "1.3.6.1.6.3.1.1.4.1.0",
