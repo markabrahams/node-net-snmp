@@ -659,7 +659,7 @@ The following arguments will be passed to the `doneCallback` function:
    error occurred
 
 Once the `doneCallback` function has been called the request is complete and
-the `requestCallback` function will no longer be called.
+the `feedCallback` function will no longer be called.
 
 If the `feedCallback` function returns a `true` value when called no more
 `get()` or `getBulk()` method calls will be made and the `doneCallback` will
@@ -998,7 +998,7 @@ passed to the `doneCallback` function:
    error occurred
 
 Once the `doneCallback` function has been called the request is complete and
-the `requestCallback` function will no longer be called.
+the `feedCallback` function will no longer be called.
 
 If the `feedCallback` function returns a `true` value when called no more
 `get()` or `getBulk()` method calls will be made and the `doneCallback` will
@@ -1091,6 +1091,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Added the example program `cisco-device-inventory.js`
  * Receive `Trap failed: TypeError: value is out of bounds` when sending
    traps using SNMP version 2c
+
+## Version 1.1.9 - ?
+
+ * Corrected a few instances of the parameter named `requestCallback` to some
+   methods in the README.md file which should have been `feedCallback`
 
 # Roadmap
 
