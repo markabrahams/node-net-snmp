@@ -557,12 +557,12 @@ and includes two enterprise specific varbinds:
     var varbinds = [
         {
             oid: "1.3.6.1.4.1.2000.2",
-            type: snmp.Type.OctetString,
+            type: snmp.ObjectType.OctetString,
             value: "Periodic hardware self-check"
         },
         {
             oid: "1.3.6.1.4.1.2000.3",
-            type: snmp.Type.OctetString,
+            type: snmp.ObjectType.OctetString,
             value: "hardware-ok"
         }
     ];
@@ -918,7 +918,7 @@ DNS to resolve the hostname of the local host:
     var varbinds = [
         {
             oid: "1.3.6.1.2.1.1.5.0",
-            type: snmp.Type.OctetString,
+            type: snmp.ObjectType.OctetString,
             value: "host1"
         }
     ];
@@ -952,12 +952,12 @@ a SNMP version 2c trap, and includes two enterprise specific varbinds:
     var varbinds = [
         {
             oid: "1.3.6.1.4.1.2000.2",
-            type: snmp.Type.OctetString,
+            type: snmp.ObjectType.OctetString,
             value: "Hardware health status changed"
         },
         {
             oid: "1.3.6.1.4.1.2000.3",
-            type: snmp.Type.OctetString,
+            type: snmp.ObjectType.OctetString,
             value: "status-error"
         }
     ];
