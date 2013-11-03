@@ -1092,10 +1092,12 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Receive `Trap failed: TypeError: value is out of bounds` when sending
    traps using SNMP version 2c
 
-## Version 1.1.9 - ?
+## Version 1.1.9 - 03/11/2013
 
  * Corrected a few instances of the parameter named `requestCallback` to some
    methods in the README.md file which should have been `feedCallback`
+ * Null type is used for varbinds with a 0 value
+ * Correct instances of snmp.Type to snmp.ObjectType in the README.md file
 
 # Roadmap
 
