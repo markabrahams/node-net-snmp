@@ -330,7 +330,7 @@ function writeVarbinds (buffer, varbinds) {
 		buffer.startSequence ();
 		buffer.writeOID (varbinds[i].oid);
 
-		if (varbinds[i].type && varbinds[i].value) {
+		if (varbinds[i].type && varbinds[i].hasOwnProperty("value")) {
 			var type = varbinds[i].type;
 			var value = varbinds[i].value;
 
