@@ -1103,6 +1103,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
 In no particular order:
 
+ * SNMP agent (i.e. server)
+ * SNMP trap/inform receiver
  * SNMP version 3
 
 Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
