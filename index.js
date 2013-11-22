@@ -906,7 +906,7 @@ Session.prototype.send = function (req, noWait) {
 	req.dgram.send (buffer, 0, buffer.length, req.port, this.target,
 			function (error, bytes) {
 		if (error) {
-			req.responseCb (new Error (error));
+			req.responseCb (error);
 		} else {
 			if (noWait) {
 				req.dgram.close ();
