@@ -1,4 +1,3 @@
-
 # net-snmp - [homepage][homepage]
 
 This module implements version 1 and 2c of the [Simple Network Management
@@ -1098,6 +1097,12 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    methods in the README.md file which should have been `feedCallback`
  * Null type is used for varbinds with a 0 value
  * Correct instances of snmp.Type to snmp.ObjectType in the README.md file
+
+## Version 1.1.10 - ?
+
+ * Error handler in the `dgram.send()` callback in the `send()` method was
+   creating a new instance of the `Error` class from the `error` parameter, but
+   it was already an instance of the `Error` class (thanks Ray Solomon)
 
 # Roadmap
 
