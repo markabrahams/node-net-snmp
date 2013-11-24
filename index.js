@@ -562,7 +562,7 @@ var Session = function (target, community, options) {
 			? options.trapPort
 			: 162;
 
-	this.retries = (options && options.retries)
+	this.retries = (options && (options.retries || options.retries == 0))
 			? options.retries
 			: 1;
 	this.timeout = (options && options.timeout)
