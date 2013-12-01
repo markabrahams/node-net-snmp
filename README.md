@@ -1103,8 +1103,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Error handler in the `dgram.send()` callback in the `send()` method was
    creating a new instance of the `Error` class from the `error` parameter, but
    it was already an instance of the `Error` class (thanks Ray Solomon)
- * Add stack traces to Error classes exported by this module
- * Allow users to specify `0` retries when creating a session
+ * Add stack traces to Error classes exported by this module (thanks Ray
+   Solomon)
+ * Allow users to specify `0` retries when creating a session (thanks Ray
+   Solomon)
 
 # Roadmap
 
