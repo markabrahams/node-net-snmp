@@ -43,16 +43,16 @@ and send SNMP traps or informs:
 
 This module aims to be fully compliant with the following RFCs:
 
- * [1065][1065] - Structure and Identification of Management Information
- * [1067][1067] - A Simple Network Management Protocol (version 1)
+ * [1155][1155] - Structure and Identification of Management Information
+ * [1098][1098] - A Simple Network Management Protocol (version 1)
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
  * [3416][3416] - Simple Network Management Protocol (SNMP) (version 2c)
 
 However, this module does not implement, or export any method that might help
 to implement, the SNMP version 2c report request type.
 
-[1065]: https://tools.ietf.org/rfc/rfc1065.txt "RFC 1065"
-[1067]: https://tools.ietf.org/rfc/rfc1067.txt "RFC 1067"
+[1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
+[1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
 [2578]: https://tools.ietf.org/rfc/rfc2578.txt "RFC 2578"
 [3416]: https://tools.ietf.org/rfc/rfc3416.txt "RFC 3416"
 
@@ -1107,6 +1107,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    Solomon)
  * Allow users to specify `0` retries when creating a session (thanks Ray
    Solomon)
+ * Update the list of SNMP version 1 related RFCs we adhere to in the
+   `Standards Compliance` section of the README.md file
 
 # Roadmap
 
