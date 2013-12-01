@@ -1108,6 +1108,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
 In no particular order:
 
+ * Use a single socket per session
+ * Allow users to specify sysUpTime for SNMP traps and informs
  * SNMP agent (i.e. server)
  * SNMP trap/inform receiver
  * SNMP version 3
