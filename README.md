@@ -505,7 +505,7 @@ sysObjectID (`1.3.6.1.2.1.1.1.0`) and sysName (`1.3.6.1.2.1.1.4.0`) OIDs:
         }
     });
 
-## session.inform (typeOrOid, [varbinds], callback)
+## session.inform (typeOrOid, [varbinds], [options], callback)
 
 The `inform()` method sends a SNMP inform.
 
@@ -515,7 +515,10 @@ defined in the `snmp.TrapType` object (excluding the
 
 The first varbind to be placed in the request message will be for the
 `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
-be the value returned by the `process.uptime ()` function multiplied by 100.
+be the value returned by the `process.uptime ()` function multiplied by 100
+(this can be overridden by providing `upTime` in the optional `options`
+parameter, as documented below).
+
 This will be followed by a second varbind for the `snmpTrapOID.0` OID
 (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this will depend on the `typeOrOid`
 parameter. If a constant is specified the trap OID for the constant will be
@@ -525,8 +528,16 @@ will be used as is for the value of the varbind.
 The optional `varbinds` parameter is an array of varbinds to include in the
 inform request, and defaults to the empty array `[]`.
 
-The `callback` function is called once the trap has been sent, or an error
-occurred.  The following arguments will be passed to the `callback` function:
+The optional `options` parameter is an object, and can contain the following
+items:
+
+ * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`) in the
+   inform, defaults to the value returned by the `process.uptime ()` function
+   multiplied by 100
+
+The `callback` function is called once a response to the inform request has
+been received, or an error occurred.  The following arguments will be passed
+to the `callback` function:
 
  * `error` - Instance of the `Error` class or a sub-class, or `null` if no
    error occurred
@@ -566,7 +577,9 @@ and includes two enterprise specific varbinds:
         }
     ];
     
-    session.inform (informOid, varbinds, function (error) {
+    // Override sysUpTime, specfiying it as 10 seconds...
+    var options = {upTime: 1000};
+    session.inform (informOid, varbinds, options, function (error) {
         if (error)
             console.error (error);
     });
@@ -856,7 +869,7 @@ specifies that only the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifPhysAddress
     // SNMP verison 2c
     session.tableColumns (oid, columns, maxRepetitions, responseCb);
 
-## session.trap (typeOrOid, [varbinds], [agentAddr], callback)
+## session.trap (typeOrOid, [varbinds], [agentAddrOrOptions], callback)
 
 The `trap()` method sends a SNMP trap.
 
@@ -886,7 +899,10 @@ SNMP version 2c messages are quite different in comparison with version 1.
 The version 2c trap has a much simpler format, simply a sequence of varbinds.
 The first varbind to be placed in the trap message will be for the
 `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
-be the value returned by the `process.uptime ()` function multiplied by 100.
+be the value returned by the `process.uptime ()` function multiplied by 100
+(this can be overridden by providing `upTime` in the optional `options`
+parameter, as documented below).
+
 This will be followed by a second varbind for the `snmpTrapOID.0` OID
 (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this will depend on the `typeOrOid`
 parameter.  If a constant is specified the trap OID for the constant
@@ -896,10 +912,19 @@ specified will be used as is for the value of the varbind.
 The optional `varbinds` parameter is an array of varbinds to include in the
 trap, and defaults to the empty array `[]`.
 
-The optional `agentAddr` parameter is the IP address used to populate the
-agent-addr field for SNMP version 1 type traps, and defaults to `127.0.0.1`.
-When using SNMP version 2c the `agentAddr` parameter is ignored if specified
-since version 2c trap messages do not have an agent-addr field.
+The optional `agentAddrOrOptions` parameter can be one of two types; one is
+the IP address used to populate the agent-addr field for SNMP version 1 type
+traps, and defaults to `127.0.0.1`, or an object, and can contain the
+following items:
+
+ * `agentAddr` - IP address used to populate the agent-addr field for SNMP
+   version 1 type traps, and defaults to `127.0.0.1`
+ * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`) in the
+   trap, defaults to the value returned by the `process.uptime ()` function
+   multiplied by 100
+
+**NOTE** When using SNMP version 2c the `agentAddr` parameter is ignored if
+specified since version 2c trap messages do not have an agent-addr field.
 
 The `callback` function is called once the trap has been sent, or an error
 occurred.  The following arguments will be passed to the `callback` function:
@@ -926,6 +951,8 @@ DNS to resolve the hostname of the local host:
         if (error) {
             console.error (error);
         } else {
+            // Override sysUpTime, specfiying it as 10 seconds...
+            var options = {agentAddr: agentAddress, upTime: 1000};
             session.trap (enterpriseOid, varbinds, agentAddress,
                     function (error) {
                 if (error)
@@ -1115,13 +1142,14 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Add `sourceAddress` and `sourcePort` optional options to the
    `Session` classes `createSession()` method, which can be used to control
    from which IP address and port messages should be sent
+ * Allow users to specify sysUpTime for SNMP traps and informs
 
 # Roadmap
 
 In no particular order:
 
  * Use a single socket per session
- * Allow users to specify sysUpTime for SNMP traps and informs
+
  * SNMP agent (i.e. server)
  * SNMP trap/inform receiver
  * SNMP version 3
