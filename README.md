@@ -341,6 +341,11 @@ is an object, and can contain the following items:
 
  * `port` - UDP port to send requests too, defaults to `161`
  * `retries` - Number of times to re-send a request, defaults to `1`
+ * `sourceAddress` - IP address from which SNMP requests should originate,
+   there is no default for this option, the operating system will select an
+   appropriate source address when the SNMP request is sent
+ * `sourcePort` - UDP port from which SNMP requests should originate, defaults
+   to an ephemeral port selected by the operation system
  * `timeout` - Number of milliseconds to wait for a response before re-trying
    or failing, defaults to `5000`
  * `transport` - Specify the transport to use, can be either `udp4` or `udp6`,
