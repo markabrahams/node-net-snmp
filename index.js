@@ -456,10 +456,11 @@ var SetRequestPdu = function () {
 
 util.inherits (SetRequestPdu, SimplePdu);
 
-var TrapPdu = function (typeOrOid, varbinds, agentAddr) {
+var TrapPdu = function (typeOrOid, varbinds, options) {
 	this.type = PduType.Trap;
 
-	this.agentAddr = agentAddr || "127.0.0.1";
+	this.agentAddr = options.agentAddr || "127.0.0.1";
+	this.upTime = options.upTime;
 
 	if (typeof typeOrOid == "string") {
 		this.generic = TrapType.EnterpriseSpecific;
@@ -482,7 +483,8 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 			ObjectType.IpAddress);
 	buffer.writeInt (this.generic);
 	buffer.writeInt (this.specific);
-	buffer.writeInt (Math.floor (process.uptime () * 100, ObjectType.TimeTicks));
+	writeUint (buffer, ObjectType.TimeTicks,
+			this.upTime || Math.floor (process.uptime () * 100));
 
 	writeVarbinds (buffer, this.varbinds);
 
@@ -780,11 +782,29 @@ Session.prototype.getNext = function (oids, responseCb) {
 
 Session.prototype.inform = function () {
 	var typeOrOid = arguments[0];;
-	var varbinds, responseCb;
+	var varbinds, options = {}, responseCb;
 
-	if (arguments.length >= 3) {
+	/**
+	 ** Support the following signatures:
+	 ** 
+	 **    typeOrOid, varbinds, options, callback
+	 **    typeOrOid, varbinds, callback
+	 **    typeOrOid, options, callback
+	 **    typeOrOid, callback
+	 **/
+	if (arguments.length >= 4) {
 		varbinds = arguments[1];
-		responseCb = arguments[2];
+		options = arguments[2];
+		responseCb = arguments[3];
+	} else if (arguments.length >= 3) {
+		if (arguments[1].constructor != Array) {
+			varbinds = [];
+			options = arguments[1];
+			responseCb = arguments[2];
+		} else {
+			varbinds = arguments[1];
+			responseCb = arguments[2];
+		}
 	} else {
 		varbinds = [];
 		responseCb = arguments[1];
@@ -822,7 +842,7 @@ Session.prototype.inform = function () {
 		{
 			oid: "1.3.6.1.2.1.1.3.0",
 			type: ObjectType.TimeTicks,
-			value: Math.floor (process.uptime () * 100)
+			value: options.upTime || Math.floor (process.uptime () * 100)
 		},
 		{
 			oid: "1.3.6.1.6.3.1.1.4.1.0",
@@ -839,10 +859,8 @@ Session.prototype.inform = function () {
 		};
 		pduVarbinds.push (varbind);
 	}
-
-	var options = {
-		port: this.trapPort
-	};
+	
+	options.port = this.trapPort;
 
 	this.simpleGet (InformRequestPdu, feedCb, pduVarbinds, responseCb, options);
 
@@ -1191,16 +1209,33 @@ Session.prototype.trap = function () {
 
 	try {
 		var typeOrOid = arguments[0];
-		var varbinds, agentAddr, responseCb;
+		var varbinds, options = {}, responseCb;
 
+		/**
+		 ** Support the following signatures:
+		 ** 
+		 **    typeOrOid, varbinds, options, callback
+		 **    typeOrOid, varbinds, agentAddr, callback
+		 **    typeOrOid, varbinds, callback
+		 **    typeOrOid, agentAddr, callback
+		 **    typeOrOid, options, callback
+		 **    typeOrOid, callback
+		 **/
 		if (arguments.length >= 4) {
 			varbinds = arguments[1];
-			agentAddr = arguments[2];
+			if (typeof arguments[2] == "string") {
+				options.agentAddr = arguments[2];
+			} else if (arguments[1].constructor != Array) {
+				options = arguments[2];
+			}
 			responseCb = arguments[3];
 		} else if (arguments.length >= 3) {
 			if (typeof arguments[1] == "string") {
 				varbinds = [];
-				agentAddr = arguments[1];
+				options.agentAddr = arguments[1];
+			} else if (arguments[1].constructor != Array) {
+				varbinds = [];
+				options = arguments[1];
 			} else {
 				varbinds = arguments[1];
 				agentAddr = null;
@@ -1208,7 +1243,6 @@ Session.prototype.trap = function () {
 			responseCb = arguments[2];
 		} else {
 			varbinds = [];
-			agentAddr = null;
 			responseCb = arguments[1];
 		}
 
@@ -1231,7 +1265,7 @@ Session.prototype.trap = function () {
 				{
 					oid: "1.3.6.1.2.1.1.3.0",
 					type: ObjectType.TimeTicks,
-					value: Math.floor (process.uptime () * 100)
+					value: options.upTime || Math.floor (process.uptime () * 100)
 				},
 				{
 					oid: "1.3.6.1.6.3.1.1.4.1.0",
@@ -1240,9 +1274,9 @@ Session.prototype.trap = function () {
 				}
 			);
 
-			pdu = new TrapV2Pdu (_generateId (), pduVarbinds);
+			pdu = new TrapV2Pdu (_generateId (), pduVarbinds, options);
 		} else {
-			pdu = new TrapPdu (typeOrOid, pduVarbinds, agentAddr);
+			pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
 		}
 
 		var message = new RequestMessage (this.version, this.community, pdu);
