@@ -1098,7 +1098,7 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Null type is used for varbinds with a 0 value
  * Correct instances of snmp.Type to snmp.ObjectType in the README.md file
 
-## Version 1.1.10 - ?
+## Version 1.1.10 - 01/12/2013
 
  * Error handler in the `dgram.send()` callback in the `send()` method was
    creating a new instance of the `Error` class from the `error` parameter, but
@@ -1109,6 +1109,12 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    Solomon)
  * Update the list of SNMP version 1 related RFCs we adhere to in the
    `Standards Compliance` section of the README.md file
+
+## Version 1.1.11 - 27/12/2013
+
+ * Add `sourceAddress` and `sourcePort` optional options to the
+   `Session` classes `createSession()` method, which can be used to control
+   from which IP address and port messages should be sent
 
 # Roadmap
 
