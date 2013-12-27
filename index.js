@@ -573,6 +573,13 @@ var Session = function (target, community, options) {
 			? options.timeout
 			: 5000;
 
+	this.sourceAddress = (options && options.sourceAddress )
+			? options.sourceAddress
+			: undefined;
+	this.sourcePort = (options && options.sourcePort )
+			? parseInt(options.sourcePort)
+			: undefined;
+
 	this.reqs   = {};
 };
 
@@ -995,6 +1002,9 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		var me = this;
 		req.dgram = dgram.createSocket (this.transport);
 		req.dgram.on ("message", me.onMsg.bind (me, req));
+
+		if (this.sourceAddress || this.sourcePort)
+			req.dgram.bind(this.sourcePort, this.sourceAddress);
 
 		this.send (req);
 	} catch (error) {
