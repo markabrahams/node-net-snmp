@@ -1,3 +1,4 @@
+
 # net-snmp - [homepage][homepage]
 
 This module implements version 1 and 2c of the [Simple Network Management
@@ -1148,6 +1149,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    `Session` classes `createSession()` method, which can be used to control
    from which IP address and port messages should be sent
  * Allow users to specify sysUpTime for SNMP traps and informs
+
+## Version 1.1.12 - 02/04/2014
+
+ * The `agentAddr` attribute is not used when passed in the `options` object
+   to the `trap()` method
 
 # Roadmap
 

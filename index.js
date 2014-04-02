@@ -1225,7 +1225,7 @@ Session.prototype.trap = function () {
 			varbinds = arguments[1];
 			if (typeof arguments[2] == "string") {
 				options.agentAddr = arguments[2];
-			} else if (arguments[1].constructor != Array) {
+			} else if (arguments[2].constructor != Array) {
 				options = arguments[2];
 			}
 			responseCb = arguments[3];
