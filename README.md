@@ -355,6 +355,54 @@ is an object, and can contain the following items:
  * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
    `snmp.Version1`
 
+## session.on ("close", callback)
+
+The `close` event is emitted by the session when the sessions underlying UDP
+socket is closed.
+
+No arguments are passed to the callback.
+
+Before this event is emitted all outstanding requests are cancelled, resulting
+in the failure of each outstanding request.  The error passed back through to
+each request will be an instance of the `Error` class with the errors
+`message` attribute set to `Socket forcibly closed`.
+
+The following example prints a message to the console when a sessions
+underlying UDP socket is closed:
+
+    session.on ("close", function () {
+        console.log ("socket closed");
+    });
+
+## session.on ("error", callback)
+
+The `error` event is emitted by the session when the sessions underlying UDP
+socket emits an error.
+
+The following arguments will be passed to the `callback` function:
+
+ * `error` - An instance of the `Error` class, the exposed `message` attribute
+   will contain a detailed error message.
+
+The following example prints a message to the console when an error occurs
+with a sessions underlying UDP socket, the session is then closed:
+
+    session.on ("error", function (error) {
+        console.log (error.toString ());
+        session.close ();
+    });
+
+## session.close ()
+
+The `close()` method closes the sessions underlying UDP socket.  This will
+result in the `close` event being emitted by the sessions underlying UDP
+socket which is passed through to the session, resulting in the session also
+emitting a `close` event.
+
+The following example closes a sessions underlying UDP socket:
+
+    session.close ();
+
 ## session.get (oids, callback)
 
 The `get()` method fetches the value for one or more OIDs.
@@ -1155,11 +1203,26 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * The `agentAddr` attribute is not used when passed in the `options` object
    to the `trap()` method
 
+## Version 1.1.13 - ?
+
+ * Not catching error events for the UDP socket returned from the
+   `dgram.createSocket()` function
+ * Some request methods do not copy arguments which results in sometimes
+   unexpected behaviour
+ * Use a single UDP socket for all requests in a single SNMP session
+ * Use a try/catch block in the timer callback in the `Session.send()` method
+ * The `Session` can now emit an `error` event to catch errors in a sessions
+   underlying UDP socket
+ * The `Session` can now emit a `close` event to catch close events from a
+   sessions underlying UDP socket, which results in the cancellation of
+   all outstanding requests
+ * Added a `close()` method to `Session` to close a sessions underlying UDP
+   socket, which results a `close` event
+
 # Roadmap
 
 In no particular order:
 
- * Use a single socket per session
  * SNMP agent (i.e. server)
  * SNMP trap/inform receiver
  * SNMP version 3

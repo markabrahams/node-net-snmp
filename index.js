@@ -1,8 +1,9 @@
 
 // Copyright 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
-var ber = require ('asn1').Ber;
+var ber = require ("asn1").Ber;
 var dgram = require ("dgram");
+var events = require ("events");
 var util = require ("util");
 
 /*****************************************************************************
@@ -582,8 +583,35 @@ var Session = function (target, community, options) {
 			? parseInt(options.sourcePort)
 			: undefined;
 
-	this.reqs   = {};
+	this.reqs = {};
+	this.reqCount = 0;
+
+	this.dgram = dgram.createSocket (this.transport);
+	this.dgram.unref();
+	
+	var me = this;
+	this.dgram.on ("message", me.onMsg.bind (me));
+	this.dgram.on ("close", me.onClose.bind (me));
+	this.dgram.on ("error", me.onError.bind (me));
+
+	if (this.sourceAddress || this.sourcePort)
+		req.dgram.bind (this.sourcePort, this.sourceAddress);
 };
+
+util.inherits (Session, events.EventEmitter);
+
+Session.prototype.close = function () {
+	this.dgram.close ();
+	return this;
+}
+
+Session.prototype.cancelRequests = function (error) {
+	for (id in this.reqs) {
+		var req = this.reqs[id];
+		this.unregisterRequest (req.id);
+		req.responseCb (error);
+	}
+}
 
 function _generateId () {
 	return Math.floor (Math.random () + Math.random () * 10000000)
@@ -867,45 +895,47 @@ Session.prototype.inform = function () {
 	return this;
 };
 
-Session.prototype.onMsg = function (req, buffer, remote) {
+Session.prototype.onClose = function () {
+	this.cancelRequests (new Error ("Socket forcibly closed"));
+	this.emit ("close");
+};
+
+Session.prototype.onError = function (error) {
+	this.emit (error);
+};
+
+Session.prototype.onMsg = function (buffer, remote) {
 	try {
-		clearTimeout (req.timer);
-		delete req.timer;
-
 		var message = new ResponseMessage (buffer);
+	} catch (error) {
+		this.emit("error", error);
+	}
 
-		function cbError (req, error) {
-			if (req.dgram && req.dgram.fd)
-				req.dgram.close ();
-			req.responseCb (error);
-		};
+	var req = this.unregisterRequest (message.pdu.id);
+	if (! req)
+		return;
 
-		if (message.pdu.id != req.message.pdu.id) {
-			cbError (req, new ResponseInvalidError ("ID in request '"
-					+ req.message.pdu.id + "' does not match ID in "
-					+ "response '" + message.pdu.id));
-		} else if (message.version != req.message.version) {
-			cbError (req, new ResponseInvalidError ("Version in request '"
+	try {
+		if (message.version != req.message.version) {
+			req.responseCb (req, new ResponseInvalidError ("Version in request '"
 					+ req.message.version + "' does not match version in "
 					+ "response '" + message.version));
 		} else if (message.community != req.message.community) {
-			cbError (req, new ResponseInvalidError ("Community '"
+			req.responseCb (req, new ResponseInvalidError ("Community '"
 					+ req.message.community + "' in request does not match "
 					+ "community '" + message.community + "' in response"));
 		} else if (message.pdu.type == PduType.GetResponse) {
 			req.onResponse (req, message);
 		} else {
-			cbError (req, new ResponseInvalidError ("Unknown PDU type '"
+			req.responseCb (req, new ResponseInvalidError ("Unknown PDU type '"
 					+ message.pdu.type + "' in response"));
 		}
 	} catch (error) {
-		cbError (req, error);
+		req.responseCb (req, error);
 	}
 };
 
 Session.prototype.onSimpleGetResponse = function (req, message) {
-	req.dgram.close ();
-
 	var pdu = message.pdu;
 
 	if (pdu.errorStatus > 0) {
@@ -927,33 +957,47 @@ Session.prototype.onSimpleGetResponse = function (req, message) {
 	}
 };
 
-Session.prototype.send = function (req, noWait) {
-	var session = this;
-
-	var buffer = req.message.toBuffer ();
-
-	req.dgram.send (buffer, 0, buffer.length, req.port, this.target,
-			function (error, bytes) {
-		if (error) {
-			req.responseCb (error);
+Session.prototype.registerRequest = function (req) {
+	if (! this.reqs[req.id]) {
+		this.reqs[req.id] = req;
+		if (this.reqCount <= 0)
+			this.dgram.ref();
+		this.reqCount++;
+	}
+	var me = this;
+	req.timer = setTimeout (function () {
+		if (req.retries-- > 0) {
+			me.send (req);
 		} else {
-			if (noWait) {
-				req.dgram.close ();
-				req.responseCb (null);
-			} else {
-				req.timer = setTimeout (function () {
-					if (req.retries-- > 0) {
-						session.send (req);
-					} else {
-						req.dgram.close ();
-						req.responseCb (new RequestTimedOutError (
-								"Request timed out"));
-					}
-				}, req.timeout);
-			}
+			me.unregisterRequest (req.id);
+			req.responseCb (new RequestTimedOutError (
+					"Request timed out"));
 		}
-	});
+	}, req.timeout);
+};
 
+Session.prototype.send = function (req, noWait) {
+	try {
+		var me = this;
+		
+		var buffer = req.message.toBuffer ();
+
+		this.dgram.send (buffer, 0, buffer.length, req.port, this.target,
+				function (error, bytes) {
+			if (error) {
+				req.responseCb (error);
+			} else {
+				if (noWait) {
+					req.responseCb (null);
+				} else {
+					me.registerRequest (req);
+				}
+			}
+		});
+	} catch (error) {
+		req.responseCb (error);
+	}
+	
 	return this;
 };
 
@@ -1004,10 +1048,12 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 	var req = {}
 
 	try {
-		var pdu = new pduClass (_generateId (), varbinds, options);
+		var id = _generateId ();
+		var pdu = new pduClass (id, varbinds, options);
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
+			id: id,
 			message: message,
 			responseCb: responseCb,
 			retries: this.retries,
@@ -1017,17 +1063,8 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			port: (options && options.port) ? options.port : this.port
 		};
 
-		var me = this;
-		req.dgram = dgram.createSocket (this.transport);
-		req.dgram.on ("message", me.onMsg.bind (me, req));
-
-		if (this.sourceAddress || this.sourcePort)
-			req.dgram.bind(this.sourcePort, this.sourceAddress);
-
 		this.send (req);
 	} catch (error) {
-		if (req.dgram && req.dgram.fd)
-			req.dgram.close ();
 		if (req.responseCb)
 			req.responseCb (error);
 	}
@@ -1134,7 +1171,7 @@ Session.prototype.tableColumns = function () {
 		maxRepetitions: maxRepetitions,
 		baseOid: oid,
 		rowOid: oid + ".1.",
-		columns: columns,
+		columns: columns.slice(0),
 		table: {}
 	};
 
@@ -1256,6 +1293,8 @@ Session.prototype.trap = function () {
 			};
 			pduVarbinds.push (varbind);
 		}
+		
+		var id = _generateId ();
 
 		if (this.version == Version2c) {
 			if (typeof typeOrOid != "string")
@@ -1274,7 +1313,7 @@ Session.prototype.trap = function () {
 				}
 			);
 
-			pdu = new TrapV2Pdu (_generateId (), pduVarbinds, options);
+			pdu = new TrapV2Pdu (id, pduVarbinds, options);
 		} else {
 			pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
 		}
@@ -1282,22 +1321,34 @@ Session.prototype.trap = function () {
 		var message = new RequestMessage (this.version, this.community, pdu);
 
 		req = {
+			id: id,
 			message: message,
 			responseCb: responseCb,
 			port: this.trapPort
 		};
 
-		req.dgram = dgram.createSocket ("udp4");
-
 		this.send (req, true);
 	} catch (error) {
-		if (req.dgram && req.dgram.fd)
-			req.dgram.close ();
 		if (req.responseCb)
 			req.responseCb (error);
 	}
 
 	return this;
+};
+
+Session.prototype.unregisterRequest = function (id) {
+	var req = this.reqs[id];
+	if (req) {
+		delete this.reqs[id];
+		clearTimeout (req.timer);
+		delete req.timer;
+		this.reqCount--;
+		if (this.reqCount <= 0)
+			this.dgram.unref();
+		return req;
+	} else {
+		return null;
+	}
 };
 
 function walkCb (req, error, varbinds) {
