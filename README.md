@@ -1203,7 +1203,7 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * The `agentAddr` attribute is not used when passed in the `options` object
    to the `trap()` method
 
-## Version 1.1.13 - ?
+## Version 1.1.13 - 12/08/2014
 
  * Not catching error events for the UDP socket returned from the
    `dgram.createSocket()` function
@@ -1218,6 +1218,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    all outstanding requests
  * Added a `close()` method to `Session` to close a sessions underlying UDP
    socket, which results a `close` event
+ * Signed integers are treated as unsigned integers when parsing response
+   messages
 
 # Roadmap
 
