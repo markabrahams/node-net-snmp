@@ -1223,6 +1223,7 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
 In no particular order:
 
+ * Use a single UDP socket for multiple sessions?
  * SNMP agent (i.e. server)
  * SNMP trap/inform receiver
  * SNMP version 3
