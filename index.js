@@ -210,15 +210,10 @@ function oidInSubtree (oidString, nextString) {
  **/
 
 function readInt (buffer) {
-	var value = readUint (buffer);
-
-	if (value & 0x80000000)
-		value = 0 - (value & 0x7fffffff);
-
-	return value;
+	return readUint (buffer, true);
 }
 
-function readUint (buffer) {
+function readUint (buffer, isSigned) {
 	buffer.readByte ();
 	var length = buffer.readByte ();
 
@@ -230,11 +225,20 @@ function readUint (buffer) {
 		length = 4;
 	}
 
-	value = 0;
+	value = 0, signedBitSet = false;
+	
 	for (var i = 0; i < length; i++) {
 		value *= 256;
 		value += buffer.readByte ();
+
+		if (isSigned && i <= 0) {
+			if ((value & 0x80) == 0x80)
+				signedBitSet = true;
+		}
 	}
+	
+	if (signedBitSet)
+		value -= (1 << (i * 8));
 
 	return value;
 }
@@ -1452,3 +1456,11 @@ exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
 exports.RequestFailedError = RequestFailedError;
 exports.RequestTimedOutError = RequestTimedOutError;
+
+/**
+ ** We've added this for testing.
+ **/
+exports.ObjectParser = {
+	readInt: readInt,
+	readUint: readUint
+};
