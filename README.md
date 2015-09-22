@@ -1,5 +1,5 @@
 
-# net-snmp - [homepage][homepage]
+# net-snmp
 
 This module implements version 1 and 2c of the [Simple Network Management
 Protocol (SNMP)][SNMP].
@@ -36,7 +36,6 @@ and send SNMP traps or informs:
             console.error (error);
     });
 
-[homepage]: http://re-tool.org "Homepage"
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
 [npm]: https://npmjs.org/ "npm"
 
@@ -1220,6 +1219,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    socket, which results a `close` event
  * Signed integers are treated as unsigned integers when parsing response
    messages
+
+## Version 1.1.14 - 22/09/2015
+
+ * Host repository on GitHub
 
 # Roadmap
 
