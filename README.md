@@ -1224,6 +1224,13 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
  * Host repository on GitHub
 
+## Version 1.1.15 - 08/02/2016
+
+ * When parsing an invalid response an exception in message parsing does not
+   interupt response processing
+ * Incorrectly passing `req` object in call to `req.responseCb` when handling
+   errors during response processing
+
 # Roadmap
 
 In no particular order:
