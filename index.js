@@ -918,21 +918,21 @@ Session.prototype.onMsg = function (buffer, remote) {
 
 		try {
 			if (message.version != req.message.version) {
-				req.responseCb (req, new ResponseInvalidError ("Version in request '"
+				req.responseCb (new ResponseInvalidError ("Version in request '"
 						+ req.message.version + "' does not match version in "
 						+ "response '" + message.version));
 			} else if (message.community != req.message.community) {
-				req.responseCb (req, new ResponseInvalidError ("Community '"
+				req.responseCb (new ResponseInvalidError ("Community '"
 						+ req.message.community + "' in request does not match "
 						+ "community '" + message.community + "' in response"));
 			} else if (message.pdu.type == PduType.GetResponse) {
 				req.onResponse (req, message);
 			} else {
-				req.responseCb (req, new ResponseInvalidError ("Unknown PDU type '"
+				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
 						+ message.pdu.type + "' in response"));
 			}
 		} catch (error) {
-			req.responseCb (req, error);
+			req.responseCb (error);
 		}
 	} catch (error) {
 		this.emit("error", error);
