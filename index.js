@@ -12,7 +12,8 @@ var util = require ("util");
 
 function _expandConstantObject (object) {
 	var keys = [];
-	for (key in object)
+	var key;
+	for (var key in object)
 		keys.push (key);
 	for (var i = 0; i < keys.length; i++)
 		object[object[keys[i]]] = parseInt (keys[i]);
@@ -133,12 +134,9 @@ util.inherits (RequestTimedOutError, Error);
  **/
 
 function isVarbindError (varbind) {
-	if (varbind.type == ObjectType.NoSuchObject
-			|| varbind.type == ObjectType.NoSuchInstance
-			|| varbind.type == ObjectType.EndOfMibView)
-		return true;
-	else
-		return false;
+	return !!(varbind.type == ObjectType.NoSuchObject
+	|| varbind.type == ObjectType.NoSuchInstance
+	|| varbind.type == ObjectType.EndOfMibView);
 }
 
 function varbindError (varbind) {
@@ -216,6 +214,8 @@ function readInt (buffer) {
 function readUint (buffer, isSigned) {
 	buffer.readByte ();
 	var length = buffer.readByte ();
+	var value = 0;
+	var signedBitSet = false;
 
 	if (length > 5) {
 		 throw new RangeError ("Integer too long '" + length + "'");
@@ -225,8 +225,6 @@ function readUint (buffer, isSigned) {
 		length = 4;
 	}
 
-	value = 0, signedBitSet = false;
-	
 	for (var i = 0; i < length; i++) {
 		value *= 256;
 		value += buffer.readByte ();
@@ -248,7 +246,7 @@ function readUint64 (buffer) {
 
 	if (value.length > 8)
 		throw new RequestInvalidError ("64 bit unsigned integer too long '"
-				+ value.length + "'")
+				+ value.length + "'");
 
 	return value;
 }
@@ -329,7 +327,7 @@ function writeUint (buffer, type, value) {
 function writeUint64 (buffer, value) {
 	if (value.length > 8)
 		throw new RequestInvalidError ("64 bit unsigned integer too long '"
-				+ value.length + "'")
+				+ value.length + "'");
 	buffer.writeBuffer (value, ObjectType.Counter64);
 }
 
@@ -381,7 +379,7 @@ function writeVarbinds (buffer, varbinds) {
 		}
 
 		buffer.endSequence ();
-	};
+	}
 	buffer.endSequence ();
 }
 
@@ -549,7 +547,7 @@ var ResponseMessage = function (buffer) {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
 				+ "' in response");
 	}
-}
+};
 
 /*****************************************************************************
  ** Session class definition
@@ -607,15 +605,16 @@ util.inherits (Session, events.EventEmitter);
 Session.prototype.close = function () {
 	this.dgram.close ();
 	return this;
-}
+};
 
 Session.prototype.cancelRequests = function (error) {
+	var id;
 	for (id in this.reqs) {
 		var req = this.reqs[id];
 		this.unregisterRequest (req.id);
 		req.responseCb (error);
 	}
-}
+};
 
 function _generateId () {
 	return Math.floor (Math.random () + Math.random () * 10000000)
@@ -645,7 +644,7 @@ Session.prototype.get = function (oids, responseCb) {
 
 			req.responseCb (null, varbinds);
 		}
-	};
+	}
 
 	var pduVarbinds = [];
 
@@ -747,7 +746,7 @@ Session.prototype.getBulk = function () {
 		}
 
 		req.responseCb (null, varbinds);
-	};
+	}
 
 	var pduVarbinds = [];
 
@@ -796,7 +795,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 
 			req.responseCb (null, varbinds);
 		}
-	};
+	}
 
 	var pduVarbinds = [];
 
@@ -813,7 +812,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 };
 
 Session.prototype.inform = function () {
-	var typeOrOid = arguments[0];;
+	var typeOrOid = arguments[0];
 	var varbinds, options = {}, responseCb;
 
 	/**
@@ -865,7 +864,7 @@ Session.prototype.inform = function () {
 
 			req.responseCb (null, varbinds);
 		}
-	};
+	}
 
 	if (typeof typeOrOid != "string")
 		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
@@ -1029,7 +1028,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 			req.responseCb (null, varbinds);
 		}
-	};
+	}
 
 	var pduVarbinds = [];
 
@@ -1049,7 +1048,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
-	var req = {}
+	var req = {};
 
 	try {
 		var id = _generateId ();
@@ -1116,7 +1115,7 @@ Session.prototype.subtree  = function () {
 	this.walk (oid, maxRepetitions, subtreeCb.bind (me, req), doneCb);
 
 	return this;
-}
+};
 
 function tableColumnsResponseCb (req, error) {
 	if (error) {
@@ -1143,7 +1142,7 @@ function tableColumnsFeedCb (req, varbinds) {
 			return true;
 		}
 
-		var oid = varbinds[i].oid.replace (req.rowOid, "")
+		var oid = varbinds[i].oid.replace (req.rowOid, "");
 		if (oid && oid != varbinds[i].oid) {
 			var match = oid.match (/^(\d+)\.(.+)$/);
 			if (match && match[1] > 0) {
@@ -1187,7 +1186,7 @@ Session.prototype.tableColumns = function () {
 	}
 
 	return this;
-}
+};
 
 function tableResponseCb (req, error) {
 	if (error)
@@ -1205,7 +1204,7 @@ function tableFeedCb (req, varbinds) {
 			return true;
 		}
 
-		var oid = varbinds[i].oid.replace (req.rowOid, "")
+		var oid = varbinds[i].oid.replace (req.rowOid, "");
 		if (oid && oid != varbinds[i].oid) {
 			var match = oid.match (/^(\d+)\.(.+)$/);
 			if (match && match[1] > 0) {
@@ -1243,7 +1242,7 @@ Session.prototype.table = function () {
 			tableResponseCb.bind (me, req));
 
 	return this;
-}
+};
 
 Session.prototype.trap = function () {
 	var req = {};
@@ -1430,7 +1429,7 @@ Session.prototype.walk  = function () {
 		this.getNext ([oid], walkCb.bind (me, req));
 
 	return this;
-}
+};
 
 /*****************************************************************************
  ** Exports
