@@ -12,7 +12,6 @@ var util = require ("util");
 
 function _expandConstantObject (object) {
 	var keys = [];
-	var key;
 	for (var key in object)
 		keys.push (key);
 	for (var i = 0; i < keys.length; i++)
