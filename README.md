@@ -1231,6 +1231,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Incorrectly passing `req` object in call to `req.responseCb` when handling
    errors during response processing
 
+## Version 1.1.16 - 29/02/2016
+
+ * Address a number of issues detected with the Mocha test suite by a user
+
 # Roadmap
 
 In no particular order:
