@@ -1235,6 +1235,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
  * Address a number of issues detected with the Mocha test suite by a user
 
+## Version 1.1.17 - 21/03/2016
+
+ * Correct reference to non-existant `req` variable in the `Session` objects
+   constructor (should be `this`)
+
 # Roadmap
 
 In no particular order:
