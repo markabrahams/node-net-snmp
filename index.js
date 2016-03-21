@@ -596,7 +596,7 @@ var Session = function (target, community, options) {
 	this.dgram.on ("error", me.onError.bind (me));
 
 	if (this.sourceAddress || this.sourcePort)
-		req.dgram.bind (this.sourcePort, this.sourceAddress);
+		this.dgram.bind (this.sourcePort, this.sourceAddress);
 };
 
 util.inherits (Session, events.EventEmitter);
