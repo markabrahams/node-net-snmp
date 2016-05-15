@@ -1436,8 +1436,8 @@ Session.prototype.walk  = function () {
 
 exports.Session = Session;
 
-exports.createSession = function (target, community, version, options) {
-	return new Session (target, community, version, options);
+exports.createSession = function (target, community, options) {
+	return new Session (target, community, options);
 };
 
 exports.isVarbindError = isVarbindError;
