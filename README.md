@@ -1240,6 +1240,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Correct reference to non-existant `req` variable in the `Session` objects
    constructor (should be `this`)
 
+## Version 1.1.18 - 15/05/2015
+
+ * Correct argument number and names to the `snmp.createSession()` function
+ * Add missing braces to an example in the README.md file
+
 # Roadmap
 
 In no particular order:
