@@ -240,12 +240,27 @@ function readUint (buffer, isSigned) {
 	return value;
 }
 
+/**
+ ** As with integers, some SNMP agents produce 64bit integers on the wire such as
+ ** 00 ff ff ff ff ff 2f 73 34.
+ **
+ ** This uses the same work-around as readInt, i.e. throw away the first byte
+ ** if it is zero.
+ **/
+
 function readUint64 (buffer) {
 	var value = buffer.readString (ObjectType.Counter64, true);
 
-	if (value.length > 8)
+	if (value.length > 9) {
 		throw new RequestInvalidError ("64 bit unsigned integer too long '"
 				+ value.length + "'");
+	} else if (value.length == 9) {
+		var firstByte = value[0] & 0xff;
+		if (firstByte !== 0)
+			throw new RangeError ("64 bit unsigned integer too long '"
+				+ value.length + "'");
+		value = value.slice(1);
+	}
 
 	return value;
 }
