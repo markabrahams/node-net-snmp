@@ -1245,6 +1245,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Correct argument number and names to the `snmp.createSession()` function
  * Add missing braces to an example in the README.md file
 
+## Version 1.1.19 - 26/08/2016
+
+ * Remove 64bit integer check to ensure a maximum of 8 bytes are given in send
+   and received messages
+
 # Roadmap
 
 In no particular order:
