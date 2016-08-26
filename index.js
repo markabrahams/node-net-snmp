@@ -243,10 +243,6 @@ function readUint (buffer, isSigned) {
 function readUint64 (buffer) {
 	var value = buffer.readString (ObjectType.Counter64, true);
 
-	if (value.length > 8)
-		throw new RequestInvalidError ("64 bit unsigned integer too long '"
-				+ value.length + "'");
-
 	return value;
 }
 
@@ -324,9 +320,6 @@ function writeUint (buffer, type, value) {
 }
 
 function writeUint64 (buffer, value) {
-	if (value.length > 8)
-		throw new RequestInvalidError ("64 bit unsigned integer too long '"
-				+ value.length + "'");
 	buffer.writeBuffer (value, ObjectType.Counter64);
 }
 
