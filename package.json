@@ -7,13 +7,13 @@
     "example": "example"
   },
   "dependencies": {
-    "asn1": "*"
+    "asn1-ber": "*"
   },
-  "contributors": [ 
+  "contributors": [
     {
       "name": "Stephen Vickers",
       "email": "stephen.vickers.sv@gmail.com"
-    } 
+    }
   ],
   "repository": {
     "type": "git",
