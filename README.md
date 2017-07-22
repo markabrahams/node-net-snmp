@@ -1250,6 +1250,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
  * Remove 64bit integer check to ensure a maximum of 8 bytes are given in send
    and received messages
 
+## Version 1.2.0 - 22/07/2017
+
+ * Replace asn1 dependancy with asn1-ber
+
 # Roadmap
 
 In no particular order:
