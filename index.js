@@ -1243,10 +1243,23 @@ function tableFeedCb (req, varbinds) {
 	}
 }
 
-Session.prototype.table = function (tableOptions, maxRepetitions, responseCb) {
+Session.prototype.table = function () {
 	var me = this;
+	
+	var tableOptions, maxRepetitions, responseCb;
+	tableOptions = arguments[0];
+	
 	if ((typeof tableOptions)!=="object") //This is the old format
 		tableOptions = {BaseOID: tableOptions}
+
+	if (arguments.length < 3) {
+		responseCb = arguments[1];
+		maxRepetitions=20;
+	} else {
+		maxRepetitions = arguments[1];
+		responseCb = arguments[2];
+	}
+
 	
 	var req = {
 		responseCb: responseCb,
