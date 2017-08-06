@@ -132,6 +132,16 @@ util.inherits (RequestTimedOutError, Error);
  ** OID and varbind helper functions
  **/
 
+function readInt64BEasFloat(buffer, offset) {
+    while (buffer.length<8)
+		buffer = Buffer.concat([Buffer([0]),buffer])
+	
+	var low = buffer.readInt32BE(offset + 4);
+  var n = buffer.readInt32BE(offset) * 4294967296.0 + low;
+  if (low < 0) n += 4294967296;
+  return n;
+}
+
 function isVarbindError (varbind) {
 	return !!(varbind.type == ObjectType.NoSuchObject
 	|| varbind.type == ObjectType.NoSuchInstance
@@ -1202,35 +1212,52 @@ function tableFeedCb (req, varbinds) {
 			if (match && match[1] > 0) {
 				if (! req.table[match[2]])
 					req.table[match[2]] = {};
-				req.table[match[2]][match[1]] = varbinds[i].value;
+				var colInfo = req.columns[match[1]];
+				var colName = match[1];
+				var thisValue = varbinds[i].value;
+				if (colInfo && colInfo.name)
+					colName = colInfo.name;
+				if (colInfo && colInfo.type) {
+					switch(colInfo.type) {
+						case 'string':
+							thisValue = thisValue.toString();
+							break;
+						case 'hex':
+							thisValue = thisValue.toString('hex');
+							break;
+						case 'uint64':
+							thisValue = readInt64BEasFloat(thisValue,0);
+							break;
+						case 'enum':
+							if (colInfo.enum && colInfo.enum[varbinds[i].value])
+							thisValue = colInfo.enum[varbinds[i].value];
+							break;
+					}
+				}
+
+					
+				
+				req.table[match[2]][colName] = thisValue;
 			}
 		}
 	}
 }
 
-Session.prototype.table = function () {
+Session.prototype.table = function (tableOptions, maxRepetitions, responseCb) {
 	var me = this;
-
-	var oid = arguments[0];
-	var maxRepetitions, responseCb;
-
-	if (arguments.length < 3) {
-		responseCb = arguments[1];
-		maxRepetitions = 20;
-	} else {
-		maxRepetitions = arguments[1];
-		responseCb = arguments[2];
-	}
-
+	if ((typeof tableOptions)!=="object") //This is the old format
+		tableOptions = {BaseOID: tableOptions}
+	
 	var req = {
 		responseCb: responseCb,
 		maxRepetitions: maxRepetitions,
-		baseOid: oid,
-		rowOid: oid + ".1.",
+		baseOid: tableOptions.BaseOID,
+		rowOid: tableOptions.BaseOID + ".1.",
+		columns: (tableOptions.Columns) ? tableOptions.Columns : {},
 		table: {}
 	};
 
-	this.subtree (oid, maxRepetitions, tableFeedCb.bind (me, req),
+	this.subtree (tableOptions.BaseOID, maxRepetitions, tableFeedCb.bind (me, req),
 			tableResponseCb.bind (me, req));
 
 	return this;
