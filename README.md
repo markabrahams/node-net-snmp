@@ -329,7 +329,8 @@ The `createSession()` function instantiates and returns an instance of the
         timeout: 5000,
         transport: "udp4",
         trapPort: 162,
-        version: snmp.Version1
+        version: snmp.Version1,
+        idBitsSize: 16
     };
     
     var session = snmp.createSession ("127.0.0.1", "public", options);
@@ -353,6 +354,8 @@ is an object, and can contain the following items:
  * `trapPort` - UDP port to send traps and informs too, defaults to `162`
  * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
    `snmp.Version1`
+ * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
+    of the generated id for compatibility with some older devices.
 
 ## session.on ("close", callback)
 

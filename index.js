@@ -577,6 +577,10 @@ var Session = function (target, community, options) {
 			? parseInt(options.sourcePort)
 			: undefined;
 
+	this.idBitsSize = (options && options.idBitsSize)
+			? parseInt(options.idBitsSize)
+			: 32;
+
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -608,8 +612,11 @@ Session.prototype.cancelRequests = function (error) {
 	}
 };
 
-function _generateId () {
-	return Math.floor (Math.random () + Math.random () * 10000000)
+function _generateId (bitsSize) {
+	if (bitSize === 16) {
+		return Math.floor(Math.random() * 0x10000);
+	}
+	return Math.floor(Math.random() * 0x100000000);
 }
 
 Session.prototype.get = function (oids, responseCb) {
@@ -1043,7 +1050,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 	var req = {};
 
 	try {
-		var id = _generateId ();
+		var id = _generateId (this.idBitsSize);
 		var pdu = new pduClass (id, varbinds, options);
 		var message = new RequestMessage (this.version, this.community, pdu);
 
@@ -1289,7 +1296,7 @@ Session.prototype.trap = function () {
 			pduVarbinds.push (varbind);
 		}
 		
-		var id = _generateId ();
+		var id = _generateId (this.idBitsSize);
 
 		if (this.version == Version2c) {
 			if (typeof typeOrOid != "string")
