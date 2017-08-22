@@ -612,7 +612,7 @@ Session.prototype.cancelRequests = function (error) {
 	}
 };
 
-function _generateId (bitsSize) {
+function _generateId (bitSize) {
 	if (bitSize === 16) {
 		return Math.floor(Math.random() * 0x10000);
 	}
