@@ -1265,6 +1265,8 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 
 ## Version 1.2.1 - 11/02/2018
 
+ * Add support of 16bit ids to help interoperate with older devices (added the
+   `idBitsSize` option to the `createSession()` function
  * Add note to README.md that sessions should be closed when done with
 
 # Roadmap
