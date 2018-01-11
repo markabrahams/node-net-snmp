@@ -29,6 +29,9 @@ and send SNMP traps or informs:
                 else
                     console.log (varbinds[i].oid + " = " + varbinds[i].value);
         }
+
+        // If done, close the session
+        session.close ();
     });
 
     session.trap (snmp.TrapType.LinkDown, function (error) {
@@ -339,7 +342,6 @@ The optional `target` parameter defaults to `127.0.0.1`.  The optional
 `community` parameter defaults to `public`.  The optional `options` parameter
 is an object, and can contain the following items:
 
-
  * `port` - UDP port to send requests too, defaults to `161`
  * `retries` - Number of times to re-send a request, defaults to `1`
  * `sourceAddress` - IP address from which SNMP requests should originate,
@@ -356,6 +358,10 @@ is an object, and can contain the following items:
    `snmp.Version1`
  * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
     of the generated id for compatibility with some older devices.
+
+When a session has been finished with it should be closed:
+
+    session.close ();
 
 ## session.on ("close", callback)
 
@@ -1256,6 +1262,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
 ## Version 1.2.0 - 22/07/2017
 
  * Replace asn1 dependancy with asn1-ber
+
+## Version 1.2.1 - 11/02/2018
+
+ * Add note to README.md that sessions should be closed when done with
 
 # Roadmap
 
