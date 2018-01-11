@@ -1,5 +1,5 @@
 
-var ber    = require ("asn1").Ber;
+var ber    = require ('asn1-ber').Ber;
 var assert = require('assert');
 var snmp   = require('../');
 
