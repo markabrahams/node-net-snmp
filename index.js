@@ -614,9 +614,9 @@ Session.prototype.cancelRequests = function (error) {
 
 function _generateId (bitSize) {
 	if (bitSize === 16) {
-		return Math.floor(Math.random() * 0x10000);
+		return Math.floor(Math.random() * 10000) % 65535;
 	}
-	return Math.floor(Math.random() * 0x100000000);
+	return Math.floor(Math.random() * 100000000) % 4294967295;
 }
 
 Session.prototype.get = function (oids, responseCb) {
