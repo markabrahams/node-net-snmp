@@ -1269,6 +1269,11 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    `idBitsSize` option to the `createSession()` function
  * Add note to README.md that sessions should be closed when done with
 
+## Version 1.2.2 - 01/02/2018
+
+ * The _generateId() function randomly returns negative ID's resulting in
+   response parsing issues and timeouts
+
 # Roadmap
 
 In no particular order:
