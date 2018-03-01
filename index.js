@@ -907,33 +907,25 @@ Session.prototype.onError = function (error) {
 };
 
 Session.prototype.onMsg = function (buffer, remote) {
-	try {
-		var message = new ResponseMessage (buffer);
+	var message = new ResponseMessage (buffer);
 
-		var req = this.unregisterRequest (message.pdu.id);
-		if (! req)
-			return;
+	var req = this.unregisterRequest (message.pdu.id);
+	if (! req)
+		return;
 
-		try {
-			if (message.version != req.message.version) {
-				req.responseCb (new ResponseInvalidError ("Version in request '"
-						+ req.message.version + "' does not match version in "
-						+ "response '" + message.version));
-			} else if (message.community != req.message.community) {
-				req.responseCb (new ResponseInvalidError ("Community '"
-						+ req.message.community + "' in request does not match "
-						+ "community '" + message.community + "' in response"));
-			} else if (message.pdu.type == PduType.GetResponse) {
-				req.onResponse (req, message);
-			} else {
-				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
-						+ message.pdu.type + "' in response"));
-			}
-		} catch (error) {
-			req.responseCb (error);
-		}
-	} catch (error) {
-		this.emit("error", error);
+	if (message.version != req.message.version) {
+		req.responseCb (new ResponseInvalidError ("Version in request '"
+				+ req.message.version + "' does not match version in "
+				+ "response '" + message.version));
+	} else if (message.community != req.message.community) {
+		req.responseCb (new ResponseInvalidError ("Community '"
+				+ req.message.community + "' in request does not match "
+				+ "community '" + message.community + "' in response"));
+	} else if (message.pdu.type == PduType.GetResponse) {
+		req.onResponse (req, message);
+	} else {
+		req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
+				+ message.pdu.type + "' in response"));
 	}
 };
 
@@ -979,11 +971,11 @@ Session.prototype.registerRequest = function (req) {
 };
 
 Session.prototype.send = function (req, noWait) {
-	try {
-		var me = this;
-		
-		var buffer = req.message.toBuffer ();
+	var me = this;
 
+	var buffer = req.message.toBuffer ();
+
+	try {
 		this.dgram.send (buffer, 0, buffer.length, req.port, this.target,
 				function (error, bytes) {
 			if (error) {
@@ -1047,24 +1039,21 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
-	var req = {};
+	var id = _generateId (this.idBitsSize);
+	var pdu = new pduClass (id, varbinds, options);
+	var message = new RequestMessage (this.version, this.community, pdu);
+	var req = {
+		id: id,
+		message: message,
+		responseCb: responseCb,
+		retries: this.retries,
+		timeout: this.timeout,
+		onResponse: this.onSimpleGetResponse,
+		feedCb: feedCb,
+		port: (options && options.port) ? options.port : this.port
+	};
 
 	try {
-		var id = _generateId (this.idBitsSize);
-		var pdu = new pduClass (id, varbinds, options);
-		var message = new RequestMessage (this.version, this.community, pdu);
-
-		req = {
-			id: id,
-			message: message,
-			responseCb: responseCb,
-			retries: this.retries,
-			timeout: this.timeout,
-			onResponse: this.onSimpleGetResponse,
-			feedCb: feedCb,
-			port: (options && options.port) ? options.port : this.port
-		};
-
 		this.send (req);
 	} catch (error) {
 		if (req.responseCb)
@@ -1245,90 +1234,89 @@ Session.prototype.table = function () {
 
 Session.prototype.trap = function () {
 	var req = {};
+	var typeOrOid = arguments[0];
+	var varbinds, options = {}, responseCb;
+
+	/**
+	 ** Support the following signatures:
+	 **
+	 **    typeOrOid, varbinds, options, callback
+	 **    typeOrOid, varbinds, agentAddr, callback
+	 **    typeOrOid, varbinds, callback
+	 **    typeOrOid, agentAddr, callback
+	 **    typeOrOid, options, callback
+	 **    typeOrOid, callback
+	 **/
+	if (arguments.length >= 4) {
+		varbinds = arguments[1];
+		if (typeof arguments[2] == "string") {
+			options.agentAddr = arguments[2];
+		} else if (arguments[2].constructor != Array) {
+			options = arguments[2];
+		}
+		responseCb = arguments[3];
+	} else if (arguments.length >= 3) {
+		if (typeof arguments[1] == "string") {
+			varbinds = [];
+			options.agentAddr = arguments[1];
+		} else if (arguments[1].constructor != Array) {
+			varbinds = [];
+			options = arguments[1];
+		} else {
+			varbinds = arguments[1];
+			agentAddr = null;
+		}
+		responseCb = arguments[2];
+	} else {
+		varbinds = [];
+		responseCb = arguments[1];
+	}
+
+	var pdu, pduVarbinds = [];
+
+	for (var i = 0; i < varbinds.length; i++) {
+		var varbind = {
+			oid: varbinds[i].oid,
+			type: varbinds[i].type,
+			value: varbinds[i].value
+		};
+		pduVarbinds.push (varbind);
+	}
+
+	var id = _generateId (this.idBitsSize);
+
+	if (this.version == Version2c) {
+		if (typeof typeOrOid != "string")
+			typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+		pduVarbinds.unshift (
+			{
+				oid: "1.3.6.1.2.1.1.3.0",
+				type: ObjectType.TimeTicks,
+				value: options.upTime || Math.floor (process.uptime () * 100)
+			},
+			{
+				oid: "1.3.6.1.6.3.1.1.4.1.0",
+				type: ObjectType.OID,
+				value: typeOrOid
+			}
+		);
+
+		pdu = new TrapV2Pdu (id, pduVarbinds, options);
+	} else {
+		pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
+	}
+
+	var message = new RequestMessage (this.version, this.community, pdu);
+
+	req = {
+		id: id,
+		message: message,
+		responseCb: responseCb,
+		port: this.trapPort
+	};
 
 	try {
-		var typeOrOid = arguments[0];
-		var varbinds, options = {}, responseCb;
-
-		/**
-		 ** Support the following signatures:
-		 ** 
-		 **    typeOrOid, varbinds, options, callback
-		 **    typeOrOid, varbinds, agentAddr, callback
-		 **    typeOrOid, varbinds, callback
-		 **    typeOrOid, agentAddr, callback
-		 **    typeOrOid, options, callback
-		 **    typeOrOid, callback
-		 **/
-		if (arguments.length >= 4) {
-			varbinds = arguments[1];
-			if (typeof arguments[2] == "string") {
-				options.agentAddr = arguments[2];
-			} else if (arguments[2].constructor != Array) {
-				options = arguments[2];
-			}
-			responseCb = arguments[3];
-		} else if (arguments.length >= 3) {
-			if (typeof arguments[1] == "string") {
-				varbinds = [];
-				options.agentAddr = arguments[1];
-			} else if (arguments[1].constructor != Array) {
-				varbinds = [];
-				options = arguments[1];
-			} else {
-				varbinds = arguments[1];
-				agentAddr = null;
-			}
-			responseCb = arguments[2];
-		} else {
-			varbinds = [];
-			responseCb = arguments[1];
-		}
-
-		var pdu, pduVarbinds = [];
-
-		for (var i = 0; i < varbinds.length; i++) {
-			var varbind = {
-				oid: varbinds[i].oid,
-				type: varbinds[i].type,
-				value: varbinds[i].value
-			};
-			pduVarbinds.push (varbind);
-		}
-		
-		var id = _generateId (this.idBitsSize);
-
-		if (this.version == Version2c) {
-			if (typeof typeOrOid != "string")
-				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
-
-			pduVarbinds.unshift (
-				{
-					oid: "1.3.6.1.2.1.1.3.0",
-					type: ObjectType.TimeTicks,
-					value: options.upTime || Math.floor (process.uptime () * 100)
-				},
-				{
-					oid: "1.3.6.1.6.3.1.1.4.1.0",
-					type: ObjectType.OID,
-					value: typeOrOid
-				}
-			);
-
-			pdu = new TrapV2Pdu (id, pduVarbinds, options);
-		} else {
-			pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
-		}
-
-		var message = new RequestMessage (this.version, this.community, pdu);
-
-		req = {
-			id: id,
-			message: message,
-			responseCb: responseCb,
-			port: this.trapPort
-		};
-
 		this.send (req, true);
 	} catch (error) {
 		if (req.responseCb)
