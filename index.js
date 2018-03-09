@@ -907,7 +907,12 @@ Session.prototype.onError = function (error) {
 };
 
 Session.prototype.onMsg = function (buffer, remote) {
-	var message = new ResponseMessage (buffer);
+	try {
+		var message = new ResponseMessage (buffer);
+	} catch (error) {
+		this.emit ("error", error);
+		return;
+	}
 
 	var req = this.unregisterRequest (message.pdu.id);
 	if (! req)
