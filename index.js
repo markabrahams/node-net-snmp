@@ -1058,12 +1058,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		port: (options && options.port) ? options.port : this.port
 	};
 
-	try {
-		this.send (req);
-	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
-	}
+	this.send (req);
 };
 
 function subtreeCb (req, varbinds) {
@@ -1321,12 +1316,7 @@ Session.prototype.trap = function () {
 		port: this.trapPort
 	};
 
-	try {
-		this.send (req, true);
-	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
-	}
+	this.send (req, true);
 
 	return this;
 };
