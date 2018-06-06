@@ -1269,7 +1269,7 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    `idBitsSize` option to the `createSession()` function
  * Add note to README.md that sessions should be closed when done with
 
-## Version 1.2.2 - 06/06/2018
+## Version 1.2.3 - 06/06/2018
 
  * Set NoSpaceships Ltd to be the owner and maintainer
 
