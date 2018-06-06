@@ -1282,7 +1282,7 @@ In no particular order:
  * SNMP trap/inform receiver
  * SNMP version 3
 
-Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
+Suggestions and requirements should be sent to <hello@nospaceships.com>.
 
 # License
 
