@@ -1269,6 +1269,10 @@ Bug reports should be sent to <stephen.vickers.sv@gmail.com>.
    `idBitsSize` option to the `createSession()` function
  * Add note to README.md that sessions should be closed when done with
 
+## Version 1.2.2 - 06/06/2018
+
+ * Set NoSpaceships Ltd to be the owner and maintainer
+
 # Roadmap
 
 In no particular order:
@@ -1282,7 +1286,9 @@ Suggestions and requirements should be sent to <stephen.vickers.sv@gmail.com>.
 
 # License
 
-Copyright (c) 2013 Stephen Vickers
+Copyright (c) 2018 NoSpaceships Ltd <hello@nospaceships.com>
+
+Copyright (c) 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -1301,7 +1307,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
-
-# Author
-
-Stephen Vickers <stephen.vickers.sv@gmail.com>

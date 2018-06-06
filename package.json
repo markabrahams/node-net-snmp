@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
@@ -12,12 +12,16 @@
   "contributors": [
     {
       "name": "Stephen Vickers",
-      "email": "stephen.vickers.sv@gmail.com"
+      "email": "stephen.vickers@nospaceships.com"
+    },
+    {
+      "name": "NoSpaceships Ltd",
+      "email": "hello@nospaceships.com"
     }
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/stephenwvickers/node-net-snmp.git"
+    "url": "git://github.com/nospaceships/node-net-snmp.git"
   },
   "keywords": [
     "snmp",
@@ -30,6 +34,6 @@
     "monitor",
     "monitoring"
   ],
-  "author": "Stephen Vickers <stephen.vickers.sv@gmail.com>",
+  "author": "NoSpaceships Ltd <hello@nospaceships.com>",
   "license": "MIT"
 }
