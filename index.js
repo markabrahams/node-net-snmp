@@ -581,6 +581,10 @@ var Session = function (target, community, options) {
 			? parseInt(options.idBitsSize)
 			: 32;
 
+	this.validateResponse = (options && 'validateResponse' in options)
+			? options.validateResponse
+			: true;
+
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -629,16 +633,17 @@ Session.prototype.get = function (oids, responseCb) {
 					+ "match response OIDs"));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
-					req.responseCb (new ResponseInvalidError ("OID '"
+				if (req.validateResponse) {
+					if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+						req.responseCb(new ResponseInvalidError("OID '"
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in request at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
 							+ "at position '" + i + "'"));
-					return;
-				} else {
-					varbinds.push (pdu.varbinds[i]);
-				}
+						return;
+					}
+				}				
+				varbinds.push (pdu.varbinds[i]);
 			}
 
 			req.responseCb (null, varbinds);
@@ -1013,16 +1018,17 @@ Session.prototype.set = function (varbinds, responseCb) {
 					+ "match response OIDs"));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
-					req.responseCb (new ResponseInvalidError ("OID '"
+				if (req.validateResponse) {
+					if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+						req.responseCb(new ResponseInvalidError("OID '"
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in request at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
 							+ "at position '" + i + "'"));
-					return;
-				} else {
-					varbinds.push (pdu.varbinds[i]);
+						return;
+					}
 				}
+				varbinds.push (pdu.varbinds[i]);
 			}
 
 			req.responseCb (null, varbinds);
@@ -1062,7 +1068,8 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			timeout: this.timeout,
 			onResponse: this.onSimpleGetResponse,
 			feedCb: feedCb,
-			port: (options && options.port) ? options.port : this.port
+			port: (options && options.port) ? options.port : this.port,
+			validateResponse: this.validateResponse
 		};
 
 		this.send (req);
