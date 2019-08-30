@@ -1378,12 +1378,17 @@ function walkCb (req, error, varbinds) {
 				varbinds[0].pop ();
 				done = 1;
 			}
+			if(!varbinds[0][i - 1].oid.includes(req.baseOid))
+				done = 1;
 		}
 		if (req.feedCb (varbinds[0]))
 			done = 1;
 		if (! done)
 			oid = varbinds[0][varbinds[0].length - 1].oid;
 	} else {
+		if (! done) 
+			if(!varbinds[0].oid.includes(req.baseOid))
+				done = 1;
 		if (! done) {
 			if (req.feedCb (varbinds)) {
 				done = 1;
@@ -1405,6 +1410,12 @@ Session.prototype.walk  = function () {
 	var oid = arguments[0];
 	var maxRepetitions, feedCb, doneCb, baseOid;
 
+	if(arguments.length < 5){
+		baseOid = oid;
+	}else{
+		baseOid = arguments[4];
+	}
+	
 	if (arguments.length < 4) {
 		maxRepetitions = 20;
 		feedCb = arguments[1];
@@ -1418,7 +1429,8 @@ Session.prototype.walk  = function () {
 	var req = {
 		maxRepetitions: maxRepetitions,
 		feedCb: feedCb,
-		doneCb: doneCb
+		doneCb: doneCb,
+		baseOid:baseOid
 	};
 
 	if (this.version == Version2c)
