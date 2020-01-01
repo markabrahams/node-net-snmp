@@ -92,8 +92,29 @@ var TrapType = {
 
 _expandConstantObject (TrapType);
 
+var UsmLevel = {
+	1: "noAuthNoPriv",
+	2: "authNoPriv",
+	3: "authPriv"
+};
+
+_expandConstantObject (UsmLevel);
+
+var UsmAuthProtocol = {
+	0: "MD5"
+};
+
+_expandConstantObject (UsmAuthProtocol);
+
+var UsmPrivProtocol = {
+	0: "DES"
+};
+
+_expandConstantObject (UsmPrivProtocol);
+
 var Version1 = 0;
 var Version2c = 1;
+var Version3 = 3;
 
 /*****************************************************************************
  ** Exception class definitions
@@ -545,13 +566,18 @@ var ResponseMessage = function (buffer) {
  ** Session class definition
  **/
 
-var Session = function (target, community, options) {
+var Session = function (target, authenticator, options) {
 	this.target = target || "127.0.0.1";
-	this.community = community || "public";
 
 	this.version = (options && options.version)
 			? options.version
 			: Version1;
+
+	if ( this.version == Version3 ) {
+		this.user = authenticator;
+	} else {
+		this.community = authenticator || "public";
+	}
 
 	this.transport = (options && options.transport)
 			? options.transport
@@ -1045,7 +1071,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 	return this;
 };
 
-Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
+Session.prototype.simpleGetPdu = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
 	var req = {};
 
@@ -1071,6 +1097,16 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			req.responseCb (error);
 	}
 };
+
+Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
+		responseCb, options) {
+	if ( this.version == Version3 ) {
+		// SNMPv3 discovery goes here
+		console.log("SNMPv3 discovery");
+	} else {
+		this.simpleGetPdu(pduClass, feedCb, varbinds, responseCb, options);
+	}
+}
 
 function subtreeCb (req, varbinds) {
 	var done = 0;
@@ -1440,15 +1476,23 @@ exports.createSession = function (target, community, options) {
 	return new Session (target, community, options);
 };
 
+exports.createV3Session = function (target, user, options) {
+	return new Session (target, user, options);
+};
+
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;
 
 exports.Version1 = Version1;
 exports.Version2c = Version2c;
+exports.Version3 = Version3;
 
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
+exports.UsmLevel = UsmLevel;
+exports.UsmAuthProtocol = UsmAuthProtocol;
+exports.UsmPrivProtocol = UsmPrivProtocol;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
