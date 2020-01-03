@@ -3,7 +3,7 @@
 
 var snmp = require ("../");
 
-if (process.argv.length < 6) {
+if (process.argv.length < 4) {
 	console.log ("usage: snmp-get <target> <oid>");
 	process.exit (1);
 }

@@ -523,8 +523,9 @@ var GetResponsePdu = function (reader) {
 var readPdu = function(reader, scoped) {
 	var pdu;
 	if ( scoped ) {
+		// auth & priv functions to go here
 		reader.readSequence ();
-		contextEngineID = reader.readString ();
+		contextEngineID = reader.readString (ber.OctetString, true);
 		contextName = reader.readString ();
 	}
 	var type = reader.peek ();
@@ -607,7 +608,7 @@ ResponseMessage.prototype.readV3Header = function (reader) {
 	this.msgSecurityParameters = {};
 	var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
 	msgSecurityParametersReader.readSequence ();
-	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString ();
+	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
 	this.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
 	this.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
 	this.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
@@ -616,19 +617,20 @@ ResponseMessage.prototype.readV3Header = function (reader) {
 
 };
 
-var V3DiscoverMessage = function (user, pdu) {
+var V3Message = function (user, msgFlags, msgSecurityParameters, pdu) {
 	this.version = 3;
 	this.msgGlobalData = {
-		msgID: _generateId(), //random ID
+		msgID: _generateId(), // random ID
 		msgMaxSize: 65507,
-		msgFlags: 4, // authFlag & 2 * privFlag & 4 * reportableFlag
+		msgFlags: 4,
+		//msgFlags: msgFlags, // authFlag & 2 * privFlag & 4 * reportableFlag
 		msgSecurityModel: 3
 	};
 	this.msgSecurityParameters = {
-		msgAuthoritativeEngineID: "",
-		msgAuthoritativeEngineBoots: 0,
-		msgAuthoritativeEngineTime: 0,
-		msgUserName: "",
+		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID,
+		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots,
+		msgAuthoritativeEngineTime: msgSecurityParameters.msgAuthoritativeEngineTime,
+		msgUserName: user.name,
 		msgAuthenticationParameters: "",
 		msgPrivacyParameters: ""
 	}
@@ -636,7 +638,7 @@ var V3DiscoverMessage = function (user, pdu) {
 
 };
 
-V3DiscoverMessage.prototype.toBuffer = function () {
+V3Message.prototype.toBuffer = function () {
 	if (this.buffer)
 		return this.buffer;
 
@@ -659,7 +661,12 @@ V3DiscoverMessage.prototype.toBuffer = function () {
 	// msgSecurityParameters
 	var msgSecurityParametersWriter = new ber.Writer ();
 	msgSecurityParametersWriter.startSequence ();
-	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	//msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
+		msgSecurityParametersWriter.writeString ("");
+	} else {
+		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+	}
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
@@ -672,7 +679,11 @@ V3DiscoverMessage.prototype.toBuffer = function () {
 
 	// ScopedPDU
 	writer.startSequence ();
-	writer.writeString ("");
+	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
+		writer.writeString ("");
+	} else {
+		writer.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+	}
 	writer.writeString ("");
 	this.pdu.toBuffer (writer);
 	writer.endSequence ();
@@ -682,6 +693,32 @@ V3DiscoverMessage.prototype.toBuffer = function () {
 	this.buffer = writer.buffer;
 
 	return this.buffer;
+};
+
+V3Message.createDiscoveryMessage = function(user, pdu) {
+	var msgSecurityParameters = {
+		msgAuthoritativeEngineID: Buffer.from(""),
+		msgAuthoritativeEngineBoots: 0,
+		msgAuthoritativeEngineTime: 0
+	};
+	var emptyUser = {
+		name: "",
+		level: 1
+	};
+	return new V3Message (emptyUser, 4, msgSecurityParameters, pdu);
+}
+
+var Req = function (session, message, pdu, feedCb, responseCb, options) {
+
+	this.id = pdu.id;
+	this.message = message;
+	this.responseCb = responseCb;
+	this.retries = session.retries;
+	this.timeout = session.timeout;
+	this.onResponse = session.onSimpleGetResponse;
+	this.feedCb = feedCb;
+	this.port = (options && options.port) ? options.port : session.port;
+
 };
 
 
@@ -1075,8 +1112,14 @@ Session.prototype.onMsg = function (buffer, remote) {
 			} else if (message.pdu.type == PduType.GetResponse) {
 				req.onResponse (req, message);
 			} else if (message.pdu.type == PduType.Report) {
-				console.log("Report response to req:");
-				console.log(req);
+				var msgSecurityParameters = {
+					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
+					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
+					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
+				};
+				var messageForOriginalPdu = new V3Message (this.user, 0, msgSecurityParameters, req.originalPdu);
+				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, req.options);
+				this.send(reqForOriginalPdu);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
 						+ message.pdu.type + "' in response"));
@@ -1197,45 +1240,29 @@ Session.prototype.set = function (varbinds, responseCb) {
 	return this;
 };
 
-Session.prototype.simpleGetPdu = function (message, pdu, feedCb, varbinds,
-		responseCb, options) {
-	var req = {};
-
-	// var message = new RequestMessage (this.version, this.community, pdu);
-
-	req = {
-		id: pdu.id,
-		message: message,
-		responseCb: responseCb,
-		retries: this.retries,
-		timeout: this.timeout,
-		onResponse: this.onSimpleGetResponse,
-		feedCb: feedCb,
-		port: (options && options.port) ? options.port : this.port
-	};
-
-	this.send (req);
-};
-
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
 	try {
 		var id = _generateId (this.idBitsSize);
 		var pdu = new pduClass (id, varbinds, options);
+		var message;
+		var req;
 
 		if ( this.version == Version3 ) {
-			// SNMPv3 discovery goes here
-			console.log("SNMPv3 discovery");
-			discoveryPdu = createDiscoveryPdu();
-			var message = new V3DiscoverMessage (this.user, discoveryPdu);
-			this.simpleGetPdu(message, discoveryPdu, feedCb, varbinds, responseCb, options);
+			// SNMPv3 discovery
+			var discoveryPdu = createDiscoveryPdu();
+			var discoveryMessage = V3Message.createDiscoveryMessage (this.user, discoveryPdu);
+			var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
+			discoveryReq.originalPdu = pdu;
+			this.send (discoveryReq);
 		} else {
-			var message = new RequestMessage (this.version, this.community, pdu);
-			this.simpleGetPdu(message, pdu, feedCb, varbinds, responseCb, options);
+			message = new RequestMessage (this.version, this.community, pdu);
+			req = new Req (this, message, pdu, feedCb, responseCb, options);
+			this.send (req);
 		}
 	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
+		if (responseCb)
+			responseCb (error);
 	}
 }
 
