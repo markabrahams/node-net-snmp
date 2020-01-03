@@ -436,21 +436,6 @@ var GetNextRequestPdu = function () {
 
 util.inherits (GetNextRequestPdu, SimplePdu);
 
-var GetResponsePdu = function (buffer) {
-	this.type = PduType.GetResponse;
-
-	buffer.readSequence (this.type);
-
-	this.id = buffer.readInt ();
-
-	this.errorStatus = buffer.readInt ();
-	this.errorIndex = buffer.readInt ();
-
-	this.varbinds = [];
-
-	readVarbinds (buffer, this.varbinds);
-};
-
 var GetRequestPdu = function () {
 	this.type = PduType.GetRequest;
 	GetRequestPdu.super_.apply (this, arguments);
@@ -514,6 +499,47 @@ var TrapV2Pdu = function () {
 
 util.inherits (TrapV2Pdu, SimplePdu);
 
+var GetResponsePdu = function (reader) {
+	//this.type = PduType.GetResponse;
+	this.type = reader.peek ();
+
+	reader.readSequence (this.type);
+
+	this.id = reader.readInt ();
+
+	this.errorStatus = reader.readInt ();
+	this.errorIndex = reader.readInt ();
+
+	this.varbinds = [];
+
+	readVarbinds (reader, this.varbinds);
+};
+
+// var ReportPdu = function () {
+// 	this.type = PduType.ReportPdu;
+// 	ReportPdu.super_.apply (this, arguments);
+// };
+
+var readPdu = function(reader, scoped) {
+	var pdu;
+	if ( scoped ) {
+		reader.readSequence ();
+		contextEngineID = reader.readString ();
+		contextName = reader.readString ();
+	}
+	var type = reader.peek ();
+
+	if (type == PduType.GetResponse) {
+		pdu = new GetResponsePdu (reader);
+	} else if (type == PduType.Report ) {
+		pdu = new GetResponsePdu (reader);
+	} else {
+		throw new ResponseInvalidError ("Unknown PDU type '" + type
+				+ "' in response");
+	}
+	return pdu;
+};
+
 var createDiscoveryPdu = function (target, host) {
 	return new GetRequestPdu(_generateId(), [], {});
 }
@@ -550,34 +576,48 @@ RequestMessage.prototype.toBuffer = function () {
 
 var ResponseMessage = function (buffer) {
 	var reader = new ber.Reader (buffer);
+	var scopedPdu;
 
 	reader.readSequence ();
 
 	this.version = reader.readInt ();
 
 	if (this.version != 3) {
-	this.community = reader.readString ();
+		this.community = reader.readString ();
+		scopedPdu = false;
 	} else {
 		this.readV3Header(reader);
+		scopedPdu = true;
 	}
 
-	var type = reader.peek ();
-
-	if (type == PduType.GetResponse) {
-		this.pdu = new GetResponsePdu (reader);
-	} else {
-		throw new ResponseInvalidError ("Unknown PDU type '" + type
-				+ "' in response");
-	}
+	this.pdu = readPdu(reader, scopedPdu);
 };
 
 ResponseMessage.prototype.readV3Header = function (reader) {
 
-	//reader.readSequence ();
+	// HeaderData
+	this.msgGlobalData = {};
+	reader.readSequence ();
+	this.msgGlobalData.msgID = reader.readInt ();
+	this.msgGlobalData.msgMaxSize = reader.readInt ();
+	this.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
+	this.msgGlobalData.msgSecurityModel = reader.readInt ();
+
+	// msgSecurityParameters
+	this.msgSecurityParameters = {};
+	var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
+	msgSecurityParametersReader.readSequence ();
+	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString ();
+	this.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
+	this.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
+	this.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
+	this.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
+	this.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
+
 };
 
-var V3DiscoverMessage = function (target, user, pdu) {
-	this.msgVersion = 3;
+var V3DiscoverMessage = function (user, pdu) {
+	this.version = 3;
 	this.msgGlobalData = {
 		msgID: _generateId(), //random ID
 		msgMaxSize: 65507,
@@ -604,7 +644,7 @@ V3DiscoverMessage.prototype.toBuffer = function () {
 
 	writer.startSequence ();
 
-	writer.writeInt (this.msgVersion);
+	writer.writeInt (this.version);
 
 	// HeaderData
 	writer.startSequence ();
@@ -1027,13 +1067,16 @@ Session.prototype.onMsg = function (buffer, remote) {
 			if (message.version != req.message.version) {
 				req.responseCb (new ResponseInvalidError ("Version in request '"
 						+ req.message.version + "' does not match version in "
-						+ "response '" + message.version));
+						+ "response '" + message.version + "'"));
 			} else if (message.community != req.message.community) {
 				req.responseCb (new ResponseInvalidError ("Community '"
 						+ req.message.community + "' in request does not match "
 						+ "community '" + message.community + "' in response"));
 			} else if (message.pdu.type == PduType.GetResponse) {
 				req.onResponse (req, message);
+			} else if (message.pdu.type == PduType.Report) {
+				console.log("Report response to req:");
+				console.log(req);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
 						+ message.pdu.type + "' in response"));
@@ -1184,7 +1227,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			// SNMPv3 discovery goes here
 			console.log("SNMPv3 discovery");
 			discoveryPdu = createDiscoveryPdu();
-			var message = new V3DiscoverMessage (this.target, this.user, discoveryPdu);
+			var message = new V3DiscoverMessage (this.user, discoveryPdu);
 			this.simpleGetPdu(message, discoveryPdu, feedCb, varbinds, responseCb, options);
 		} else {
 			var message = new RequestMessage (this.version, this.community, pdu);
