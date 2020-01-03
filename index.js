@@ -514,6 +514,10 @@ var TrapV2Pdu = function () {
 
 util.inherits (TrapV2Pdu, SimplePdu);
 
+var createDiscoveryPdu = function (target, host) {
+	return new GetRequestPdu(_generateId(), [], {});
+}
+
 /*****************************************************************************
  ** Message class definitions
  **/
@@ -550,7 +554,12 @@ var ResponseMessage = function (buffer) {
 	reader.readSequence ();
 
 	this.version = reader.readInt ();
+
+	if (this.version != 3) {
 	this.community = reader.readString ();
+	} else {
+		this.readV3Header(reader);
+	}
 
 	var type = reader.peek ();
 
@@ -561,6 +570,80 @@ var ResponseMessage = function (buffer) {
 				+ "' in response");
 	}
 };
+
+ResponseMessage.prototype.readV3Header = function (reader) {
+
+	//reader.readSequence ();
+};
+
+var V3DiscoverMessage = function (target, user, pdu) {
+	this.msgVersion = 3;
+	this.msgGlobalData = {
+		msgID: _generateId(), //random ID
+		msgMaxSize: 65507,
+		msgFlags: 4, // authFlag & 2 * privFlag & 4 * reportableFlag
+		msgSecurityModel: 3
+	};
+	this.msgSecurityParameters = {
+		msgAuthoritativeEngineID: "",
+		msgAuthoritativeEngineBoots: 0,
+		msgAuthoritativeEngineTime: 0,
+		msgUserName: "",
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	}
+	this.pdu = pdu;
+
+};
+
+V3DiscoverMessage.prototype.toBuffer = function () {
+	if (this.buffer)
+		return this.buffer;
+
+	var writer = new ber.Writer ();
+
+	writer.startSequence ();
+
+	writer.writeInt (this.msgVersion);
+
+	// HeaderData
+	writer.startSequence ();
+	writer.writeInt (this.msgGlobalData.msgID);
+	writer.writeInt (this.msgGlobalData.msgMaxSize);
+	writer.writeByte(ber.OctetString);
+	writer.writeByte(1);
+	writer.writeByte(this.msgGlobalData.msgFlags);
+	writer.writeInt (this.msgGlobalData.msgSecurityModel);
+	writer.endSequence();
+
+	// msgSecurityParameters
+	var msgSecurityParametersWriter = new ber.Writer ();
+	msgSecurityParametersWriter.startSequence ();
+	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
+	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
+	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
+	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
+	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
+	msgSecurityParametersWriter.endSequence ();
+	writer.writeByte (ber.OctetString);
+	writer.writeByte (msgSecurityParametersWriter.buffer.length);  // probably need to fix for condition if length > 255
+	writer.writeBuffer (msgSecurityParametersWriter.buffer);
+
+	// ScopedPDU
+	writer.startSequence ();
+	writer.writeString ("");
+	writer.writeString ("");
+	this.pdu.toBuffer (writer);
+	writer.endSequence ();
+
+	writer.endSequence ();
+
+	this.buffer = writer.buffer;
+
+	return this.buffer;
+};
+
 
 /*****************************************************************************
  ** Session class definition
@@ -1071,40 +1154,45 @@ Session.prototype.set = function (varbinds, responseCb) {
 	return this;
 };
 
-Session.prototype.simpleGetPdu = function (pduClass, feedCb, varbinds,
+Session.prototype.simpleGetPdu = function (message, pdu, feedCb, varbinds,
 		responseCb, options) {
 	var req = {};
 
-	try {
-		var id = _generateId (this.idBitsSize);
-		var pdu = new pduClass (id, varbinds, options);
-		var message = new RequestMessage (this.version, this.community, pdu);
+	// var message = new RequestMessage (this.version, this.community, pdu);
 
-		req = {
-			id: id,
-			message: message,
-			responseCb: responseCb,
-			retries: this.retries,
-			timeout: this.timeout,
-			onResponse: this.onSimpleGetResponse,
-			feedCb: feedCb,
-			port: (options && options.port) ? options.port : this.port
-		};
+	req = {
+		id: pdu.id,
+		message: message,
+		responseCb: responseCb,
+		retries: this.retries,
+		timeout: this.timeout,
+		onResponse: this.onSimpleGetResponse,
+		feedCb: feedCb,
+		port: (options && options.port) ? options.port : this.port
+	};
 
-		this.send (req);
-	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
-	}
+	this.send (req);
 };
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
-	if ( this.version == Version3 ) {
-		// SNMPv3 discovery goes here
-		console.log("SNMPv3 discovery");
-	} else {
-		this.simpleGetPdu(pduClass, feedCb, varbinds, responseCb, options);
+	try {
+		var id = _generateId (this.idBitsSize);
+		var pdu = new pduClass (id, varbinds, options);
+
+		if ( this.version == Version3 ) {
+			// SNMPv3 discovery goes here
+			console.log("SNMPv3 discovery");
+			discoveryPdu = createDiscoveryPdu();
+			var message = new V3DiscoverMessage (this.target, this.user, discoveryPdu);
+			this.simpleGetPdu(message, discoveryPdu, feedCb, varbinds, responseCb, options);
+		} else {
+			var message = new RequestMessage (this.version, this.community, pdu);
+			this.simpleGetPdu(message, pdu, feedCb, varbinds, responseCb, options);
+		}
+	} catch (error) {
+		if (req.responseCb)
+			req.responseCb (error);
 	}
 }
 
