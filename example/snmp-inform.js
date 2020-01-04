@@ -2,20 +2,10 @@
 // Copyright 2013 Stephen Vickers
 
 var snmp = require ("../");
+var options = require("./option-parser");
 
-if (process.argv.length < 5) {
-	console.log ("usage: snmp-inform <target> <community> <oid>");
-	process.exit (1);
-}
-
-var target = process.argv[2];
-var community = process.argv[3];
-
-var typeOrOid = process.argv[4];
-
-var options = {version: snmp.Version2c};
-
-var session = snmp.createSession (target, community, options);
+var session = options.session;
+var typeOrOid = options.oids[0];
 
 session.inform (snmp.TrapType[typeOrOid] || typeOrOid, function (error,
 		varbinds) {

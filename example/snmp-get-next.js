@@ -2,19 +2,10 @@
 // Copyright 2013 Stephen Vickers
 
 var snmp = require ("../");
+var options = require("./option-parser");
 
-if (process.argv.length < 5) {
-	console.log ("usage: snmp-get-next <target> <community> <version> <oid>");
-	process.exit (1);
-}
-
-var target = process.argv[2];
-var community = process.argv[3];
-var version = (process.argv[4] == "2c") ? snmp.Version2c : snmp.Version1;
-
-var oids = [process.argv[5]];
-
-var session = snmp.createSession (target, community, {version: version});
+var session = options.session;
+var oids = options.oids;
 
 session.getNext (oids, function (error, varbinds) {
 	if (error) {

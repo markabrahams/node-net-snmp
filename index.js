@@ -116,6 +116,12 @@ var Version1 = 0;
 var Version2c = 1;
 var Version3 = 3;
 
+var Version = {
+	"1": Version1,
+	"2c": Version2c,
+	"3": Version3
+};
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -627,10 +633,10 @@ var V3Message = function (user, msgFlags, msgSecurityParameters, pdu) {
 		msgSecurityModel: 3
 	};
 	this.msgSecurityParameters = {
-		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID,
-		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots,
-		msgAuthoritativeEngineTime: msgSecurityParameters.msgAuthoritativeEngineTime,
-		msgUserName: user.name,
+		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID || Buffer.from(""),
+		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots || 0,
+		msgAuthoritativeEngineTime: msgSecurityParameters.msgAuthoritativeEngineTime || 0,
+		msgUserName: user.name || "",
 		msgAuthenticationParameters: "",
 		msgPrivacyParameters: ""
 	}
@@ -1118,7 +1124,9 @@ Session.prototype.onMsg = function (buffer, remote) {
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
 				var messageForOriginalPdu = new V3Message (this.user, 0, msgSecurityParameters, req.originalPdu);
-				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, req.options);
+				var reqForOriginalPduOptions = req.options || {};
+				reqForOriginalPduOptions.port = req.port;
+				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, reqForOriginalPduOptions);
 				this.send(reqForOriginalPdu);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
@@ -1443,6 +1451,7 @@ Session.prototype.trap = function () {
 	try {
 		var typeOrOid = arguments[0];
 		var varbinds, options = {}, responseCb;
+		var message;
 
 		/**
 		 ** Support the following signatures:
@@ -1492,7 +1501,7 @@ Session.prototype.trap = function () {
 		
 		var id = _generateId (this.idBitsSize);
 
-		if (this.version == Version2c) {
+		if (this.version == Version2c || this.version == Version3 ) {
 			if (typeof typeOrOid != "string")
 				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
 
@@ -1514,7 +1523,17 @@ Session.prototype.trap = function () {
 			pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
 		}
 
-		var message = new RequestMessage (this.version, this.community, pdu);
+		if ( this.version == Version3 ) {
+			var msgSecurityParameters = {
+				//msgAuthoritativeEngineID: Buffer.from(this.user.engineID, 'hex'),
+				msgAuthoritativeEngineID: this.user.engineID,
+				msgAuthoritativeEngineBoots: 0,
+				msgAuthoritativeEngineTime: 0
+			};
+			message = new V3Message (this.user, 0, msgSecurityParameters, pdu);
+		} else {
+			message = new RequestMessage (this.version, this.community, pdu);
+		}
 
 		req = {
 			id: id,
@@ -1566,7 +1585,7 @@ function walkCb (req, error, varbinds) {
 		}
 	}
 
-	if (this.version == Version2c) {
+	if (this.version == Version2c || this.version == Version3 ) {
 		for (var i = varbinds[0].length; i > 0; i--) {
 			if (varbinds[0][i - 1].type == ObjectType.EndOfMibView) {
 				varbinds[0].pop ();
@@ -1615,7 +1634,7 @@ Session.prototype.walk  = function () {
 		doneCb: doneCb
 	};
 
-	if (this.version == Version2c)
+	if (this.version == Version2c || this.version == Version3)
 		this.getBulk ([oid], 0, maxRepetitions,
 				walkCb.bind (me, req));
 	else
@@ -1631,10 +1650,19 @@ Session.prototype.walk  = function () {
 exports.Session = Session;
 
 exports.createSession = function (target, community, options) {
-	return new Session (target, community, options);
+	if ( options.version && ! ( options.version == Version1 || options.version == Version2c ) ) {
+		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
+	} else {
+		return new Session (target, community, options);
+	}
 };
 
 exports.createV3Session = function (target, user, options) {
+	if ( options.version && options.version != Version3 ) {
+		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
+	} else {
+		options.version = Version3;
+	}
 	return new Session (target, user, options);
 };
 
@@ -1644,6 +1672,7 @@ exports.varbindError = varbindError;
 exports.Version1 = Version1;
 exports.Version2c = Version2c;
 exports.Version3 = Version3;
+exports.Version = Version;
 
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;

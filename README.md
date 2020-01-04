@@ -703,7 +703,7 @@ sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
 
 The `subtree()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
-there base.  For example, the OIDs sysName (`1.3.6.1.2.1.1.5.0`) and
+their base.  For example, the OIDs sysName (`1.3.6.1.2.1.1.5.0`) and
 sysLocation (`1.3.6.1.2.1.1.6.0`) both have the same base system
 (`1.3.6.1.2.1.1`) OID.
 
@@ -767,7 +767,7 @@ The following example fetches all OIDS under the system (`1.3.6.1.2.1.1`) OID:
 
 The `table()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
-there base, much like the `subtree()` method.
+their base, much like the `subtree()` method.
 
 This method is designed to fetch conceptial tables, for example the ifTable
 (`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will be structured
