@@ -555,13 +555,18 @@ var createDiscoveryPdu = function (target, host) {
  ** Message class definitions
  **/
 
-var RequestMessage = function (version, community, pdu) {
-	this.version = version;
-	this.community = community;
-	this.pdu = pdu;
-};
+var Message = function () {
+}
 
-RequestMessage.prototype.toBuffer = function () {
+Message.prototype.toBuffer = function () {
+	if ( this.version == Version3 ) {
+		return this.toBufferV3();
+	} else {
+		return this.toBufferCommunity();
+	}
+}
+
+Message.prototype.toBufferCommunity = function () {
 	if (this.buffer)
 		return this.buffer;
 
@@ -581,70 +586,7 @@ RequestMessage.prototype.toBuffer = function () {
 	return this.buffer;
 };
 
-var ResponseMessage = function (buffer) {
-	var reader = new ber.Reader (buffer);
-	var scopedPdu;
-
-	reader.readSequence ();
-
-	this.version = reader.readInt ();
-
-	if (this.version != 3) {
-		this.community = reader.readString ();
-		scopedPdu = false;
-	} else {
-		this.readV3Header(reader);
-		scopedPdu = true;
-	}
-
-	this.pdu = readPdu(reader, scopedPdu);
-};
-
-ResponseMessage.prototype.readV3Header = function (reader) {
-
-	// HeaderData
-	this.msgGlobalData = {};
-	reader.readSequence ();
-	this.msgGlobalData.msgID = reader.readInt ();
-	this.msgGlobalData.msgMaxSize = reader.readInt ();
-	this.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
-	this.msgGlobalData.msgSecurityModel = reader.readInt ();
-
-	// msgSecurityParameters
-	this.msgSecurityParameters = {};
-	var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
-	msgSecurityParametersReader.readSequence ();
-	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
-	this.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
-	this.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
-	this.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
-	this.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
-	this.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
-
-};
-
-var V3Message = function (user, msgFlags, msgSecurityParameters, pdu) {
-	this.version = 3;
-	this.msgGlobalData = {
-		msgID: _generateId(), // random ID
-		msgMaxSize: 65507,
-		msgFlags: 4,
-		//msgFlags: msgFlags, // authFlag & 2 * privFlag & 4 * reportableFlag
-		msgSecurityModel: 3
-	};
-	this.msgSecurityParameters = {
-		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID || Buffer.from(""),
-		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots || 0,
-		msgAuthoritativeEngineTime: msgSecurityParameters.msgAuthoritativeEngineTime || 0,
-		msgUserName: user.name || "",
-		msgAuthenticationParameters: "",
-		msgPrivacyParameters: ""
-	}
-	this.pdu = pdu;
-
-};
-
-V3Message.prototype.toBuffer = function () {
+Message.prototype.toBufferV3 = function () {
 	if (this.buffer)
 		return this.buffer;
 
@@ -701,7 +643,41 @@ V3Message.prototype.toBuffer = function () {
 	return this.buffer;
 };
 
-V3Message.createDiscoveryMessage = function(user, pdu) {
+Message.createRequestCommunity = function (version, community, pdu) {
+	var message = new Message();
+
+	message.version = version;
+	message.community = community;
+	message.pdu = pdu;
+
+	return message;
+};
+
+Message.createRequestV3 = function (user, msgFlags, msgSecurityParameters, pdu) {
+	var message = new Message();
+
+	message.version = 3;
+	message.msgGlobalData = {
+		msgID: _generateId(), // random ID
+		msgMaxSize: 65507,
+		msgFlags: 4,
+		//msgFlags: msgFlags, // authFlag & 2 * privFlag & 4 * reportableFlag
+		msgSecurityModel: 3
+	};
+	message.msgSecurityParameters = {
+		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID || Buffer.from(""),
+		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots || 0,
+		msgAuthoritativeEngineTime: msgSecurityParameters.msgAuthoritativeEngineTime || 0,
+		msgUserName: user.name || "",
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	}
+	message.pdu = pdu;
+
+	return message;
+};
+
+Message.createDiscoveryV3 = function(user, pdu) {
 	var msgSecurityParameters = {
 		msgAuthoritativeEngineID: Buffer.from(""),
 		msgAuthoritativeEngineBoots: 0,
@@ -711,8 +687,71 @@ V3Message.createDiscoveryMessage = function(user, pdu) {
 		name: "",
 		level: 1
 	};
-	return new V3Message (emptyUser, 4, msgSecurityParameters, pdu);
+	return Message.createRequestV3 (emptyUser, 4, msgSecurityParameters, pdu);
 }
+
+Message.createResponse = function (buffer) {
+	var reader = new ber.Reader (buffer);
+	var message = new Message();
+	var scopedPdu;
+
+	reader.readSequence ();
+
+	message.version = reader.readInt ();
+
+	if (message.version != 3) {
+		message.community = reader.readString ();
+		scopedPdu = false;
+	} else {
+		//message.readV3Header(reader);
+		// HeaderData
+		message.msgGlobalData = {};
+		reader.readSequence ();
+		message.msgGlobalData.msgID = reader.readInt ();
+		message.msgGlobalData.msgMaxSize = reader.readInt ();
+		message.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
+		message.msgGlobalData.msgSecurityModel = reader.readInt ();
+
+		// msgSecurityParameters
+		message.msgSecurityParameters = {};
+		var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
+		msgSecurityParametersReader.readSequence ();
+		message.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
+		message.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
+		message.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
+		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
+		message.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
+		message.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
+		scopedPdu = true;
+	}
+
+	message.pdu = readPdu(reader, scopedPdu);
+
+	return message;
+};
+
+// Message.prototype.readV3Header = function (reader) {
+
+// 	// HeaderData
+// 	this.msgGlobalData = {};
+// 	reader.readSequence ();
+// 	this.msgGlobalData.msgID = reader.readInt ();
+// 	this.msgGlobalData.msgMaxSize = reader.readInt ();
+// 	this.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
+// 	this.msgGlobalData.msgSecurityModel = reader.readInt ();
+
+// 	// msgSecurityParameters
+// 	this.msgSecurityParameters = {};
+// 	var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
+// 	msgSecurityParametersReader.readSequence ();
+// 	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
+// 	this.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
+// 	this.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
+// 	this.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
+// 	this.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
+// 	this.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
+
+// };
 
 var Req = function (session, message, pdu, feedCb, responseCb, options) {
 
@@ -726,7 +765,6 @@ var Req = function (session, message, pdu, feedCb, responseCb, options) {
 	this.port = (options && options.port) ? options.port : session.port;
 
 };
-
 
 /*****************************************************************************
  ** Session class definition
@@ -1100,7 +1138,7 @@ Session.prototype.onError = function (error) {
 
 Session.prototype.onMsg = function (buffer, remote) {
 	try {
-		var message = new ResponseMessage (buffer);
+		var message = Message.createResponse (buffer);
 
 		var req = this.unregisterRequest (message.pdu.id);
 		if (! req)
@@ -1123,7 +1161,7 @@ Session.prototype.onMsg = function (buffer, remote) {
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
-				var messageForOriginalPdu = new V3Message (this.user, 0, msgSecurityParameters, req.originalPdu);
+				var messageForOriginalPdu = Message.createRequestV3 (this.user, 0, msgSecurityParameters, req.originalPdu);
 				var reqForOriginalPduOptions = req.options || {};
 				reqForOriginalPduOptions.port = req.port;
 				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, reqForOriginalPduOptions);
@@ -1259,12 +1297,12 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		if ( this.version == Version3 ) {
 			// SNMPv3 discovery
 			var discoveryPdu = createDiscoveryPdu();
-			var discoveryMessage = V3Message.createDiscoveryMessage (this.user, discoveryPdu);
+			var discoveryMessage = Message.createDiscoveryV3 (this.user, discoveryPdu);
 			var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
 			discoveryReq.originalPdu = pdu;
 			this.send (discoveryReq);
 		} else {
-			message = new RequestMessage (this.version, this.community, pdu);
+			message = Message.createRequestCommunity (this.version, this.community, pdu);
 			req = new Req (this, message, pdu, feedCb, responseCb, options);
 			this.send (req);
 		}
@@ -1530,9 +1568,9 @@ Session.prototype.trap = function () {
 				msgAuthoritativeEngineBoots: 0,
 				msgAuthoritativeEngineTime: 0
 			};
-			message = new V3Message (this.user, 0, msgSecurityParameters, pdu);
+			message = Message.createRequestV3 (this.user, 0, msgSecurityParameters, pdu);
 		} else {
-			message = new RequestMessage (this.version, this.community, pdu);
+			message = Message.createRequestCommunity (this.version, this.community, pdu);
 		}
 
 		req = {
