@@ -25,12 +25,16 @@ if ( snmpOptions.version == snmp.Version3 ) {
 	user = {
 		name: options.u,
 		level: snmp.UsmLevel[options.l],
-		authProtocol: snmp.UsmAuthProtocol[options.a],
-		authKey: options.A,
-		privProtocol: snmp.UsmPrivProtocol[options.x],
-        privKey: options.X,
         engineID: engineID
-	};
+    };
+    if ( options.a ) {
+        user.authProtocol = options.a.toLowerCase();
+        user.authKey = options.A;
+    }
+    if ( options.x ) {
+		user.privProtocol = options.x.toLowerCase();
+        user.privKey = options.X;
+    }
 } else {
 	community = options.c;
 }
@@ -46,13 +50,13 @@ if (options._.length < 2) {
 var target = options._[0];
 
 var command = process.argv[1].split('/').slice(-1)[0];
-if ( command.includes('set') ) {
+if ( command.includes('snmp-set') ) {
     varbinds = [{
         oid: options._[1],
         type: snmp.ObjectType[options._[2]],
         value: options._[3]
     }];
-} else if ( command.includes('columns') ) {
+} else if ( command.includes('snmp-table-columns') ) {
     oids = [options._[1]];
     columns = [];
     for (var i = 1; i < options._.length; i++) {

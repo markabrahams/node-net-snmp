@@ -5,6 +5,7 @@ var ber = require ("asn1-ber").Ber;
 var dgram = require ("dgram");
 var events = require ("events");
 var util = require ("util");
+var crypto = require("crypto");
 
 /*****************************************************************************
  ** Constants
@@ -101,7 +102,7 @@ var UsmLevel = {
 _expandConstantObject (UsmLevel);
 
 var UsmAuthProtocol = {
-	0: "MD5"
+	0: "md5"
 };
 
 _expandConstantObject (UsmAuthProtocol);
@@ -549,10 +550,102 @@ var readPdu = function(reader, scoped) {
 
 var createDiscoveryPdu = function (target, host) {
 	return new GetRequestPdu(_generateId(), [], {});
-}
+};
+
+var Authentication = {};
+
+Authentication.HMAC_BUFFER_SIZE = 1024*1024;
+Authentication.HMAC_BLOCK_SIZE = 64;
+Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH = 12;
+Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
+
+// Adapted from RFC3414 Appendix A.2.1. Password to Key Sample Code for MD5
+Authentication.passwordToKey = function (authProtocol, authPasswordString, engineID) {
+	var hashAlgorithm;
+	var firstDigest;
+	var finalDigest;
+	var buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE);
+	var bufOffset = 0;
+	var passwordIndex = 0;
+	var count = 0;
+	var password = Buffer.from (authPasswordString);
+	
+	while (count < Authentication.HMAC_BUFFER_SIZE) {
+		for (var i = 0; i < Authentication.HMAC_BLOCK_SIZE; i++) {
+			buf.writeUInt8(password[passwordIndex++ % password.length], bufOffset++);
+		}
+		count += Authentication.HMAC_BLOCK_SIZE;
+	}
+	hashAlgorithm = crypto.createHash(authProtocol);
+	hashAlgorithm.update(buf);
+	firstDigest = hashAlgorithm.digest();
+	// console.log("First digest: " + firstDigest.toString('hex'));
+
+	hashAlgorithm = crypto.createHash(authProtocol);
+	hashAlgorithm.update(firstDigest);
+	hashAlgorithm.update(engineID);
+	hashAlgorithm.update(firstDigest);
+	finalDigest = hashAlgorithm.digest();
+	// console.log("Localized key: " + finalDigest.toString('hex'));
+
+	return finalDigest;
+};
+
+Authentication.authenticate = function (user, messageBuffer, engineId) {
+	var authKey = Authentication.passwordToKey(user.authProtocol, user.authKey, engineId);
+
+	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
+	var hashAlgorithm;
+	var kIpad;
+	var kOpad;
+	var firstDigest;
+	var finalDigest;
+	var i;
+	var authenticationParametersOffset;
+
+	// clear the authenticationParameters field in message
+	authenticationParametersOffset = messageBuffer.indexOf(Authentication.AUTH_PARAMETERS_PLACEHOLDER);
+	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+
+	if (authKey.length > Authentication.HMAC_BLOCK_SIZE) {
+		hashAlgorithm = crypto.createHash(user.authProtocol);
+		hashAlgorithm.update(authKey);
+		authKey = hashAlgorithm.digest();
+	}
+
+	// MD(K XOR opad, MD(K XOR ipad, msg))
+	kIpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
+	kOpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
+	for (i = 0; i < authKey.length; i++) {
+		kIpad[i] = authKey[i] ^ 0x36;
+		kOpad[i] = authKey[i] ^ 0x5c;
+	}
+	kIpad.fill(0x36, authKey.length);
+	kOpad.fill(0x5c, authKey.length);
+
+	// inner MD
+	hashAlgorithm = crypto.createHash(user.authProtocol);
+	hashAlgorithm.update(kIpad);
+	hashAlgorithm.update(messageBuffer);
+	firstDigest = hashAlgorithm.digest();
+	// outer MD
+	hashAlgorithm = crypto.createHash(user.authProtocol);
+	hashAlgorithm.update(kOpad);
+	hashAlgorithm.update(firstDigest);
+	finalDigest = hashAlgorithm.digest();
+
+	// copy the digest into the authentication parameters field of the message
+	finalDigest.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	// console.log("Auth Parameters: " + finalDigest.toString('hex'));
+	return true;
+};
+
+// Authentication.isAuthentic = function () {
+// };
+
 
 /*****************************************************************************
- ** Message class definitions
+ ** Message class definition
  **/
 
 var Message = function () {
@@ -600,16 +693,17 @@ Message.prototype.toBufferV3 = function () {
 	writer.startSequence ();
 	writer.writeInt (this.msgGlobalData.msgID);
 	writer.writeInt (this.msgGlobalData.msgMaxSize);
-	writer.writeByte(ber.OctetString);
-	writer.writeByte(1);
-	writer.writeByte(this.msgGlobalData.msgFlags);
+	writer.writeByte (ber.OctetString);
+	writer.writeByte (1);
+	writer.writeByte (this.msgGlobalData.msgFlags);
 	writer.writeInt (this.msgGlobalData.msgSecurityModel);
-	writer.endSequence();
+	writer.endSequence ();
 
 	// msgSecurityParameters
 	var msgSecurityParametersWriter = new ber.Writer ();
 	msgSecurityParametersWriter.startSequence ();
 	//msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	// writing zero-length buffer fails
 	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
 		msgSecurityParametersWriter.writeString ("");
 	} else {
@@ -618,7 +712,14 @@ Message.prototype.toBufferV3 = function () {
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
-	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
+	if ( this.hasAuthentication() ) {
+		this.msgSecurityParameters.msgAuthenticationParameters = Authentication.AUTH_PARAMETERS_PLACEHOLDER;
+	}
+	if ( this.msgSecurityParameters.msgAuthenticationParameters.length == 0 ) {
+		msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
+	} else {
+		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
+	}
 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
 	msgSecurityParametersWriter.endSequence ();
 	writer.writeByte (ber.OctetString);
@@ -640,7 +741,19 @@ Message.prototype.toBufferV3 = function () {
 
 	this.buffer = writer.buffer;
 
+	if ( this.hasAuthentication() ) {
+		Authentication.authenticate(this.user, this.buffer, this.msgSecurityParameters.msgAuthoritativeEngineID);
+	}
+
 	return this.buffer;
+};
+
+Message.prototype.hasAuthentication = function () {
+	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
+};
+
+Message.prototype.hasPrivacy = function () {
+	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 2;
 };
 
 Message.createRequestCommunity = function (version, community, pdu) {
@@ -653,15 +766,18 @@ Message.createRequestCommunity = function (version, community, pdu) {
 	return message;
 };
 
-Message.createRequestV3 = function (user, msgFlags, msgSecurityParameters, pdu) {
+Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
 	var message = new Message();
+	var authFlag = user.level == UsmLevel.authNoPriv || user.level == UsmLevel.authPriv ? 1 : 0;
+	var privFlag = user.level == UsmLevel.authPriv ? 1 : 0;
+	var reportableFlag = 1; // all request messages are reportable
 
 	message.version = 3;
+	message.user = user;
 	message.msgGlobalData = {
 		msgID: _generateId(), // random ID
 		msgMaxSize: 65507,
-		msgFlags: 4,
-		//msgFlags: msgFlags, // authFlag & 2 * privFlag & 4 * reportableFlag
+		msgFlags: reportableFlag * 4 | privFlag * 2 | authFlag * 1,
 		msgSecurityModel: 3
 	};
 	message.msgSecurityParameters = {
@@ -687,7 +803,7 @@ Message.createDiscoveryV3 = function(user, pdu) {
 		name: "",
 		level: 1
 	};
-	return Message.createRequestV3 (emptyUser, 4, msgSecurityParameters, pdu);
+	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
 }
 
 Message.createResponse = function (buffer) {
@@ -703,7 +819,6 @@ Message.createResponse = function (buffer) {
 		message.community = reader.readString ();
 		scopedPdu = false;
 	} else {
-		//message.readV3Header(reader);
 		// HeaderData
 		message.msgGlobalData = {};
 		reader.readSequence ();
@@ -729,29 +844,6 @@ Message.createResponse = function (buffer) {
 
 	return message;
 };
-
-// Message.prototype.readV3Header = function (reader) {
-
-// 	// HeaderData
-// 	this.msgGlobalData = {};
-// 	reader.readSequence ();
-// 	this.msgGlobalData.msgID = reader.readInt ();
-// 	this.msgGlobalData.msgMaxSize = reader.readInt ();
-// 	this.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
-// 	this.msgGlobalData.msgSecurityModel = reader.readInt ();
-
-// 	// msgSecurityParameters
-// 	this.msgSecurityParameters = {};
-// 	var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
-// 	msgSecurityParametersReader.readSequence ();
-// 	this.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
-// 	this.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
-// 	this.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
-// 	this.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
-// 	this.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
-// 	this.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
-
-// };
 
 var Req = function (session, message, pdu, feedCb, responseCb, options) {
 
@@ -1161,7 +1253,7 @@ Session.prototype.onMsg = function (buffer, remote) {
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
-				var messageForOriginalPdu = Message.createRequestV3 (this.user, 0, msgSecurityParameters, req.originalPdu);
+				var messageForOriginalPdu = Message.createRequestV3 (this.user, msgSecurityParameters, req.originalPdu);
 				var reqForOriginalPduOptions = req.options || {};
 				reqForOriginalPduOptions.port = req.port;
 				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, reqForOriginalPduOptions);
@@ -1568,7 +1660,7 @@ Session.prototype.trap = function () {
 				msgAuthoritativeEngineBoots: 0,
 				msgAuthoritativeEngineTime: 0
 			};
-			message = Message.createRequestV3 (this.user, 0, msgSecurityParameters, pdu);
+			message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
 		} else {
 			message = Message.createRequestCommunity (this.version, this.community, pdu);
 		}
@@ -1731,3 +1823,4 @@ exports.ObjectParser = {
 	readInt: readInt,
 	readUint: readUint
 };
+exports.Authentication = Authentication;
