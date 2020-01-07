@@ -591,8 +591,39 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	return finalDigest;
 };
 
-Authentication.authenticate = function (user, messageBuffer, engineId) {
-	var authKey = Authentication.passwordToKey(user.authProtocol, user.authKey, engineId);
+Authentication.addDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
+	var authenticationParametersOffset;
+	var digestToAdd;
+
+	// clear the authenticationParameters field in message
+	authenticationParametersOffset = messageBuffer.indexOf(Authentication.AUTH_PARAMETERS_PLACEHOLDER);
+	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+
+	digestToAdd = Authentication.calculateDigest(messageBuffer, authProtocol, authPassword, engineID);
+	digestToAdd.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	//console.log("Added Auth Parameters: " + digestToAdd.toString('hex'));
+};
+
+Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
+	var authenticationParametersOffset;
+	var calculatedDigest;
+
+	// clear the authenticationParameters field in message
+	authenticationParametersOffset = messageBuffer.indexOf(digestInMessage);
+	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+
+	calculatedDigest = Authentication.calculateDigest(messageBuffer, authProtocol, authPassword, engineID);
+
+	// replace previously cleared authenticationParameters field in message
+	digestInMessage.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+
+	//console.log("Digest in message: " + digestInMessage.toString('hex'));
+	//console.log("Calculated digest: " + calculatedDigest.toString('hex'));
+	return calculatedDigest.equals(digestInMessage, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+};
+
+Authentication.calculateDigest = function(messageBuffer, authProtocol, authPassword, engineID) {
+	var authKey = Authentication.passwordToKey(authProtocol, authPassword, engineID);
 
 	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
 	var hashAlgorithm;
@@ -600,15 +631,11 @@ Authentication.authenticate = function (user, messageBuffer, engineId) {
 	var kOpad;
 	var firstDigest;
 	var finalDigest;
+	var truncatedDigest;
 	var i;
-	var authenticationParametersOffset;
-
-	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf(Authentication.AUTH_PARAMETERS_PLACEHOLDER);
-	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
 
 	if (authKey.length > Authentication.HMAC_BLOCK_SIZE) {
-		hashAlgorithm = crypto.createHash(user.authProtocol);
+		hashAlgorithm = crypto.createHash(authProtocol);
 		hashAlgorithm.update(authKey);
 		authKey = hashAlgorithm.digest();
 	}
@@ -624,25 +651,20 @@ Authentication.authenticate = function (user, messageBuffer, engineId) {
 	kOpad.fill(0x5c, authKey.length);
 
 	// inner MD
-	hashAlgorithm = crypto.createHash(user.authProtocol);
+	hashAlgorithm = crypto.createHash(authProtocol);
 	hashAlgorithm.update(kIpad);
 	hashAlgorithm.update(messageBuffer);
 	firstDigest = hashAlgorithm.digest();
 	// outer MD
-	hashAlgorithm = crypto.createHash(user.authProtocol);
+	hashAlgorithm = crypto.createHash(authProtocol);
 	hashAlgorithm.update(kOpad);
 	hashAlgorithm.update(firstDigest);
 	finalDigest = hashAlgorithm.digest();
 
-	// copy the digest into the authentication parameters field of the message
-	finalDigest.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
-	// console.log("Auth Parameters: " + finalDigest.toString('hex'));
-	return true;
+	truncatedDigest = Buffer.alloc(Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	finalDigest.copy(truncatedDigest, 0, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	return truncatedDigest;
 };
-
-// Authentication.isAuthentic = function () {
-// };
-
 
 /*****************************************************************************
  ** Message class definition
@@ -742,7 +764,7 @@ Message.prototype.toBufferV3 = function () {
 	this.buffer = writer.buffer;
 
 	if ( this.hasAuthentication() ) {
-		Authentication.authenticate(this.user, this.buffer, this.msgSecurityParameters.msgAuthoritativeEngineID);
+		Authentication.addDigest(this.buffer, this.user.authProtocol, this.user.authKey, this.msgSecurityParameters.msgAuthoritativeEngineID);
 	}
 
 	return this.buffer;
@@ -835,8 +857,8 @@ Message.createResponse = function (buffer) {
 		message.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
 		message.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
-		message.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString ();
-		message.msgSecurityParameters.msgPrivacyParameters = msgSecurityParametersReader.readString ();
+		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
+		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 		scopedPdu = true;
 	}
 
@@ -1228,7 +1250,7 @@ Session.prototype.onError = function (error) {
 	this.emit (error);
 };
 
-Session.prototype.onMsg = function (buffer, remote) {
+Session.prototype.onMsg = function (buffer) {
 	try {
 		var message = Message.createResponse (buffer);
 
@@ -1236,6 +1258,19 @@ Session.prototype.onMsg = function (buffer, remote) {
 		if (! req)
 			return;
 
+		if ( message.hasAuthentication() ) {
+			if ( ! Authentication.isAuthentic(buffer, this.user.authProtocol, this.user.authKey,
+					message.msgSecurityParameters.msgAuthoritativeEngineID, message.msgSecurityParameters.msgAuthenticationParameters) ) {
+				req.responseCb (new ResponseInvalidError ("Authentication digest "
+						+ message.msgSecurityParameters.msgAuthenticationParameters.toString('hex')
+						+ " received in message does not match digest "
+						+ Authentication.calculateDigest(buffer, this.user.authProtocol,this.user.authKey,
+							message.msgSecurityParameters.msgAuthoritativeEngineID).toString('hex')
+						+ " calculated for message") );
+				return;
+			}
+		}
+		
 		try {
 			if (message.version != req.message.version) {
 				req.responseCb (new ResponseInvalidError ("Version in request '"
