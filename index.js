@@ -591,7 +591,7 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	return finalDigest;
 };
 
-Authentication.addDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
+Authentication.addParametersToMessageBuffer = function (messageBuffer, authProtocol, authPassword, engineID) {
 	var authenticationParametersOffset;
 	var digestToAdd;
 
@@ -622,7 +622,7 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 	return calculatedDigest.equals(digestInMessage, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
 };
 
-Authentication.calculateDigest = function(messageBuffer, authProtocol, authPassword, engineID) {
+Authentication.calculateDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
 	var authKey = Authentication.passwordToKey(authProtocol, authPassword, engineID);
 
 	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
@@ -666,6 +666,67 @@ Authentication.calculateDigest = function(messageBuffer, authProtocol, authPassw
 	return truncatedDigest;
 };
 
+var Encryption = {};
+
+Encryption.INPUT_KEY_LENGTH = 16;
+Encryption.DES_KEY_LENGTH = 8;
+Encryption.DES_BLOCK_LENGTH = 8;
+Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from('9192939495969798', 'hex');
+
+Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authProtocol, engineID) {
+	var privLocalizedKey;
+	var encryptionKey;
+	var preIv;
+	var salt;
+	var iv;
+	var i;
+	var paddedScopedPduLength;
+	var paddedScopedPdu;
+	var encryptedPdu;
+	var cbcProtocol = privProtocol + '-cbc';
+
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
+	encryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
+	privLocalizedKey.copy (encryptionKey, 0, 0, Encryption.DES_KEY_LENGTH);
+	preIv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	privLocalizedKey.copy (preIv, 0, Encryption.DES_KEY_LENGTH, Encryption.DES_KEY_LENGTH + Encryption.DES_BLOCK_LENGTH);
+
+	salt = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	// set local SNMP engine boots part of salt to 1, as we have no persistent engine state
+	salt.fill ('00000001', 0, 4, 'hex');
+	// set local integer part of salt to random
+	salt.fill (crypto.randomBytes (4), 4, 8);
+	iv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	for (i = 0; i < iv.length; i++) {
+		iv[i] = preIv[i] ^ salt[i];
+	}
+	
+	if (scopedPdu.length % Encryption.DES_BLOCK_LENGTH == 0) {
+		paddedScopedPdu = scopedPdu;
+	} else {
+		paddedScopedPduLength = Encryption.DES_BLOCK_LENGTH * (Math.floor (scopedPdu.length / Encryption.DES_BLOCK_LENGTH) + 1);
+		paddedScopedPdu = Buffer.alloc (paddedScopedPduLength);
+		scopedPdu.copy (paddedScopedPdu, 0, 0, scopedPdu.length);
+	}
+	cipher = crypto.createCipheriv (cbcProtocol, encryptionKey, iv);
+	encryptedPdu = cipher.update (paddedScopedPdu);
+	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
+	// console.log ("Key: " + encryptionKey.toString ('hex'));
+	// console.log ("IV:  " + iv.toString ('hex'));
+	// console.log ("Plain:     " + paddedScopedPdu.toString ('hex'));
+	// console.log ("Encrypted: " + encryptedPdu.toString ('hex'));
+
+	return {
+		encryptedPdu: encryptedPdu,
+		msgPrivacyParameters: salt
+	};
+};
+
+Encryption.addParametersToMessageBuffer = function(messageBuffer, msgPrivacyParameters) {
+	privacyParametersOffset = messageBuffer.indexOf(Encryption.PRIV_PARAMETERS_PLACEHOLDER);
+	msgPrivacyParameters.copy(messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
+}
+
 /*****************************************************************************
  ** Message class definition
  **/
@@ -702,6 +763,8 @@ Message.prototype.toBufferCommunity = function () {
 };
 
 Message.prototype.toBufferV3 = function () {
+	var encryptionResult;
+
 	if (this.buffer)
 		return this.buffer;
 
@@ -725,7 +788,7 @@ Message.prototype.toBufferV3 = function () {
 	var msgSecurityParametersWriter = new ber.Writer ();
 	msgSecurityParametersWriter.startSequence ();
 	//msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
-	// writing zero-length buffer fails
+	// writing a zero-length buffer fails - should fix asn1-ber for this condition
 	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
 		msgSecurityParametersWriter.writeString ("");
 	} else {
@@ -734,37 +797,60 @@ Message.prototype.toBufferV3 = function () {
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
 	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
+
 	if ( this.hasAuthentication() ) {
-		this.msgSecurityParameters.msgAuthenticationParameters = Authentication.AUTH_PARAMETERS_PLACEHOLDER;
-	}
-	if ( this.msgSecurityParameters.msgAuthenticationParameters.length == 0 ) {
-		msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
-	} else {
+		msgSecurityParametersWriter.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
+	// should never happen where msgFlags has no authentication but authentication parameters still present
+	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
+	} else {
+	 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
 	}
-	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
+
+	if ( this.hasPrivacy() ) {
+		msgSecurityParametersWriter.writeBuffer (Encryption.PRIV_PARAMETERS_PLACEHOLDER, ber.OctetString);
+	// should never happen where msgFlags has no privacy but privacy parameters still present
+	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
+		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
+	} else {
+	 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
+	}
+
 	msgSecurityParametersWriter.endSequence ();
 	writer.writeByte (ber.OctetString);
 	writer.writeByte (msgSecurityParametersWriter.buffer.length);  // probably need to fix for condition if length > 255
 	writer.writeBuffer (msgSecurityParametersWriter.buffer);
 
 	// ScopedPDU
-	writer.startSequence ();
+	var scopedPduWriter = new ber.Writer ();
+	scopedPduWriter.startSequence ();
 	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
-		writer.writeString ("");
+		scopedPduWriter.writeString ("");
 	} else {
-		writer.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+		scopedPduWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
 	}
-	writer.writeString ("");
-	this.pdu.toBuffer (writer);
-	writer.endSequence ();
+	scopedPduWriter.writeString ("");
+	this.pdu.toBuffer (scopedPduWriter);
+	scopedPduWriter.endSequence ();
+
+	if ( this.hasPrivacy() ) {
+		encryptionResult = Encryption.encryptPdu(scopedPduWriter.buffer, this.user.privProtocol, this.user.privKey, this.user.authProtocol, this.msgSecurityParameters.msgAuthoritativeEngineID);
+		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
+	} else {
+		writer.writeBuffer (scopedPduWriter.buffer);
+	}
 
 	writer.endSequence ();
 
 	this.buffer = writer.buffer;
 
+	if ( this.hasPrivacy() ) {
+		Encryption.addParametersToMessageBuffer(this.buffer, encryptionResult.msgPrivacyParameters);
+	}
+
 	if ( this.hasAuthentication() ) {
-		Authentication.addDigest(this.buffer, this.user.authProtocol, this.user.authKey, this.msgSecurityParameters.msgAuthoritativeEngineID);
+		Authentication.addParametersToMessageBuffer(this.buffer, this.user.authProtocol, this.user.authKey,
+			this.msgSecurityParameters.msgAuthoritativeEngineID);
 	}
 
 	return this.buffer;
