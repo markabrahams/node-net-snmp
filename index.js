@@ -671,7 +671,7 @@ var Encryption = {};
 Encryption.INPUT_KEY_LENGTH = 16;
 Encryption.DES_KEY_LENGTH = 8;
 Encryption.DES_BLOCK_LENGTH = 8;
-Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from('9192939495969798', 'hex');
+Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex');
 
 Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authProtocol, engineID) {
 	var privLocalizedKey;
@@ -722,10 +722,44 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	};
 };
 
-Encryption.addParametersToMessageBuffer = function(messageBuffer, msgPrivacyParameters) {
+Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engineID) {
+	var privLocalizedKey;
+	var decryptionKey;
+	var preIv;
+	var salt;
+	var iv;
+	var i;
+	var decryptedPdu;
+	var cbcProtocol = privProtocol + '-cbc';
+
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
+	decryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
+	privLocalizedKey.copy (decryptionKey, 0, 0, Encryption.DES_KEY_LENGTH);
+	preIv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	privLocalizedKey.copy (preIv, 0, Encryption.DES_KEY_LENGTH, Encryption.DES_KEY_LENGTH + Encryption.DES_BLOCK_LENGTH);
+
+	salt = privParameters;
+	iv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	for (i = 0; i < iv.length; i++) {
+		iv[i] = preIv[i] ^ salt[i];
+	}
+	
+	decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
+	decryptedPdu = decipher.update (encryptedPdu);
+	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	// console.log ("Key: " + decryptionKey.toString ('hex'));
+	// console.log ("IV:  " + iv.toString ('hex'));
+	// console.log ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// console.log ("Plain:     " + decryptedPdu.toString ('hex'));
+
+	return decryptedPdu;
+
+};
+
+Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
 	privacyParametersOffset = messageBuffer.indexOf(Encryption.PRIV_PARAMETERS_PLACEHOLDER);
 	msgPrivacyParameters.copy(messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
-}
+};
 
 /*****************************************************************************
  ** Message class definition
@@ -856,6 +890,10 @@ Message.prototype.toBufferV3 = function () {
 	return this.buffer;
 };
 
+Message.prototype.getReqId = function () {
+	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
+};
+
 Message.prototype.hasAuthentication = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
 };
@@ -901,7 +939,7 @@ Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
 	return message;
 };
 
-Message.createDiscoveryV3 = function(user, pdu) {
+Message.createDiscoveryV3 = function (pdu) {
 	var msgSecurityParameters = {
 		msgAuthoritativeEngineID: Buffer.from(""),
 		msgAuthoritativeEngineBoots: 0,
@@ -914,10 +952,9 @@ Message.createDiscoveryV3 = function(user, pdu) {
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
 }
 
-Message.createResponse = function (buffer) {
+Message.createResponse = function (buffer, reqs) {
 	var reader = new ber.Reader (buffer);
 	var message = new Message();
-	var scopedPdu;
 
 	reader.readSequence ();
 
@@ -925,7 +962,7 @@ Message.createResponse = function (buffer) {
 
 	if (message.version != 3) {
 		message.community = reader.readString ();
-		scopedPdu = false;
+		message.pdu = readPdu(reader, false);
 	} else {
 		// HeaderData
 		message.msgGlobalData = {};
@@ -946,16 +983,25 @@ Message.createResponse = function (buffer) {
 		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 		scopedPdu = true;
-	}
 
-	message.pdu = readPdu(reader, scopedPdu);
+		if ( message.hasPrivacy() ) {
+			var encryptedPdu = reader.readString (ber.OctetString, true);
+			var user = reqs[message.msgGlobalData.msgID].message.user;
+			var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
+				message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+				message.msgSecurityParameters.msgAuthoritativeEngineID);
+			var decryptedPduReader = new ber.Reader (decryptedPdu);
+			message.pdu = readPdu(decryptedPduReader, true);		
+		} else {
+			message.pdu = readPdu(reader, true);
+		}
+	}
 
 	return message;
 };
 
 var Req = function (session, message, pdu, feedCb, responseCb, options) {
 
-	this.id = pdu.id;
 	this.message = message;
 	this.responseCb = responseCb;
 	this.retries = session.retries;
@@ -965,6 +1011,11 @@ var Req = function (session, message, pdu, feedCb, responseCb, options) {
 	this.port = (options && options.port) ? options.port : session.port;
 
 };
+
+Req.prototype.getId = function() {
+	return this.message.getReqId ();
+}
+
 
 /*****************************************************************************
  ** Session class definition
@@ -1037,7 +1088,7 @@ Session.prototype.cancelRequests = function (error) {
 	var id;
 	for (id in this.reqs) {
 		var req = this.reqs[id];
-		this.unregisterRequest (req.id);
+		this.unregisterRequest (req.getId ());
 		req.responseCb (error);
 	}
 };
@@ -1338,9 +1389,9 @@ Session.prototype.onError = function (error) {
 
 Session.prototype.onMsg = function (buffer) {
 	try {
-		var message = Message.createResponse (buffer);
+		var message = Message.createResponse (buffer, this.reqs);
 
-		var req = this.unregisterRequest (message.pdu.id);
+		var req = this.unregisterRequest (message.getReqId ());
 		if (! req)
 			return;
 
@@ -1348,10 +1399,10 @@ Session.prototype.onMsg = function (buffer) {
 			if ( ! Authentication.isAuthentic(buffer, this.user.authProtocol, this.user.authKey,
 					message.msgSecurityParameters.msgAuthoritativeEngineID, message.msgSecurityParameters.msgAuthenticationParameters) ) {
 				req.responseCb (new ResponseInvalidError ("Authentication digest "
-						+ message.msgSecurityParameters.msgAuthenticationParameters.toString('hex')
+						+ message.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
 						+ " received in message does not match digest "
-						+ Authentication.calculateDigest(buffer, this.user.authProtocol,this.user.authKey,
-							message.msgSecurityParameters.msgAuthoritativeEngineID).toString('hex')
+						+ Authentication.calculateDigest (buffer, this.user.authProtocol,this.user.authKey,
+							message.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
 						+ " calculated for message") );
 				return;
 			}
@@ -1414,8 +1465,8 @@ Session.prototype.onSimpleGetResponse = function (req, message) {
 };
 
 Session.prototype.registerRequest = function (req) {
-	if (! this.reqs[req.id]) {
-		this.reqs[req.id] = req;
+	if (! this.reqs[req.getId ()]) {
+		this.reqs[req.getId ()] = req;
 		if (this.reqCount <= 0)
 			this.dgram.ref();
 		this.reqCount++;
@@ -1425,7 +1476,7 @@ Session.prototype.registerRequest = function (req) {
 		if (req.retries-- > 0) {
 			me.send (req);
 		} else {
-			me.unregisterRequest (req.id);
+			me.unregisterRequest (req.getId ());
 			req.responseCb (new RequestTimedOutError (
 					"Request timed out"));
 		}
@@ -1510,7 +1561,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		if ( this.version == Version3 ) {
 			// SNMPv3 discovery
 			var discoveryPdu = createDiscoveryPdu();
-			var discoveryMessage = Message.createDiscoveryV3 (this.user, discoveryPdu);
+			var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
 			var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
 			discoveryReq.originalPdu = pdu;
 			this.send (discoveryReq);
