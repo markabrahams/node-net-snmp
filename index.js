@@ -93,25 +93,28 @@ var TrapType = {
 
 _expandConstantObject (TrapType);
 
-var UsmLevel = {
+var SecurityLevel = {
 	1: "noAuthNoPriv",
 	2: "authNoPriv",
 	3: "authPriv"
 };
 
-_expandConstantObject (UsmLevel);
+_expandConstantObject (SecurityLevel);
 
-var UsmAuthProtocol = {
-	0: "md5"
+var AuthProtocols = {
+	"1": "none",
+	"2": "md5",
+	"3": "sha"
 };
 
-_expandConstantObject (UsmAuthProtocol);
+_expandConstantObject (AuthProtocols);
 
-var UsmPrivProtocol = {
-	0: "DES"
+var PrivProtocols = {
+	"1": "none",
+	"2": "des"
 };
 
-_expandConstantObject (UsmPrivProtocol);
+_expandConstantObject (PrivProtocols);
 
 var Version1 = 0;
 var Version2c = 1;
@@ -559,16 +562,17 @@ Authentication.HMAC_BLOCK_SIZE = 64;
 Authentication.AUTHENTICATION_CODE_LENGTH = 12;
 Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
 
-Authentication.algorithms = {
-	md5: {
-		// KEY_LENGTH: 16,
-		CRYPTO_ALGORITHM: 'md5'
-	},
-	sha: {
-		// KEY_LENGTH: 20,
-		CRYPTO_ALGORITHM: 'sha1'
-	}
-}
+Authentication.algorithms = {};
+
+Authentication.algorithms[AuthProtocols.md5] = {
+	// KEY_LENGTH: 16,
+	CRYPTO_ALGORITHM: 'md5'
+};
+
+Authentication.algorithms[AuthProtocols.sha] = {
+	// KEY_LENGTH: 20,
+	CRYPTO_ALGORITHM: 'sha1'
+};
 
 // Adapted from RFC3414 Appendix A.2.1. Password to Key Sample Code for MD5
 Authentication.passwordToKey = function (authProtocol, authPasswordString, engineID) {
@@ -744,7 +748,7 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 	var iv;
 	var i;
 	var decryptedPdu;
-	var cbcProtocol = privProtocol + '-cbc';
+	var cbcProtocol = Encryption.CRYPTO_DES_ALGORITHM;;
 
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
 	decryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
@@ -926,8 +930,8 @@ Message.createRequestCommunity = function (version, community, pdu) {
 
 Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
 	var message = new Message();
-	var authFlag = user.level == UsmLevel.authNoPriv || user.level == UsmLevel.authPriv ? 1 : 0;
-	var privFlag = user.level == UsmLevel.authPriv ? 1 : 0;
+	var authFlag = user.level == SecurityLevel.authNoPriv || user.level == SecurityLevel.authPriv ? 1 : 0;
+	var privFlag = user.level == SecurityLevel.authPriv ? 1 : 0;
 	var reportableFlag = 1; // all request messages are reportable
 
 	message.version = 3;
@@ -1413,7 +1417,7 @@ Session.prototype.onMsg = function (buffer) {
 				req.responseCb (new ResponseInvalidError ("Authentication digest "
 						+ message.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
 						+ " received in message does not match digest "
-						+ Authentication.calculateDigest (buffer, this.user.authProtocol,this.user.authKey,
+						+ Authentication.calculateDigest (buffer, this.user.authProtocol, this.user.authKey,
 							message.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
 						+ " calculated for message") );
 				return;
@@ -1995,9 +1999,9 @@ exports.Version = Version;
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
-exports.UsmLevel = UsmLevel;
-exports.UsmAuthProtocol = UsmAuthProtocol;
-exports.UsmPrivProtocol = UsmPrivProtocol;
+exports.SecurityLevel = SecurityLevel;
+exports.AuthProtocols = AuthProtocols;
+exports.PrivProtocols = PrivProtocols;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;

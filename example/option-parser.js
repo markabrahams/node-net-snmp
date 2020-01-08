@@ -24,15 +24,15 @@ if ( snmpOptions.version == snmp.Version3 ) {
     }
 	user = {
 		name: options.u,
-		level: snmp.UsmLevel[options.l],
+		level: snmp.SecurityLevel[options.l],
         engineID: engineID
     };
     if ( options.a ) {
-        user.authProtocol = options.a.toLowerCase();
+        user.authProtocol = snmp.AuthProtocols[options.a.toLowerCase()];
         user.authKey = options.A;
     }
     if ( options.x ) {
-		user.privProtocol = options.x.toLowerCase();
+		user.privProtocol = snmp.PrivProtocols[options.x.toLowerCase()];
         user.privKey = options.X;
     }
 } else {
