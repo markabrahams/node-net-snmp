@@ -413,12 +413,12 @@ same `Session` class as `createSession()`, only instead initialized for SNMPv3:
 
     // Example user
     var user = {
-		name: blinkybill,
-		level: snmp.SecurityLevel.authPriv,
-        user.authProtocol = snmp.AuthProtocols.sha;
-        user.authKey = "madeahash";
-		user.privProtocol = snmp.PrivProtocols.des;
-        user.privKey = "privycouncil";
+        name: "blinkybill",
+        level: snmp.SecurityLevel.authPriv,
+        authProtocol: snmp.AuthProtocols.sha,
+        authKey: "madeahash",
+        privProtocol: snmp.PrivProtocols.des,
+        privKey: "privycouncil"
     };
     
     var session = snmp.createV3Session ("127.0.0.1", user, options);
