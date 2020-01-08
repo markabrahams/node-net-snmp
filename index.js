@@ -522,15 +522,15 @@ var GetResponsePdu = function (reader) {
 	readVarbinds (reader, this.varbinds);
 };
 
+// we never create Report PDUs - so not needed at present
 // var ReportPdu = function () {
 // 	this.type = PduType.ReportPdu;
 // 	ReportPdu.super_.apply (this, arguments);
 // };
 
-var readPdu = function(reader, scoped) {
+var readPdu = function (reader, scoped) {
 	var pdu;
 	if ( scoped ) {
-		// auth & priv functions to go here
 		reader.readSequence ();
 		contextEngineID = reader.readString (ber.OctetString, true);
 		contextName = reader.readString ();
@@ -556,8 +556,19 @@ var Authentication = {};
 
 Authentication.HMAC_BUFFER_SIZE = 1024*1024;
 Authentication.HMAC_BLOCK_SIZE = 64;
-Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH = 12;
+Authentication.AUTHENTICATION_CODE_LENGTH = 12;
 Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
+
+Authentication.algorithms = {
+	md5: {
+		// KEY_LENGTH: 16,
+		CRYPTO_ALGORITHM: 'md5'
+	},
+	sha: {
+		// KEY_LENGTH: 20,
+		CRYPTO_ALGORITHM: 'sha1'
+	}
+}
 
 // Adapted from RFC3414 Appendix A.2.1. Password to Key Sample Code for MD5
 Authentication.passwordToKey = function (authProtocol, authPasswordString, engineID) {
@@ -569,6 +580,7 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	var passwordIndex = 0;
 	var count = 0;
 	var password = Buffer.from (authPasswordString);
+	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
 	
 	while (count < Authentication.HMAC_BUFFER_SIZE) {
 		for (var i = 0; i < Authentication.HMAC_BLOCK_SIZE; i++) {
@@ -576,12 +588,12 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 		}
 		count += Authentication.HMAC_BLOCK_SIZE;
 	}
-	hashAlgorithm = crypto.createHash(authProtocol);
+	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(buf);
 	firstDigest = hashAlgorithm.digest();
-	// console.log("First digest: " + firstDigest.toString('hex'));
+	// console.log("First digest:  " + firstDigest.toString('hex'));
 
-	hashAlgorithm = crypto.createHash(authProtocol);
+	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(firstDigest);
 	hashAlgorithm.update(engineID);
 	hashAlgorithm.update(firstDigest);
@@ -596,11 +608,11 @@ Authentication.addParametersToMessageBuffer = function (messageBuffer, authProto
 	var digestToAdd;
 
 	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf(Authentication.AUTH_PARAMETERS_PLACEHOLDER);
-	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	authenticationParametersOffset = messageBuffer.indexOf (Authentication.AUTH_PARAMETERS_PLACEHOLDER);
+	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
 
-	digestToAdd = Authentication.calculateDigest(messageBuffer, authProtocol, authPassword, engineID);
-	digestToAdd.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	digestToAdd = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
+	digestToAdd.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
 	//console.log("Added Auth Parameters: " + digestToAdd.toString('hex'));
 };
 
@@ -609,21 +621,21 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 	var calculatedDigest;
 
 	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf(digestInMessage);
-	messageBuffer.fill(0, authenticationParametersOffset, authenticationParametersOffset + Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	authenticationParametersOffset = messageBuffer.indexOf (digestInMessage);
+	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
 
-	calculatedDigest = Authentication.calculateDigest(messageBuffer, authProtocol, authPassword, engineID);
+	calculatedDigest = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
 
 	// replace previously cleared authenticationParameters field in message
-	digestInMessage.copy(messageBuffer, authenticationParametersOffset, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	digestInMessage.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
 
-	//console.log("Digest in message: " + digestInMessage.toString('hex'));
-	//console.log("Calculated digest: " + calculatedDigest.toString('hex'));
-	return calculatedDigest.equals(digestInMessage, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	// console.log ("Digest in message: " + digestInMessage.toString('hex'));
+	// console.log ("Calculated digest: " + calculatedDigest.toString('hex'));
+	return calculatedDigest.equals (digestInMessage, Authentication.AUTHENTICATION_CODE_LENGTH);
 };
 
 Authentication.calculateDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
-	var authKey = Authentication.passwordToKey(authProtocol, authPassword, engineID);
+	var authKey = Authentication.passwordToKey (authProtocol, authPassword, engineID);
 
 	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
 	var hashAlgorithm;
@@ -633,11 +645,12 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 	var finalDigest;
 	var truncatedDigest;
 	var i;
+	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
 
 	if (authKey.length > Authentication.HMAC_BLOCK_SIZE) {
-		hashAlgorithm = crypto.createHash(authProtocol);
-		hashAlgorithm.update(authKey);
-		authKey = hashAlgorithm.digest();
+		hashAlgorithm = crypto.createHash (cryptoAlgorithm);
+		hashAlgorithm.update (authKey);
+		authKey = hashAlgorithm.digest ();
 	}
 
 	// MD(K XOR opad, MD(K XOR ipad, msg))
@@ -647,22 +660,22 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 		kIpad[i] = authKey[i] ^ 0x36;
 		kOpad[i] = authKey[i] ^ 0x5c;
 	}
-	kIpad.fill(0x36, authKey.length);
-	kOpad.fill(0x5c, authKey.length);
+	kIpad.fill (0x36, authKey.length);
+	kOpad.fill (0x5c, authKey.length);
 
 	// inner MD
-	hashAlgorithm = crypto.createHash(authProtocol);
-	hashAlgorithm.update(kIpad);
-	hashAlgorithm.update(messageBuffer);
-	firstDigest = hashAlgorithm.digest();
+	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
+	hashAlgorithm.update (kIpad);
+	hashAlgorithm.update (messageBuffer);
+	firstDigest = hashAlgorithm.digest ();
 	// outer MD
-	hashAlgorithm = crypto.createHash(authProtocol);
-	hashAlgorithm.update(kOpad);
-	hashAlgorithm.update(firstDigest);
-	finalDigest = hashAlgorithm.digest();
+	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
+	hashAlgorithm.update (kOpad);
+	hashAlgorithm.update (firstDigest);
+	finalDigest = hashAlgorithm.digest ();
 
-	truncatedDigest = Buffer.alloc(Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
-	finalDigest.copy(truncatedDigest, 0, 0, Authentication.DEFAULT_AUTHENTICATION_CODE_LENGTH);
+	truncatedDigest = Buffer.alloc (Authentication.AUTHENTICATION_CODE_LENGTH);
+	finalDigest.copy (truncatedDigest, 0, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
 	return truncatedDigest;
 };
 
@@ -671,6 +684,7 @@ var Encryption = {};
 Encryption.INPUT_KEY_LENGTH = 16;
 Encryption.DES_KEY_LENGTH = 8;
 Encryption.DES_BLOCK_LENGTH = 8;
+Encryption.CRYPTO_DES_ALGORITHM = 'des-cbc';
 Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex');
 
 Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authProtocol, engineID) {
@@ -683,7 +697,7 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	var paddedScopedPduLength;
 	var paddedScopedPdu;
 	var encryptedPdu;
-	var cbcProtocol = privProtocol + '-cbc';
+	var cbcProtocol = Encryption.CRYPTO_DES_ALGORITHM;
 
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
 	encryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
@@ -757,8 +771,8 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 };
 
 Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
-	privacyParametersOffset = messageBuffer.indexOf(Encryption.PRIV_PARAMETERS_PLACEHOLDER);
-	msgPrivacyParameters.copy(messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
+	privacyParametersOffset = messageBuffer.indexOf (Encryption.PRIV_PARAMETERS_PLACEHOLDER);
+	msgPrivacyParameters.copy (messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
 };
 
 /*****************************************************************************
@@ -849,11 +863,9 @@ Message.prototype.toBufferV3 = function () {
 	} else {
 	 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
 	}
-
 	msgSecurityParametersWriter.endSequence ();
-	writer.writeByte (ber.OctetString);
-	writer.writeByte (msgSecurityParametersWriter.buffer.length);  // probably need to fix for condition if length > 255
-	writer.writeBuffer (msgSecurityParametersWriter.buffer);
+
+	writer.writeBuffer (msgSecurityParametersWriter.buffer, ber.OctetString);
 
 	// ScopedPDU
 	var scopedPduWriter = new ber.Writer ();
@@ -1420,6 +1432,10 @@ Session.prototype.onMsg = function (buffer) {
 			} else if (message.pdu.type == PduType.GetResponse) {
 				req.onResponse (req, message);
 			} else if (message.pdu.type == PduType.Report) {
+				if ( ! req.originalPdu ) {
+					req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
+					return;
+				}
 				var msgSecurityParameters = {
 					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
