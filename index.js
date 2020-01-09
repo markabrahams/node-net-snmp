@@ -764,7 +764,19 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 	
 	decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
 	decryptedPdu = decipher.update (encryptedPdu);
-	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	// This try-catch is a workaround for a seemingly incorrect error condition
+	// - where sometimes a decrypt error is thrown with decipher.final()
+	// It replaces this line which should have been sufficient:
+	// decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	try {
+		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	} catch (error) {
+		// console.log("Decrypt error: " + error);
+		decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
+		decipher.setAutoPadding(false);
+		decryptedPdu = decipher.update (encryptedPdu);
+		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	}
 	// console.log ("Key: " + decryptionKey.toString ('hex'));
 	// console.log ("IV:  " + iv.toString ('hex'));
 	// console.log ("Encrypted: " + encryptedPdu.toString ('hex'));
@@ -963,7 +975,7 @@ Message.createDiscoveryV3 = function (pdu) {
 	};
 	var emptyUser = {
 		name: "",
-		level: 1
+		level: SecurityLevel.noAuthNoPriv
 	};
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
 }
@@ -2016,3 +2028,4 @@ exports.ObjectParser = {
 	readUint: readUint
 };
 exports.Authentication = Authentication;
+exports.Encryption = Encryption;
