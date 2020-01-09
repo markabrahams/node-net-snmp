@@ -7,9 +7,18 @@ var events = require ("events");
 var util = require ("util");
 var crypto = require("crypto");
 
+var DEBUG = false;
+
+function debug (line) {
+	if ( DEBUG ) {
+		console.debug (line);
+	}
+}
+
 /*****************************************************************************
  ** Constants
  **/
+
 
 function _expandConstantObject (object) {
 	var keys = [];
@@ -595,14 +604,14 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(buf);
 	firstDigest = hashAlgorithm.digest();
-	// console.log("First digest:  " + firstDigest.toString('hex'));
+	// debug ("First digest:  " + firstDigest.toString('hex'));
 
 	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(firstDigest);
 	hashAlgorithm.update(engineID);
 	hashAlgorithm.update(firstDigest);
 	finalDigest = hashAlgorithm.digest();
-	// console.log("Localized key: " + finalDigest.toString('hex'));
+	debug ("Localized key: " + finalDigest.toString('hex'));
 
 	return finalDigest;
 };
@@ -617,7 +626,7 @@ Authentication.addParametersToMessageBuffer = function (messageBuffer, authProto
 
 	digestToAdd = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
 	digestToAdd.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
-	//console.log("Added Auth Parameters: " + digestToAdd.toString('hex'));
+	debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
 };
 
 Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
@@ -633,8 +642,8 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 	// replace previously cleared authenticationParameters field in message
 	digestInMessage.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
 
-	// console.log ("Digest in message: " + digestInMessage.toString('hex'));
-	// console.log ("Calculated digest: " + calculatedDigest.toString('hex'));
+	debug ("Digest in message: " + digestInMessage.toString('hex'));
+	debug ("Calculated digest: " + calculatedDigest.toString('hex'));
 	return calculatedDigest.equals (digestInMessage, Authentication.AUTHENTICATION_CODE_LENGTH);
 };
 
@@ -729,10 +738,10 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	cipher = crypto.createCipheriv (cbcProtocol, encryptionKey, iv);
 	encryptedPdu = cipher.update (paddedScopedPdu);
 	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
-	// console.log ("Key: " + encryptionKey.toString ('hex'));
-	// console.log ("IV:  " + iv.toString ('hex'));
-	// console.log ("Plain:     " + paddedScopedPdu.toString ('hex'));
-	// console.log ("Encrypted: " + encryptedPdu.toString ('hex'));
+	debug ("Key: " + encryptionKey.toString ('hex'));
+	debug ("IV:  " + iv.toString ('hex'));
+	debug ("Plain:     " + paddedScopedPdu.toString ('hex'));
+	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
 
 	return {
 		encryptedPdu: encryptedPdu,
@@ -740,7 +749,7 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	};
 };
 
-Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engineID) {
+Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engineID, forceAutoPaddingDisable ) {
 	var privLocalizedKey;
 	var decryptionKey;
 	var preIv;
@@ -763,6 +772,9 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 	}
 	
 	decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
+	if ( forceAutoPaddingDisable ) {
+		decipher.setAutoPadding(false);
+	}
 	decryptedPdu = decipher.update (encryptedPdu);
 	// This try-catch is a workaround for a seemingly incorrect error condition
 	// - where sometimes a decrypt error is thrown with decipher.final()
@@ -771,16 +783,16 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 	try {
 		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	} catch (error) {
-		// console.log("Decrypt error: " + error);
+		// debug("Decrypt error: " + error);
 		decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
 		decipher.setAutoPadding(false);
 		decryptedPdu = decipher.update (encryptedPdu);
 		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	}
-	// console.log ("Key: " + decryptionKey.toString ('hex'));
-	// console.log ("IV:  " + iv.toString ('hex'));
-	// console.log ("Encrypted: " + encryptedPdu.toString ('hex'));
-	// console.log ("Plain:     " + decryptedPdu.toString ('hex'));
+	debug ("Key: " + decryptionKey.toString ('hex'));
+	debug ("IV:  " + iv.toString ('hex'));
+	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	debug ("Plain:     " + decryptedPdu.toString ('hex'));
 
 	return decryptedPdu;
 
@@ -1015,11 +1027,22 @@ Message.createResponse = function (buffer, reqs) {
 		if ( message.hasPrivacy() ) {
 			var encryptedPdu = reader.readString (ber.OctetString, true);
 			var user = reqs[message.msgGlobalData.msgID].message.user;
-			var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
-				message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
-				message.msgSecurityParameters.msgAuthoritativeEngineID);
-			var decryptedPduReader = new ber.Reader (decryptedPdu);
-			message.pdu = readPdu(decryptedPduReader, true);		
+			try {
+				var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
+					message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+					message.msgSecurityParameters.msgAuthoritativeEngineID);
+				var decryptedPduReader = new ber.Reader (decryptedPdu);
+				message.pdu = readPdu(decryptedPduReader, true);
+			// really really occasionally the decrypt truncates a single byte causing an ASN read failure in readPdu()
+			// in this case, disabling auto padding decrypts the PDU correctly
+			// this try-catch provides the workaround for this condition
+			} catch (error) {
+				var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
+					message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+					message.msgSecurityParameters.msgAuthoritativeEngineID, true);
+				var decryptedPduReader = new ber.Reader (decryptedPdu);
+				message.pdu = readPdu(decryptedPduReader, true);
+			}
 		} else {
 			message.pdu = readPdu(reader, true);
 		}
@@ -1089,6 +1112,8 @@ var Session = function (target, authenticator, options) {
 	this.idBitsSize = (options && options.idBitsSize)
 			? parseInt(options.idBitsSize)
 			: 32;
+
+	DEBUG = options.debug;
 
 	this.reqs = {};
 	this.reqCount = 0;

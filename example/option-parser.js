@@ -17,6 +17,7 @@ if ( ! options.v ) {
 }
 
 snmpOptions.version = snmp.Version[options.v];
+snmpOptions.debug = options.d;
 if ( snmpOptions.version == snmp.Version3 ) {
     var engineID;
     if ( options.e ) {
@@ -43,7 +44,7 @@ nonRepeaters = options.n;
 maxRepetitions = options.r;
 
 if (options._.length < 2) {
-	console.log ("usage: " + process.argv[1] + "<target> <oid>");
+	console.log ("usage: " + process.argv[1] + " [<options>] <target> <oid>");
 	process.exit (1);
 }
 
