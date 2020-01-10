@@ -1065,7 +1065,7 @@ var Req = function (session, message, pdu, feedCb, responseCb, options) {
 
 Req.prototype.getId = function() {
 	return this.message.getReqId ();
-}
+};
 
 
 /*****************************************************************************
@@ -1477,16 +1477,12 @@ Session.prototype.onMsg = function (buffer) {
 					req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
 					return;
 				}
-				var msgSecurityParameters = {
+				this.msgSecurityParameters = {
 					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
-				var messageForOriginalPdu = Message.createRequestV3 (this.user, msgSecurityParameters, req.originalPdu);
-				var reqForOriginalPduOptions = req.options || {};
-				reqForOriginalPduOptions.port = req.port;
-				var reqForOriginalPdu = new Req (this, messageForOriginalPdu, req.originalPdu, req.feedCb, req.responseCb, reqForOriginalPduOptions);
-				this.send(reqForOriginalPdu);
+				this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
 						+ message.pdu.type + "' in response"));
@@ -1616,12 +1612,16 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		var req;
 
 		if ( this.version == Version3 ) {
-			// SNMPv3 discovery
-			var discoveryPdu = createDiscoveryPdu();
-			var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
-			var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
-			discoveryReq.originalPdu = pdu;
-			this.send (discoveryReq);
+			if ( this.msgSecurityParameters ) {
+				this.sendV3Req(pdu, feedCb, responseCb, options, this.port);
+			} else {
+				// SNMPv3 discovery
+				var discoveryPdu = createDiscoveryPdu();
+				var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
+				var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
+				discoveryReq.originalPdu = pdu;
+				this.send (discoveryReq);
+			}
 		} else {
 			message = Message.createRequestCommunity (this.version, this.community, pdu);
 			req = new Req (this, message, pdu, feedCb, responseCb, options);
@@ -2000,6 +2000,14 @@ Session.prototype.walk  = function () {
 		this.getNext ([oid], walkCb.bind (me, req));
 
 	return this;
+};
+
+Session.prototype.sendV3Req = function(pdu, feedCb, responseCb, options, port) {
+	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
+	var reqOptions = options || {};
+	var req = new Req (this, message, pdu, feedCb, responseCb, reqOptions);
+	req.port = port;
+	this.send (req);
 };
 
 /*****************************************************************************
