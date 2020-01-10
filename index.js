@@ -560,7 +560,7 @@ var readPdu = function (reader, scoped) {
 	return pdu;
 };
 
-var createDiscoveryPdu = function (target, host) {
+var createDiscoveryPdu = function () {
 	return new GetRequestPdu(_generateId(), [], {});
 };
 
@@ -1051,7 +1051,7 @@ Message.createResponse = function (buffer, reqs) {
 	return message;
 };
 
-var Req = function (session, message, pdu, feedCb, responseCb, options) {
+var Req = function (session, message, feedCb, responseCb, options) {
 
 	this.message = message;
 	this.responseCb = responseCb;
@@ -1618,13 +1618,13 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 				// SNMPv3 discovery
 				var discoveryPdu = createDiscoveryPdu();
 				var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
-				var discoveryReq = new Req (this, discoveryMessage, discoveryPdu, feedCb, responseCb, options);
+				var discoveryReq = new Req (this, discoveryMessage, feedCb, responseCb, options);
 				discoveryReq.originalPdu = pdu;
 				this.send (discoveryReq);
 			}
 		} else {
 			message = Message.createRequestCommunity (this.version, this.community, pdu);
-			req = new Req (this, message, pdu, feedCb, responseCb, options);
+			req = new Req (this, message, feedCb, responseCb, options);
 			this.send (req);
 		}
 	} catch (error) {
@@ -1884,7 +1884,6 @@ Session.prototype.trap = function () {
 
 		if ( this.version == Version3 ) {
 			var msgSecurityParameters = {
-				//msgAuthoritativeEngineID: Buffer.from(this.user.engineID, 'hex'),
 				msgAuthoritativeEngineID: this.user.engineID,
 				msgAuthoritativeEngineBoots: 0,
 				msgAuthoritativeEngineTime: 0
@@ -2005,7 +2004,7 @@ Session.prototype.walk  = function () {
 Session.prototype.sendV3Req = function(pdu, feedCb, responseCb, options, port) {
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
-	var req = new Req (this, message, pdu, feedCb, responseCb, reqOptions);
+	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
 	this.send (req);
 };
