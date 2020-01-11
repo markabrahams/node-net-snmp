@@ -18,6 +18,7 @@ if ( ! options.v ) {
 
 snmpOptions.version = snmp.Version[options.v];
 snmpOptions.debug = options.d;
+snmpOptions.port = options.p;
 if ( snmpOptions.version == snmp.Version3 ) {
     var engineID;
     if ( options.e ) {
