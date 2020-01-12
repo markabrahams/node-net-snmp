@@ -2254,8 +2254,17 @@ Receiver = function (options, callback) {
 	if ( options.engineID ) {
 		this.engineID = Buffer.from (options.engineID, 'hex');
 	} else {
-		this.generateEngineID();
+		this.generateEngineID ();
 	}
+};
+
+Receiver.prototype.startListening = function () {
+	var me = this;
+
+	this.dgram = dgram.createSocket (this.family);
+	this.dgram.bind (this.port);
+	this.dgram.on ("message", me.onMsg.bind (me));
+
 };
 
 Receiver.prototype.addCommunity = function (community) {
@@ -2373,13 +2382,8 @@ Receiver.prototype.send = function (message, rinfo) {
 };
 
 Receiver.create = function (options, callback) {
-	var receiver = new Receiver(options, callback);
-	var me = receiver;
-
-	receiver.dgram = dgram.createSocket(receiver.family);
-	receiver.dgram.bind(receiver.port);
-	receiver.dgram.on ("message", me.onMsg.bind (me));
-
+	var receiver = new Receiver (options, callback);
+	receiver.startListening ();
 	return receiver;
 };
 
@@ -2419,6 +2423,7 @@ exports.Version = Version;
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
+exports.PduType = PduType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;

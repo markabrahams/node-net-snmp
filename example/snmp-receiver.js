@@ -5,24 +5,16 @@ var snmp = require ("../");
 var getopts = require ("getopts");
 
 var options = getopts(process.argv.slice(2));
+
 var verbose = options.v;
 
 var cb = function(error, trap) {
     var now = new Date().toLocaleString();
     var trapType;
-
     if (error) {
         console.log(now + ": " + error.message);
     } else {
-        if (trap.pdu.type == 164 ) {
-            trapType = "Trap (v1)";
-        } else if ( trap.pdu.type == 167) {
-            trapType = "Trap (v2)";
-        } else if ( trap.pdu.type == 166 ) {
-            trapType = "Inform";
-        } else {
-            trapType = "Unknown";
-        }
+        trapType = snmp.PduType[trap.pdu.type] || "Unknown";
         if ( verbose ) {
             console.log (now + ": " + trapType + " received:");
             console.log (JSON.stringify(trap, null, 2));
@@ -37,13 +29,12 @@ var cb = function(error, trap) {
 }
 
 var snmpOptions = {
-    disableAuthorization: false,
+    disableAuthorization: options.n,
     trapPort: options.p,
     engineID: options.e
 };
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
-
 receiver.addUser ({
     name: "none",
     level: snmp.SecurityLevel.noAuthNoPriv
