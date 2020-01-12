@@ -2,23 +2,38 @@
 // Copyright 2013 Stephen Vickers
 
 var snmp = require ("../");
-//var options = require("./option-parser");
+var getopts = require ("getopts");
+
+var options = getopts(process.argv.slice(2));
+
+var verbose = options.v;
 
 var cb = function(error, trap) {
+    var now = new Date().toLocaleString();
     if (error) {
-        console.error(error);
+        console.log(now + ": " + error.message);
     } else {
-        if (trap.enterprise) {
-            console.log("Trap (v1): " + trap.enterprise);
+        if ( verbose ) {
+            console.log (now + ": Trap received:");
+            console.log (JSON.stringify(trap, null, 2));
         } else {
-            console.log("Trap (v2): " + trap.varbinds[1].value)
+            if (trap.pdu.type == 164 ) {
+                console.log (now + ": Trap (v1): " + trap.rinfo.address + " : " + trap.pdu.enterprise);
+            } else {
+                console.log (now + ": Trap (v2): " + trap.rinfo.address + " : " + trap.pdu.varbinds[1].value);
+            }
         }
     }
 }
 
-var receiver = snmp.createReceiver({disableAuthorization: true}, cb);
+var snmpOptions = {
+    disableAuthorization: false,
+    trapPort: options.p,
+    engineID: options.e
+};
+
+var receiver = snmp.createReceiver(snmpOptions, cb);
 receiver.addUser ({
-    engineID: this.engineID,
     name: "none",
     level: snmp.SecurityLevel.noAuthNoPriv
 });
@@ -26,22 +41,14 @@ receiver.addUser ({
     name: "md5only",
     level: snmp.SecurityLevel.authNoPriv,
     authProtocol: snmp.AuthProtocols.md5,
-    authKey: "presnets8"
-});
-receiver.addUser ({
-    name: "md5des",
-    level: snmp.SecurityLevel.authPriv,
-    authProtocol: snmp.AuthProtocols.md5,
-    authKey: "presnets8",
-    privProtocol: snmp.PrivProtocols.des,
-    privKey: "presnets8"
+    authKey: "justtheauththanks"
 });
 receiver.addUser ({
     name: "shades",
     level: snmp.SecurityLevel.authPriv,
     authProtocol: snmp.AuthProtocols.sha,
-    authKey: "presnets8",
+    authKey: "illhavesomeauth",
     privProtocol: snmp.PrivProtocols.des,
-    privKey: "presnets8"
+    privKey: "andsomepriv"
 });
 receiver.addCommunity("public");

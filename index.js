@@ -301,6 +301,8 @@ function readVarbinds (buffer, varbinds) {
 
 	while (1) {
 		buffer.readSequence ();
+		if ( buffer.peek () != ObjectType.OID )
+			break;
 		var oid = buffer.readOID ();
 		var type = buffer.peek ();
 
@@ -668,6 +670,8 @@ ReportPdu.createFromVariables = function (id, varbinds, options) {
 
 var readPdu = function (reader, scoped) {
 	var pdu;
+	var contextEngineID;
+	var contextName;
 	if ( scoped ) {
 		reader.readSequence ();
 		contextEngineID = reader.readString (ber.OctetString, true);
@@ -691,6 +695,11 @@ var readPdu = function (reader, scoped) {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
 				+ "' in response");
 	}
+	if ( scoped ) {
+		pdu.contextEngineID = contextEngineID;
+		pdu.contextName = contextName;
+	}
+	pdu.scoped = scoped;
 	return pdu;
 };
 
@@ -1036,10 +1045,11 @@ Message.prototype.toBufferV3 = function () {
 	// ScopedPDU
 	var scopedPduWriter = new ber.Writer ();
 	scopedPduWriter.startSequence ();
-	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
+	var contextEngineID = this.pdu.contextEngineID ? this.pdu.contextEngineID : this.msgSecurityParameters.msgAuthoritativeEngineID;
+	if ( contextEngineID.length == 0 ) {
 		scopedPduWriter.writeString ("");
 	} else {
-		scopedPduWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+		scopedPduWriter.writeBuffer (contextEngineID, ber.OctetString);
 	}
 	scopedPduWriter.writeString ("");
 	this.pdu.toBuffer (scopedPduWriter);
@@ -1139,6 +1149,17 @@ Message.prototype.hasPrivacy = function () {
 Message.prototype.isReportable = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 4;
 };
+
+Message.prototype.setReportable = function (flag) {
+	if ( this.msgGlobalData && this.msgGlobalData.msgFlags ) {
+		if ( flag ) {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | 4;
+		} else {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 4 );
+		}
+	}
+};
+
 
 Message.prototype.isAuthenticationDisabled = function () {
 	return this.disableAuthentication;
@@ -2213,14 +2234,23 @@ Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) 
  ** Receiver class definition
  **/
 
-Receiver = function () {
+Receiver = function (options, callback) {
 	this.communities = [];
 	this.users = [];
 
-	this.generateEngineID();
 	this.engineBoots = 0;
 	this.engineTime = 10;
 	this.disableAuthorization = false;
+
+	this.callback = callback;
+	this.family = options.family || 'udp4';
+	this.port = options.trapPort || 162;
+	this.disableAuthorization = options.disableAuthorization || false;
+	if ( options.engineID ) {
+		this.engineID = Buffer.from (options.engineID, 'hex');
+	} else {
+		this.generateEngineID();
+	}
 };
 
 Receiver.prototype.addCommunity = function (community) {
@@ -2250,10 +2280,10 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 		message.disableAuthentication = this.disableAuthorization;
 		if ( ! user ) {
 			if ( ! this.disableAuthorization ) {
-				this.callback (new Error ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
+				this.callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
 				return;
 			} else if ( message.hasAuthentication () ) {
-				this.callback (new Error ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
+				this.callback (new RequestFailedError ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
 				return;
 			} else {
 				user = {
@@ -2268,20 +2298,21 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	} else {
 		community = this.communities.filter( localCommunity => localCommunity == message.community )[0];
 		if ( ! community && ! this.disableAuthorization ) {
-			this.callback (new Error ("Local community not found for message with community " + message.community));
+			this.callback (new RequestFailedError ("Local community not found for message with community " + message.community));
+			return;
 		}
 	}
 
 	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
 	if ( message.pdu.type == PduType.GetRequest ) {
 		if ( message.version != Version3 ) {
-			this.callback(new Error ("Only SNMPv3 discovery GetRequests are supported"));
+			this.callback (new RequestInvalidError ("Only SNMPv3 discovery GetRequests are supported"));
 			return;
 		} else if ( message.hasAuthentication() ) {
-			this.callback(new Error ("Only discovery (noAuthNoPriv) GetRequests are supported but this message has authentication"));
+			this.callback (new RequestInvalidError ("Only discovery (noAuthNoPriv) GetRequests are supported but this message has authentication"));
 			return;
 		} else if ( ! message.isReportable () ) {
-			this.callback(new Error ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
+			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
 		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime);
@@ -2292,17 +2323,25 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	// Inform/trap processing
 	debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
-		this.callback (null, message.pdu);
+		this.callback (null, this.getCallbackData (message.pdu, rinfo) );
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
 		message.user = user;
+		message.setReportable (false);
 		this.send (message, rinfo);
-		this.callback (null, message.pdu);
+		this.callback (null, this.getCallbackData (message.pdu, rinfo) );
 	} else {
-		this.callback (new Error ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
+		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
 }
+
+Receiver.prototype.getCallbackData = function (pdu, rinfo) {
+	return {
+		pdu: pdu,
+		rinfo: rinfo 
+	};
+};
 
 Receiver.prototype.send = function (message, rinfo) {
 	var me = this;
@@ -2313,7 +2352,7 @@ Receiver.prototype.send = function (message, rinfo) {
 			function (error, bytes) {
 		if (error) {
 			// me.callback (error);
-			console.error ("Error sending: " + error);
+			console.error ("Error sending: " + error.message);
 		} else {
 			debug ("Receiver sent response message");
 		}
@@ -2323,16 +2362,11 @@ Receiver.prototype.send = function (message, rinfo) {
 };
 
 Receiver.create = function (options, callback) {
-	var receiver = new Receiver();
+	var receiver = new Receiver(options, callback);
 	var me = receiver;
-	receiver.callback = callback;
-	receiver.family = options.family || 'udp4';
-	receiver.port = options.port || 162;
-	receiver.disableAuthorization = options.disableAuthorization || false;
 
 	receiver.dgram = dgram.createSocket(receiver.family);
 	receiver.dgram.bind(receiver.port);
-
 	receiver.dgram.on ("message", me.onMsg.bind (me));
 
 	return receiver;
