@@ -502,6 +502,12 @@ GetRequestPdu.createFromBuffer = function (reader) {
 	return pdu;
 };
 
+GetRequestPdu.createFromVariables = function (id, varbinds, options) {
+	var pdu = new GetRequestPdu();
+	pdu.initializeFromVariables (id, varbinds, options);
+	return pdu;
+};
+
 var InformRequestPdu = function () {
 	this.type = PduType.InformRequest;
 	InformRequestPdu.super_.apply (this, arguments);
@@ -689,8 +695,7 @@ var readPdu = function (reader, scoped) {
 };
 
 var createDiscoveryPdu = function () {
-	//return new GetRequestPdu(_generateId(), [], {});
-	return SimplePdu.createFromVariables(GetRequestPdu, _generateId(), [], {});
+	return GetRequestPdu.createFromVariables(_generateId(), [], {});
 };
 
 var Authentication = {};
@@ -1019,7 +1024,7 @@ Message.prototype.toBufferV3 = function () {
 	if ( this.hasPrivacy() ) {
 		msgSecurityParametersWriter.writeBuffer (Encryption.PRIV_PARAMETERS_PLACEHOLDER, ber.OctetString);
 	// should never happen where msgFlags has no privacy but privacy parameters still present
-	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
+	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
 		 msgSecurityParametersWriter.writeString ("");
@@ -1070,7 +1075,7 @@ Message.prototype.processIncomingSecurity = function (user, responseCb) {
 		}
 	}
 
-	if ( this.hasAuthentication() ) {
+	if ( this.hasAuthentication() && ! this.isAuthenticationDisabled() ) {
 		return this.checkAuthentication(user, responseCb);
 	} else {
 		return true;
@@ -1133,6 +1138,30 @@ Message.prototype.hasPrivacy = function () {
 
 Message.prototype.isReportable = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 4;
+};
+
+Message.prototype.isAuthenticationDisabled = function () {
+	return this.disableAuthentication;
+};
+
+
+Message.prototype.createReportResponseMessage = function(engineID, engineBoots, engineTime) {
+	var user = {
+		name: "",
+		level: SecurityLevel.noAuthNoPriv
+	};
+	var responseSecurityParameters = {
+		msgAuthoritativeEngineID: engineID,
+		msgAuthoritativeEngineBoots: engineBoots,
+		msgAuthoritativeEngineTime: engineTime,
+		msgUserName: user.name,
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	};
+	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, [], {});
+	var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, reportPdu);
+	responseMessage.msgGlobalData.msgID = this.msgGlobalData.msgID;
+	return responseMessage;
 };
 
 Message.createRequestCommunity = function (version, community, pdu) {
@@ -2187,16 +2216,11 @@ Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) 
 Receiver = function () {
 	this.communities = [];
 	this.users = [];
-	this.communities.push ("public");
 
 	this.generateEngineID();
 	this.engineBoots = 0;
-	this.engineTime = 0;
-	this.users.push ({
-		engineID: this.engineID,
-		name: "none",
-		level: SecurityLevel.noAuthNoPriv
-	});
+	this.engineTime = 10;
+	this.disableAuthorization = false;
 };
 
 Receiver.prototype.addCommunity = function (community) {
@@ -2220,44 +2244,63 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	var user;
 	var community;
 
+	// Authorization
 	if ( message.version == Version3 ) {
 		user = this.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
+		message.disableAuthentication = this.disableAuthorization;
 		if ( ! user ) {
-			user = {
-				name: "",
-				level: SecurityLevel.noAuthNoPriv
-			};
+			if ( ! this.disableAuthorization ) {
+				this.callback (new Error ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else if ( message.hasAuthentication () ) {
+				this.callback (new Error ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else {
+				user = {
+					name: "",
+					level: SecurityLevel.noAuthNoPriv
+				};
+			}
+		}
+		if ( ! message.processIncomingSecurity (user, this.callback) ) {
+			return;
 		}
 	} else {
 		community = this.communities.filter( localCommunity => localCommunity == message.community )[0];
+		if ( ! community && ! this.disableAuthorization ) {
+			this.callback (new Error ("Local community not found for message with community " + message.community));
+		}
 	}
 
-	if ( ! message.processIncomingSecurity (null, function(error, data) {} ) )
+	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
+	if ( message.pdu.type == PduType.GetRequest ) {
+		if ( message.version != Version3 ) {
+			this.callback(new Error ("Only SNMPv3 discovery GetRequests are supported"));
+			return;
+		} else if ( message.hasAuthentication() ) {
+			this.callback(new Error ("Only discovery (noAuthNoPriv) GetRequests are supported but this message has authentication"));
+			return;
+		} else if ( ! message.isReportable () ) {
+			this.callback(new Error ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
+			return;
+		}
+		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime);
+		this.send (reportMessage, rinfo);
 		return;
+	};
 
+	// Inform/trap processing
 	debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
 		this.callback (null, message.pdu);
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
+		message.user = user;
 		this.send (message, rinfo);
 		this.callback (null, message.pdu);
-	} else if ( message.version == Version3 && message.pdu.type == PduType.GetRequest && message.isReportable () ) {
-		var responseSecurityParameters = {
-			msgAuthoritativeEngineID: this.engineID,
-			msgAuthoritativeEngineBoots: this.engineBoots,
-			msgAuthoritativeEngineTime: this.engineTime,
-			msgUserName: (user && user.name) ? user.name : "",
-			msgAuthenticationParameters: "",
-			msgPrivacyParameters: ""
-		};
-		var responsePdu = ReportPdu.createFromVariables (message.pdu.id, [], {});
-		var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, responsePdu);
-		responseMessage.msgGlobalData.msgID = message.msgGlobalData.msgID;
-		this.send (responseMessage, rinfo);
 	} else {
-		// unexpected PDU type
+		this.callback (new Error ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
 }
 
@@ -2283,8 +2326,9 @@ Receiver.create = function (options, callback) {
 	var receiver = new Receiver();
 	var me = receiver;
 	receiver.callback = callback;
-	receiver.family = 'udp4';
-	receiver.port = 162;
+	receiver.family = options.family || 'udp4';
+	receiver.port = options.port || 162;
+	receiver.disableAuthorization = options.disableAuthorization || false;
 
 	receiver.dgram = dgram.createSocket(receiver.family);
 	receiver.dgram.bind(receiver.port);

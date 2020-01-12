@@ -16,5 +16,32 @@ var cb = function(error, trap) {
     }
 }
 
-var receiver = snmp.createReceiver({}, cb);
-
+var receiver = snmp.createReceiver({disableAuthorization: true}, cb);
+receiver.addUser ({
+    engineID: this.engineID,
+    name: "none",
+    level: snmp.SecurityLevel.noAuthNoPriv
+});
+receiver.addUser ({
+    name: "md5only",
+    level: snmp.SecurityLevel.authNoPriv,
+    authProtocol: snmp.AuthProtocols.md5,
+    authKey: "presnets8"
+});
+receiver.addUser ({
+    name: "md5des",
+    level: snmp.SecurityLevel.authPriv,
+    authProtocol: snmp.AuthProtocols.md5,
+    authKey: "presnets8",
+    privProtocol: snmp.PrivProtocols.des,
+    privKey: "presnets8"
+});
+receiver.addUser ({
+    name: "shades",
+    level: snmp.SecurityLevel.authPriv,
+    authProtocol: snmp.AuthProtocols.sha,
+    authKey: "presnets8",
+    privProtocol: snmp.PrivProtocols.des,
+    privKey: "presnets8"
+});
+receiver.addCommunity("public");
