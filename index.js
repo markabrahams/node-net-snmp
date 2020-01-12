@@ -1604,6 +1604,11 @@ Session.prototype.inform = function () {
 		responseCb = arguments[1];
 	}
 
+	if ( this.version == Version1 ) {
+		responseCb (new RequestInvalidError ("Inform not allowed for SNMPv1"));
+		return;
+	}
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
@@ -2279,7 +2284,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 		user = this.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
 		message.disableAuthentication = this.disableAuthorization;
 		if ( ! user ) {
-			if ( ! this.disableAuthorization ) {
+			if ( message.msgSecurityParameters.msgUserName != "" && ! this.disableAuthorization ) {
 				this.callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
 				return;
 			} else if ( message.hasAuthentication () ) {
@@ -2323,20 +2328,26 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	// Inform/trap processing
 	debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
-		this.callback (null, this.getCallbackData (message.pdu, rinfo) );
+		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
 		message.user = user;
 		message.setReportable (false);
 		this.send (message, rinfo);
-		this.callback (null, this.getCallbackData (message.pdu, rinfo) );
+		message.pdu.type = PduType.InformRequest;
+		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
 }
 
-Receiver.prototype.getCallbackData = function (pdu, rinfo) {
+Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
+	if ( pdu.contextEngineID ) {
+		pdu.contextEngineID = pdu.contextEngineID.toString('hex');
+	}
+	delete pdu.nonRepeaters;
+	delete pdu.maxRepetitions;
 	return {
 		pdu: pdu,
 		rinfo: rinfo 

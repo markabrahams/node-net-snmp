@@ -5,22 +5,32 @@ var snmp = require ("../");
 var getopts = require ("getopts");
 
 var options = getopts(process.argv.slice(2));
-
 var verbose = options.v;
 
 var cb = function(error, trap) {
     var now = new Date().toLocaleString();
+    var trapType;
+
     if (error) {
         console.log(now + ": " + error.message);
     } else {
+        if (trap.pdu.type == 164 ) {
+            trapType = "Trap (v1)";
+        } else if ( trap.pdu.type == 167) {
+            trapType = "Trap (v2)";
+        } else if ( trap.pdu.type == 166 ) {
+            trapType = "Inform";
+        } else {
+            trapType = "Unknown";
+        }
         if ( verbose ) {
-            console.log (now + ": Trap received:");
+            console.log (now + ": " + trapType + " received:");
             console.log (JSON.stringify(trap, null, 2));
         } else {
             if (trap.pdu.type == 164 ) {
-                console.log (now + ": Trap (v1): " + trap.rinfo.address + " : " + trap.pdu.enterprise);
+                console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.enterprise);
             } else {
-                console.log (now + ": Trap (v2): " + trap.rinfo.address + " : " + trap.pdu.varbinds[1].value);
+                console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[1].value);
             }
         }
     }
@@ -33,6 +43,7 @@ var snmpOptions = {
 };
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
+
 receiver.addUser ({
     name: "none",
     level: snmp.SecurityLevel.noAuthNoPriv
