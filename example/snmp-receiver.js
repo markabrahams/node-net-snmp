@@ -19,7 +19,7 @@ var cb = function(error, trap) {
             console.log (now + ": " + trapType + " received:");
             console.log (JSON.stringify(trap, null, 2));
         } else {
-            if (trap.pdu.type == 164 ) {
+            if (trap.pdu.type == snmp.PduType.Trap ) {
                 console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.enterprise);
             } else {
                 console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[1].value);
@@ -35,22 +35,22 @@ var snmpOptions = {
 };
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
+receiver.addCommunity ("public");
 receiver.addUser ({
-    name: "none",
+    name: "fred",
     level: snmp.SecurityLevel.noAuthNoPriv
 });
 receiver.addUser ({
-    name: "md5only",
+    name: "betty",
     level: snmp.SecurityLevel.authNoPriv,
-    authProtocol: snmp.AuthProtocols.md5,
-    authKey: "justtheauththanks"
+    authProtocol: snmp.AuthProtocols.sha,
+    authKey: "illhavesomeauth"
 });
 receiver.addUser ({
-    name: "shades",
+    name: "wilma",
     level: snmp.SecurityLevel.authPriv,
     authProtocol: snmp.AuthProtocols.sha,
     authKey: "illhavesomeauth",
     privProtocol: snmp.PrivProtocols.des,
     privKey: "andsomepriv"
 });
-receiver.addCommunity("public");

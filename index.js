@@ -2268,11 +2268,48 @@ Receiver.prototype.startListening = function () {
 };
 
 Receiver.prototype.addCommunity = function (community) {
-	this.communities.push (community);
+	if ( this.getCommunity (community) ) {
+		return;
+	} else {
+		this.communities.push (community);
+	}
+};
+
+Receiver.prototype.getCommunity = function (community) {
+	return this.communities.filter( localCommunity => localCommunity == community )[0];
+};
+
+Receiver.prototype.getCommunities = function () {
+	return this.communities;
+};
+
+Receiver.prototype.deleteCommunity = function (community) {
+	var index = this.communities.indexOf(community);
+	if ( index > -1 ) {
+		this.communities.splice(index, 1);
+	}
 };
 
 Receiver.prototype.addUser = function (user) {
+	if ( this.getUser (user.name) ) {
+		this.deleteUser (user.name);
+	}
 	this.users.push (user);
+};
+
+Receiver.prototype.getUser = function (userName) {
+	return this.users.filter( localUser => localUser.name == userName )[0];
+};
+
+Receiver.prototype.getUsers = function () {
+	return this.users;
+};
+
+Receiver.prototype.deleteUser = function (userName) {
+	var index = this.users.findIndex(localUser => localUser.name == userName );
+	if ( index > -1 ) {
+		this.users.splice(index, 1);
+	}
 };
 
 Receiver.prototype.generateEngineID = function() {
@@ -2379,6 +2416,10 @@ Receiver.prototype.send = function (message, rinfo) {
 	});
 	
 	return this;
+};
+
+Receiver.prototype.close  = function() {
+	this.dgram.close ();
 };
 
 Receiver.create = function (options, callback) {
