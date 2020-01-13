@@ -30,7 +30,7 @@ var cb = function(error, trap) {
 
 var snmpOptions = {
     disableAuthorization: options.n,
-    trapPort: options.p,
+    port: options.p,
     engineID: options.e
 };
 

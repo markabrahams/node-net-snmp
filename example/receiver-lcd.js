@@ -19,9 +19,9 @@ console.log ("After adding 'public' and 'private' communities:");
 console.log ("communities =", receiver.getCommunities () );
 console.log ("Fetch existing 'public' community:");
 console.log (receiver.getCommunity("public"));
-console.log ("Fetch non-existant community 'notfound':");
+console.log ("Fetch non-existent community 'notfound':");
 console.log (receiver.getCommunity("notfound"));
-console.log ("Delete non-existant community 'notfound':")
+console.log ("Delete non-existent community 'notfound':")
 receiver.deleteCommunity("notfound");
 console.log ("communities =", receiver.getCommunities () );
 console.log ("Delete existing community 'private':")
@@ -56,13 +56,12 @@ console.log ("After adding 'fred' and 'wilma' users:");
 console.log ("users =", receiver.getUsers () );
 console.log ("Fetch existing user 'fred':");
 console.log (receiver.getUser("fred"));
-console.log ("Fetch non-existant user 'barney':");
+console.log ("Fetch non-existent user 'barney':");
 console.log (receiver.getUser("barney"));
 console.log ("Add existing user 'wilma' (should replace existing 'wilma'):");
 receiver.addUser (newWilma);
 console.log ("users =", receiver.getUsers () );
-console.log (receiver.getUser("barney"));
-console.log ("Delete non-existant user 'barney':")
+console.log ("Delete non-existent user 'barney':")
 receiver.deleteUser("barney");
 console.log ("users =", receiver.getUsers () );
 console.log ("Delete existing user 'wilma':")

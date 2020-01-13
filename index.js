@@ -2248,8 +2248,8 @@ Receiver = function (options, callback) {
 	this.disableAuthorization = false;
 
 	this.callback = callback;
-	this.family = options.family || 'udp4';
-	this.port = options.trapPort || 162;
+	this.family = options.transport || 'udp4';
+	this.port = options.port || 162;
 	this.disableAuthorization = options.disableAuthorization || false;
 	if ( options.engineID ) {
 		this.engineID = Buffer.from (options.engineID, 'hex');
@@ -2276,7 +2276,7 @@ Receiver.prototype.addCommunity = function (community) {
 };
 
 Receiver.prototype.getCommunity = function (community) {
-	return this.communities.filter( localCommunity => localCommunity == community )[0];
+	return this.communities.filter( localCommunity => localCommunity == community )[0] || null;
 };
 
 Receiver.prototype.getCommunities = function () {
@@ -2298,7 +2298,7 @@ Receiver.prototype.addUser = function (user) {
 };
 
 Receiver.prototype.getUser = function (userName) {
-	return this.users.filter( localUser => localUser.name == userName )[0];
+	return this.users.filter( localUser => localUser.name == userName )[0] || null;
 };
 
 Receiver.prototype.getUsers = function () {
