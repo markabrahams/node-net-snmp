@@ -1542,6 +1542,10 @@ Example programs are included under the module's `example` directory.
 
  * Add SNMPv3 support
 
+## Version 1.4.0 - 13/01/2020
+
+ * Add trap and inform receiver
+
 # License
 
 Copyright (c) 2018 NoSpaceships Ltd <hello@nospaceships.com>
