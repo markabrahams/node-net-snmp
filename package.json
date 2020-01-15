@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
@@ -17,11 +17,15 @@
     {
       "name": "NoSpaceships Ltd",
       "email": "hello@nospaceships.com"
+    },
+    {
+      "name": "Mark Abrahams",
+      "email": "mark@abrahams.co.nz"
     }
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/nospaceships/node-net-snmp.git"
+    "url": "git://github.com/markabrahams/node-net-snmp.git"
   },
   "keywords": [
     "snmp",
@@ -34,6 +38,6 @@
     "monitor",
     "monitoring"
   ],
-  "author": "NoSpaceships Ltd <hello@nospaceships.com>",
+  "author": "Mark Abrahams <mark@abrahams.co.nz>",
   "license": "MIT"
 }
