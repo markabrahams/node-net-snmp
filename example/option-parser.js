@@ -69,6 +69,11 @@ if ( command.includes('snmp-set') ) {
         oids.push (options._[i]);
     }
 }
+if ( command.includes('snmp-trap') || command.includes('snmp-inform') || command.includes('snmp-receiver') ) {
+    snmpOptions.trapPort = options.p
+} else {
+    snmpOptions.port = options.p
+}
 
 if ( snmpOptions.version == snmp.Version3 ) {
 	session = snmp.createV3Session (target, user, snmpOptions);

@@ -250,6 +250,16 @@ function readInt (buffer) {
 	return readUint (buffer, true);
 }
 
+function readIpAddress (buffer) {
+	var bytes = buffer.readString (ObjectType.IpAddress, true);
+	if (bytes.length != 4)
+		throw new ResponseInvalidError ("Length '" + bytes.length
+				+ "' of IP address '" + bytes.toString ("hex")
+				+ "' is not 4");
+	var value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
+	return value;
+}
+
 function readUint (buffer, isSigned) {
 	buffer.readByte ();
 	var length = buffer.readByte ();
@@ -291,6 +301,8 @@ function readVarbinds (buffer, varbinds) {
 
 	while (1) {
 		buffer.readSequence ();
+		if ( buffer.peek () != ObjectType.OID )
+			break;
 		var oid = buffer.readOID ();
 		var type = buffer.peek ();
 
@@ -419,10 +431,7 @@ function writeVarbinds (buffer, varbinds) {
  ** PDU class definitions
  **/
 
-var SimplePdu = function (id, varbinds, options) {
-	this.id = id;
-	this.varbinds = varbinds;
-	this.options = options || {};
+var SimplePdu = function () {
 };
 
 SimplePdu.prototype.toBuffer = function (buffer) {
@@ -439,6 +448,33 @@ SimplePdu.prototype.toBuffer = function (buffer) {
 	writeVarbinds (buffer, this.varbinds);
 
 	buffer.endSequence ();
+};
+
+SimplePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
+	this.id = id;
+	this.varbinds = varbinds;
+	this.options = options || {};
+}
+
+SimplePdu.prototype.initializeFromBuffer = function (reader) {
+	this.type = reader.peek ();
+	reader.readSequence ();
+
+	this.id = reader.readInt ();
+	this.nonRepeaters = reader.readInt ();
+	this.maxRepetitions = reader.readInt ();
+
+	this.varbinds = [];
+	readVarbinds (reader, this.varbinds);
+
+};
+
+SimplePdu.createFromVariables = function (pduClass, id, varbinds, options) {
+	var pdu = new pduClass (id, varbinds, options);
+	pdu.id = id;
+	pdu.varbinds = varbinds;
+	pdu.options = options || {};
+	return pdu;
 };
 
 var GetBulkRequestPdu = function () {
@@ -462,12 +498,30 @@ var GetRequestPdu = function () {
 
 util.inherits (GetRequestPdu, SimplePdu);
 
+GetRequestPdu.createFromBuffer = function (reader) {
+	var pdu = new GetRequestPdu();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
+GetRequestPdu.createFromVariables = function (id, varbinds, options) {
+	var pdu = new GetRequestPdu();
+	pdu.initializeFromVariables (id, varbinds, options);
+	return pdu;
+};
+
 var InformRequestPdu = function () {
 	this.type = PduType.InformRequest;
 	InformRequestPdu.super_.apply (this, arguments);
 };
 
 util.inherits (InformRequestPdu, SimplePdu);
+
+InformRequestPdu.createFromBuffer = function (reader) {
+	var pdu = new InformRequestPdu();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
 
 var SetRequestPdu = function () {
 	this.type = PduType.SetRequest;
@@ -476,23 +530,8 @@ var SetRequestPdu = function () {
 
 util.inherits (SetRequestPdu, SimplePdu);
 
-var TrapPdu = function (typeOrOid, varbinds, options) {
+var TrapPdu = function () {
 	this.type = PduType.Trap;
-
-	this.agentAddr = options.agentAddr || "127.0.0.1";
-	this.upTime = options.upTime;
-
-	if (typeof typeOrOid == "string") {
-		this.generic = TrapType.EnterpriseSpecific;
-		this.specific = parseInt (typeOrOid.match (/\.(\d+)$/)[1]);
-		this.enterprise = typeOrOid.replace (/\.(\d+)$/, "");
-	} else {
-		this.generic = typeOrOid;
-		this.specific = 0;
-		this.enterprise = "1.3.6.1.4.1";
-	}
-
-	this.varbinds = varbinds;
 };
 
 TrapPdu.prototype.toBuffer = function (buffer) {
@@ -511,6 +550,42 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.endSequence ();
 };
 
+TrapPdu.createFromBuffer = function (reader) {
+	var pdu = new TrapPdu();
+	reader.readSequence ();
+
+	pdu.enterprise = reader.readOID ();
+	pdu.agentAddr = readIpAddress (reader);
+	pdu.generic = reader.readInt ();
+	pdu.specific = reader.readInt ();
+	pdu.upTime = readUint (reader)
+
+	pdu.varbinds = [];
+	readVarbinds (reader, pdu.varbinds);
+
+	return pdu;
+};
+
+TrapPdu.createFromVariables = function (typeOrOid, varbinds, options) {
+	var pdu = new TrapPdu ();
+	pdu.agentAddr = options.agentAddr || "127.0.0.1";
+	pdu.upTime = options.upTime;
+
+	if (typeof typeOrOid == "string") {
+		pdu.generic = TrapType.EnterpriseSpecific;
+		pdu.specific = parseInt (typeOrOid.match (/\.(\d+)$/)[1]);
+		pdu.enterprise = typeOrOid.replace (/\.(\d+)$/, "");
+	} else {
+		pdu.generic = typeOrOid;
+		pdu.specific = 0;
+		pdu.enterprise = "1.3.6.1.4.1";
+	}
+
+	pdu.varbinds = varbinds;
+
+	return pdu;
+};
+
 var TrapV2Pdu = function () {
 	this.type = PduType.TrapV2;
 	TrapV2Pdu.super_.apply (this, arguments);
@@ -518,30 +593,85 @@ var TrapV2Pdu = function () {
 
 util.inherits (TrapV2Pdu, SimplePdu);
 
-var GetResponsePdu = function (reader) {
-	//this.type = PduType.GetResponse;
-	this.type = reader.peek ();
+TrapV2Pdu.createFromBuffer = function (reader) {
+	var pdu = new TrapV2Pdu();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
 
+TrapV2Pdu.createFromVariables = function (id, varbinds, options) {
+	var pdu = new TrapV2Pdu();
+	pdu.initializeFromVariables (id, varbinds, options);
+	return pdu;
+};
+
+var SimpleResponsePdu = function() {
+};
+
+SimpleResponsePdu.prototype.toBuffer = function (writer) {
+	writer.startSequence (this.type);
+
+	writer.writeInt (this.id);
+	writer.writeInt (this.errorStatus || 0);
+	writer.writeInt (this.errorIndex || 0);
+	writeVarbinds (writer, this.varbinds);
+	writer.endSequence ();
+
+};
+
+SimpleResponsePdu.prototype.initializeFromBuffer = function (reader) {
 	reader.readSequence (this.type);
 
 	this.id = reader.readInt ();
-
 	this.errorStatus = reader.readInt ();
 	this.errorIndex = reader.readInt ();
 
 	this.varbinds = [];
-
 	readVarbinds (reader, this.varbinds);
 };
 
-// we never create Report PDUs - so not needed at present
-// var ReportPdu = function () {
-// 	this.type = PduType.ReportPdu;
-// 	ReportPdu.super_.apply (this, arguments);
-// };
+SimpleResponsePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
+	this.id = id;
+	this.varbinds = varbinds;
+	this.options = options || {};
+};
+
+var GetResponsePdu = function () {
+	this.type = PduType.GetResponse;
+	GetResponsePdu.super_.apply (this, arguments);
+};
+
+util.inherits (GetResponsePdu, SimpleResponsePdu);
+
+GetResponsePdu.createFromBuffer = function (reader) {
+	var pdu = new GetResponsePdu ();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
+var ReportPdu = function () {
+	this.type = PduType.Report;
+	ReportPdu.super_.apply (this, arguments);
+};
+
+util.inherits (ReportPdu, SimpleResponsePdu);
+
+ReportPdu.createFromBuffer = function (reader) {
+	var pdu = new ReportPdu ();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
+ReportPdu.createFromVariables = function (id, varbinds, options) {
+	var pdu = new ReportPdu();
+	pdu.initializeFromVariables (id, varbinds, options);
+	return pdu;
+};
 
 var readPdu = function (reader, scoped) {
 	var pdu;
+	var contextEngineID;
+	var contextName;
 	if ( scoped ) {
 		reader.readSequence ();
 		contextEngineID = reader.readString (ber.OctetString, true);
@@ -550,18 +680,31 @@ var readPdu = function (reader, scoped) {
 	var type = reader.peek ();
 
 	if (type == PduType.GetResponse) {
-		pdu = new GetResponsePdu (reader);
+		pdu = GetResponsePdu.createFromBuffer (reader);
 	} else if (type == PduType.Report ) {
-		pdu = new GetResponsePdu (reader);
+		pdu = ReportPdu.createFromBuffer (reader);
+	} else if (type == PduType.Trap ) {
+		pdu = TrapPdu.createFromBuffer (reader);
+	} else if (type == PduType.TrapV2 ) {
+		pdu = TrapV2Pdu.createFromBuffer (reader);
+	} else if (type == PduType.InformRequest ) {
+		pdu = InformRequestPdu.createFromBuffer (reader);
+	} else if (type == PduType.GetRequest ) {
+		pdu = GetRequestPdu.createFromBuffer (reader);
 	} else {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
 				+ "' in response");
 	}
+	if ( scoped ) {
+		pdu.contextEngineID = contextEngineID;
+		pdu.contextName = contextName;
+	}
+	pdu.scoped = scoped;
 	return pdu;
 };
 
 var createDiscoveryPdu = function () {
-	return new GetRequestPdu(_generateId(), [], {});
+	return GetRequestPdu.createFromVariables(_generateId(), [], {});
 };
 
 var Authentication = {};
@@ -810,6 +953,10 @@ Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyPar
 var Message = function () {
 }
 
+Message.prototype.getReqId = function () {
+	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
+};
+
 Message.prototype.toBuffer = function () {
 	if ( this.version == Version3 ) {
 		return this.toBufferV3();
@@ -880,16 +1027,16 @@ Message.prototype.toBufferV3 = function () {
 	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
 	} else {
-	 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthenticationParameters);
+		 msgSecurityParametersWriter.writeString ("");
 	}
 
 	if ( this.hasPrivacy() ) {
 		msgSecurityParametersWriter.writeBuffer (Encryption.PRIV_PARAMETERS_PLACEHOLDER, ber.OctetString);
 	// should never happen where msgFlags has no privacy but privacy parameters still present
-	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
+	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
-	 	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgPrivacyParameters);
+		 msgSecurityParametersWriter.writeString ("");
 	}
 	msgSecurityParametersWriter.endSequence ();
 
@@ -898,10 +1045,11 @@ Message.prototype.toBufferV3 = function () {
 	// ScopedPDU
 	var scopedPduWriter = new ber.Writer ();
 	scopedPduWriter.startSequence ();
-	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
+	var contextEngineID = this.pdu.contextEngineID ? this.pdu.contextEngineID : this.msgSecurityParameters.msgAuthoritativeEngineID;
+	if ( contextEngineID.length == 0 ) {
 		scopedPduWriter.writeString ("");
 	} else {
-		scopedPduWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+		scopedPduWriter.writeBuffer (contextEngineID, ber.OctetString);
 	}
 	scopedPduWriter.writeString ("");
 	this.pdu.toBuffer (scopedPduWriter);
@@ -930,8 +1078,64 @@ Message.prototype.toBufferV3 = function () {
 	return this.buffer;
 };
 
-Message.prototype.getReqId = function () {
-	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
+Message.prototype.processIncomingSecurity = function (user, responseCb) {
+	if ( this.hasPrivacy() ) {
+		if ( ! this.decryptPdu(user, responseCb) ) {
+			return false;
+		}
+	}
+
+	if ( this.hasAuthentication() && ! this.isAuthenticationDisabled() ) {
+		return this.checkAuthentication(user, responseCb);
+	} else {
+		return true;
+	}
+};
+
+Message.prototype.decryptPdu = function (user, responseCb) {
+	var decryptedPdu;
+	var decryptedPduReader;
+	try {
+		decryptedPdu = Encryption.decryptPdu(this.encryptedPdu, user.privProtocol,
+				this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+				this.msgSecurityParameters.msgAuthoritativeEngineID);
+		decryptedPduReader = new ber.Reader (decryptedPdu);
+		this.pdu = readPdu(decryptedPduReader, true);
+		return true;
+	// really really occasionally the decrypt truncates a single byte
+	// causing an ASN read failure in readPdu()
+	// in this case, disabling auto padding decrypts the PDU correctly
+	// this try-catch provides the workaround for this condition
+	} catch (possibleTruncationError) {
+		try {
+			decryptedPdu = Encryption.decryptPdu(this.encryptedPdu, user.privProtocol,
+					this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+					this.msgSecurityParameters.msgAuthoritativeEngineID, true);
+			decryptedPduReader = new ber.Reader (decryptedPdu);
+			this.pdu = readPdu(decryptedPduReader, true);
+			return true;
+		} catch (error) {
+			responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error));
+			return false;
+		}
+	}
+
+};
+
+Message.prototype.checkAuthentication = function (user, responseCb) {
+	if ( Authentication.isAuthentic(this.buffer, user.authProtocol, user.authKey,
+			this.msgSecurityParameters.msgAuthoritativeEngineID, this.msgSecurityParameters.msgAuthenticationParameters) ) {
+		return true;
+	} else {
+		responseCb (new ResponseInvalidError ("Authentication digest "
+				+ this.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
+				+ " received in message does not match digest "
+				+ Authentication.calculateDigest (buffer, user.authProtocol, user.authKey,
+					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
+				+ " calculated for message") );
+		return false;
+	}
+
 };
 
 Message.prototype.hasAuthentication = function () {
@@ -940,6 +1144,45 @@ Message.prototype.hasAuthentication = function () {
 
 Message.prototype.hasPrivacy = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 2;
+};
+
+Message.prototype.isReportable = function () {
+	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 4;
+};
+
+Message.prototype.setReportable = function (flag) {
+	if ( this.msgGlobalData && this.msgGlobalData.msgFlags ) {
+		if ( flag ) {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | 4;
+		} else {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 4 );
+		}
+	}
+};
+
+
+Message.prototype.isAuthenticationDisabled = function () {
+	return this.disableAuthentication;
+};
+
+
+Message.prototype.createReportResponseMessage = function(engineID, engineBoots, engineTime) {
+	var user = {
+		name: "",
+		level: SecurityLevel.noAuthNoPriv
+	};
+	var responseSecurityParameters = {
+		msgAuthoritativeEngineID: engineID,
+		msgAuthoritativeEngineBoots: engineBoots,
+		msgAuthoritativeEngineTime: engineTime,
+		msgUserName: user.name,
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	};
+	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, [], {});
+	var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, reportPdu);
+	responseMessage.msgGlobalData.msgID = this.msgGlobalData.msgID;
+	return responseMessage;
 };
 
 Message.createRequestCommunity = function (version, community, pdu) {
@@ -956,7 +1199,7 @@ Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
 	var message = new Message();
 	var authFlag = user.level == SecurityLevel.authNoPriv || user.level == SecurityLevel.authPriv ? 1 : 0;
 	var privFlag = user.level == SecurityLevel.authPriv ? 1 : 0;
-	var reportableFlag = 1; // all request messages are reportable
+	var reportableFlag = ( pdu.type == PduType.GetResponse || pdu.type == PduType.TrapV2 ) ? 0 : 1;
 
 	message.version = 3;
 	message.user = user;
@@ -973,7 +1216,7 @@ Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
 		msgUserName: user.name || "",
 		msgAuthenticationParameters: "",
 		msgPrivacyParameters: ""
-	}
+	};
 	message.pdu = pdu;
 
 	return message;
@@ -992,7 +1235,7 @@ Message.createDiscoveryV3 = function (pdu) {
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
 }
 
-Message.createResponse = function (buffer, reqs) {
+Message.createFromBuffer = function (buffer, user) {
 	var reader = new ber.Reader (buffer);
 	var message = new Message();
 
@@ -1025,31 +1268,18 @@ Message.createResponse = function (buffer, reqs) {
 		scopedPdu = true;
 
 		if ( message.hasPrivacy() ) {
-			var encryptedPdu = reader.readString (ber.OctetString, true);
-			var user = reqs[message.msgGlobalData.msgID].message.user;
-			try {
-				var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
-					message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
-					message.msgSecurityParameters.msgAuthoritativeEngineID);
-				var decryptedPduReader = new ber.Reader (decryptedPdu);
-				message.pdu = readPdu(decryptedPduReader, true);
-			// really really occasionally the decrypt truncates a single byte causing an ASN read failure in readPdu()
-			// in this case, disabling auto padding decrypts the PDU correctly
-			// this try-catch provides the workaround for this condition
-			} catch (error) {
-				var decryptedPdu = Encryption.decryptPdu(encryptedPdu, user.privProtocol,
-					message.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
-					message.msgSecurityParameters.msgAuthoritativeEngineID, true);
-				var decryptedPduReader = new ber.Reader (decryptedPdu);
-				message.pdu = readPdu(decryptedPduReader, true);
-			}
+			message.encryptedPdu = reader.readString (ber.OctetString, true);
+			message.pdu = null;
 		} else {
 			message.pdu = readPdu(reader, true);
 		}
 	}
 
+	message.buffer = buffer;
+
 	return message;
 };
+
 
 var Req = function (session, message, feedCb, responseCb, options) {
 
@@ -1374,6 +1604,11 @@ Session.prototype.inform = function () {
 		responseCb = arguments[1];
 	}
 
+	if ( this.version == Version1 ) {
+		responseCb (new RequestInvalidError ("Inform not allowed for SNMPv1"));
+		return;
+	}
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
@@ -1442,25 +1677,15 @@ Session.prototype.onError = function (error) {
 
 Session.prototype.onMsg = function (buffer) {
 	try {
-		var message = Message.createResponse (buffer, this.reqs);
+		var message = Message.createFromBuffer (buffer);
 
 		var req = this.unregisterRequest (message.getReqId ());
-		if (! req)
+		if ( ! req )
 			return;
 
-		if ( message.hasAuthentication() ) {
-			if ( ! Authentication.isAuthentic(buffer, this.user.authProtocol, this.user.authKey,
-					message.msgSecurityParameters.msgAuthoritativeEngineID, message.msgSecurityParameters.msgAuthenticationParameters) ) {
-				req.responseCb (new ResponseInvalidError ("Authentication digest "
-						+ message.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
-						+ " received in message does not match digest "
-						+ Authentication.calculateDigest (buffer, this.user.authProtocol, this.user.authKey,
-							message.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
-						+ " calculated for message") );
-				return;
-			}
-		}
-		
+		if ( ! message.processIncomingSecurity (this.user, req.responseCb) )
+			return;
+
 		try {
 			if (message.version != req.message.version) {
 				req.responseCb (new ResponseInvalidError ("Version in request '"
@@ -1607,7 +1832,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
 	try {
 		var id = _generateId (this.idBitsSize);
-		var pdu = new pduClass (id, varbinds, options);
+		var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
 		var message;
 		var req;
 
@@ -1877,9 +2102,9 @@ Session.prototype.trap = function () {
 				}
 			);
 
-			pdu = new TrapV2Pdu (id, pduVarbinds, options);
+			pdu = TrapV2Pdu.createFromVariables (id, pduVarbinds, options);
 		} else {
-			pdu = new TrapPdu (typeOrOid, pduVarbinds, options);
+			pdu = TrapPdu.createFromVariables (typeOrOid, pduVarbinds, options);
 		}
 
 		if ( this.version == Version3 ) {
@@ -2001,12 +2226,206 @@ Session.prototype.walk  = function () {
 	return this;
 };
 
-Session.prototype.sendV3Req = function(pdu, feedCb, responseCb, options, port) {
+Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) {
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
 	this.send (req);
+};
+
+
+/*****************************************************************************
+ ** Receiver class definition
+ **/
+
+Receiver = function (options, callback) {
+	this.communities = [];
+	this.users = [];
+
+	this.engineBoots = 0;
+	this.engineTime = 10;
+	this.disableAuthorization = false;
+
+	this.callback = callback;
+	this.family = options.transport || 'udp4';
+	this.port = options.port || 162;
+	this.disableAuthorization = options.disableAuthorization || false;
+	if ( options.engineID ) {
+		this.engineID = Buffer.from (options.engineID, 'hex');
+	} else {
+		this.generateEngineID ();
+	}
+};
+
+Receiver.prototype.startListening = function () {
+	var me = this;
+
+	this.dgram = dgram.createSocket (this.family);
+	this.dgram.bind (this.port);
+	this.dgram.on ("message", me.onMsg.bind (me));
+
+};
+
+Receiver.prototype.addCommunity = function (community) {
+	if ( this.getCommunity (community) ) {
+		return;
+	} else {
+		this.communities.push (community);
+	}
+};
+
+Receiver.prototype.getCommunity = function (community) {
+	return this.communities.filter( localCommunity => localCommunity == community )[0] || null;
+};
+
+Receiver.prototype.getCommunities = function () {
+	return this.communities;
+};
+
+Receiver.prototype.deleteCommunity = function (community) {
+	var index = this.communities.indexOf(community);
+	if ( index > -1 ) {
+		this.communities.splice(index, 1);
+	}
+};
+
+Receiver.prototype.addUser = function (user) {
+	if ( this.getUser (user.name) ) {
+		this.deleteUser (user.name);
+	}
+	this.users.push (user);
+};
+
+Receiver.prototype.getUser = function (userName) {
+	return this.users.filter( localUser => localUser.name == userName )[0] || null;
+};
+
+Receiver.prototype.getUsers = function () {
+	return this.users;
+};
+
+Receiver.prototype.deleteUser = function (userName) {
+	var index = this.users.findIndex(localUser => localUser.name == userName );
+	if ( index > -1 ) {
+		this.users.splice(index, 1);
+	}
+};
+
+Receiver.prototype.generateEngineID = function() {
+	// generate a 17-byte engine ID in the following format:
+	// 0x80 + 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
+	this.engineID = Buffer.alloc (17);
+	this.engineID.fill ('8000B98380', 'hex', 0, 5);
+	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
+}
+
+Receiver.prototype.onMsg = function (buffer, rinfo) {
+	var message = Message.createFromBuffer (buffer);
+	var user;
+	var community;
+
+	// Authorization
+	if ( message.version == Version3 ) {
+		user = this.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
+		message.disableAuthentication = this.disableAuthorization;
+		if ( ! user ) {
+			if ( message.msgSecurityParameters.msgUserName != "" && ! this.disableAuthorization ) {
+				this.callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else if ( message.hasAuthentication () ) {
+				this.callback (new RequestFailedError ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else {
+				user = {
+					name: "",
+					level: SecurityLevel.noAuthNoPriv
+				};
+			}
+		}
+		if ( ! message.processIncomingSecurity (user, this.callback) ) {
+			return;
+		}
+	} else {
+		community = this.communities.filter( localCommunity => localCommunity == message.community )[0];
+		if ( ! community && ! this.disableAuthorization ) {
+			this.callback (new RequestFailedError ("Local community not found for message with community " + message.community));
+			return;
+		}
+	}
+
+	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
+	if ( message.pdu.type == PduType.GetRequest ) {
+		if ( message.version != Version3 ) {
+			this.callback (new RequestInvalidError ("Only SNMPv3 discovery GetRequests are supported"));
+			return;
+		} else if ( message.hasAuthentication() ) {
+			this.callback (new RequestInvalidError ("Only discovery (noAuthNoPriv) GetRequests are supported but this message has authentication"));
+			return;
+		} else if ( ! message.isReportable () ) {
+			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
+			return;
+		}
+		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime);
+		this.send (reportMessage, rinfo);
+		return;
+	};
+
+	// Inform/trap processing
+	debug (JSON.stringify (message.pdu, null, 2));
+	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
+		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+	} else if ( message.pdu.type == PduType.InformRequest ) {
+		message.pdu.type = PduType.GetResponse;
+		message.buffer = null;
+		message.user = user;
+		message.setReportable (false);
+		this.send (message, rinfo);
+		message.pdu.type = PduType.InformRequest;
+		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+	} else {
+		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
+	}
+}
+
+Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
+	if ( pdu.contextEngineID ) {
+		pdu.contextEngineID = pdu.contextEngineID.toString('hex');
+	}
+	delete pdu.nonRepeaters;
+	delete pdu.maxRepetitions;
+	return {
+		pdu: pdu,
+		rinfo: rinfo 
+	};
+};
+
+Receiver.prototype.send = function (message, rinfo) {
+	var me = this;
+	
+	var buffer = message.toBuffer ();
+
+	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.host,
+			function (error, bytes) {
+		if (error) {
+			// me.callback (error);
+			console.error ("Error sending: " + error.message);
+		} else {
+			debug ("Receiver sent response message");
+		}
+	});
+	
+	return this;
+};
+
+Receiver.prototype.close  = function() {
+	this.dgram.close ();
+};
+
+Receiver.create = function (options, callback) {
+	var receiver = new Receiver (options, callback);
+	receiver.startListening ();
+	return receiver;
 };
 
 /*****************************************************************************
@@ -2032,6 +2451,8 @@ exports.createV3Session = function (target, user, options) {
 	return new Session (target, user, options);
 };
 
+exports.createReceiver = Receiver.create;
+
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;
 
@@ -2043,6 +2464,7 @@ exports.Version = Version;
 exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
+exports.PduType = PduType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;

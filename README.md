@@ -49,9 +49,12 @@ This module aims to be fully compliant with the following RFCs:
  * [1155][1155] - Structure and Identification of Management Information
  * [1098][1098] - A Simple Network Management Protocol (version 1)
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
- * [3414][3414] - User-based Security Model (USM) for version 3 of the Simple Network Management Protocol (SNMPv3)
- * [3416][3416] - Version 2 of the Protocol Operations for the Simple Network Management Protocol (SNMP)
- * [3417][3417] - Transport Mappings for the Simple Network Management Protocol (SNMP)
+ * [3414][3414] - User-based Security Model (USM) for version 3 of the
+ Simple Network Management Protocol (SNMPv3)
+ * [3416][3416] - Version 2 of the Protocol Operations for the Simple
+Network Management Protocol (SNMP)
+ * [3417][3417] - Transport Mappings for the Simple Network Management
+Protocol (SNMP)
 
 [1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
 [1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
@@ -142,6 +145,22 @@ constants are passed to the `trap()` and `inform()` methods exposed by the
  * `AuthenticationFailure`
  * `EgpNeighborLoss`
  * `EnterpriseSpecific`
+
+## snmp.PduType
+
+This object contains constants used to identify the SNMP PDU types specified
+in RFC 3416.  The values, along with their numeric codes, are:
+
+ * `160 - GetRequest`
+ * `161 - GetNextRequest`
+ * `162 - GetResponse`
+ * `163 - SetRequest`
+ * `164 - Trap`
+ * `165 - GetBulkRequest`
+ * `166 - InformRequest`
+ * `167 - TrapV2`
+ * `168 - Report`
+
 
 ## snmp.SecurityLevel
 
@@ -343,7 +362,9 @@ exposed `message` attribute will contain the value `Request timed out`.
 This error indicates a failure to parse a response message.  The exposed
 `message` attribute will contain a detailed error message.
 
-# Using This Module
+# Using This Module: Command & Notification Generator
+
+RFC 3413 describes "Command Generator" and "Notification Originator" types of SNMP applications.  This library provides a `Session` class to provide support for building these two types of application.
 
 All SNMP requests are made using an instance of the `Session` class.  This
 module exports two functions that are used to create instances of the
@@ -1200,6 +1221,169 @@ ifTable (`1.3.6.1.2.1.2.2`) OID:
     // SNMP verison 2c
     session.walk (oid, maxRepetitions, feedCb, doneCb);
 
+# Using This Module: Notification Receiver
+
+RFC 3413 classifies a "Notification Receiver" SNMP application that receives
+"Notification-Class" PDUs.  This library is able to receive these types of PDU:
+
+ * `Trap-PDU` (original v1 trap PDUs, which are now considered obselete)
+ * `Trapv2-PDU` (unacknowledged notifications)
+ * `InformRequest-PDU` (same format as `Trapv2-PDU` but with message acknowledgement)
+
+The library provides a `Receiver` class for receiving SNMP notifications. This
+module exports the `createReceiver()` function, which creates a new `Receiver`
+instance.
+
+The receiver maintains an authorization list of SNMP communities (for v1 and v2c
+notifications) and also an authorization list of SNMP users (for v3 notifications).
+These lists are used to authorize notification access to the receiver, and to store
+security protocol and key settings.  RFC 3414 terms the user list as the the
+"usmUserTable" stored in the receiver's "Local Configuration Database".
+
+If a v1 or v2c notification is received with a community that is not in the
+receiver's community authorization list, the receiver will not accept the notification,
+instead returning a error of class `RequestFailedError` to the supplied callback
+function.  Similarly, if a v3 notification is received with a user whose name is
+not in the receiver's user authorization list, the receiver will return a
+`RequestFailedError`.  If the `disableAuthorization` option is supplied for the
+receiver on start-up, then these local authorization list checks are disabled for
+community notifications and noAuthNoPriv user notifications.  Note that even with
+this setting, the user list is *still checked* for authNoPriv and authPriv notifications,
+as the library still requires access to the correct keys for the message authentication
+and encryption operations, and these keys are stored against a user in the user
+authorization list.
+
+The API allows the receiver's community authorization and user authorization lists
+to be managed with adds, queries and deletes.
+
+## snmp.createReceiver (options, callback)
+
+The `createReceiver()` function instantiates and returns an instance of the `Receiver`
+class:
+
+    // Default options
+    var options = {
+        port: 162,
+        disableAuthorization: false,
+        engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+        transport: "udp4"
+    };
+
+    var callback = function (error, notification) {
+        if ( error ) {
+            console.error (error);
+        } else {
+            console.log (JSON.stringify(notification, null, 2));
+        }
+    };
+
+    receiver = snmp.createReceiver (options, callback);
+
+The `options` and `callback` parameters are mandatory.  The `options` parameter is
+an object, possibly empty, and can contain the following fields:
+
+ * `port` - the port to list for notifications on - defaults to 162
+ * `disableAuthorization` - disables local authorization for all community-based
+ notifications received and for those user-based notifications received with no
+ message authentication or privacy (noAuthNoPriv) - defaults to false
+ * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
+ defaults to a system-generated engineID containing elements of random
+ * `transport` - the transport family to use - defaults to `udp4`
+
+The `callback` parameter is a callback function of the form
+`function (error, notification)`.  On an error condition, the `notification`
+parameter is set to `null`.  On successful reception of a notification, the error
+parameter is set to `null`, and the `notification` parameter is set as an object
+with the notification PDU details in the `pdu` field and the sender socket details
+in the `rinfo` field.  For example:
+
+    {
+        "pdu": {
+            "type": 166,
+            "id": 45385686,
+            "varbinds": [
+                {
+                    "oid": "1.3.6.1.2.1.1.3.0",
+                    "type": 67,
+                    "value": 5
+                },
+                {
+                    "oid": "1.3.6.1.6.3.1.1.4.1.0",
+                    "type": 6,
+                    "value": "1.3.6.1.6.3.1.1.5.2"
+                }
+            ],
+            "scoped": false
+        },
+        "rinfo": {
+            "address": "127.0.0.1",
+            "family": "IPv4",
+            "port": 43162,
+            "size": 72
+        }
+    }
+
+When a receiver is no longer required, it can be closed, which will stop it
+from listening on its notification port:
+
+    receiver.close ();
+
+## receiver.addCommunity (community)
+
+Adds a community string to the receiver's community authorization list.  Does
+nothing if the community is already in the list, ensuring there is only one
+occurence of any given community string in the list.
+
+## receiver.getCommunity (community)
+
+Returns a community string if it is stored in the receiver's community authorization
+list, otherwise returns `null`.
+
+## receiver.getCommunities ()
+
+Returns the receiver's community authorization list.
+
+## receiver.deleteCommunity (community)
+
+Deletes a community string from the receiver's community authorization list.  Does
+nothing if the community is not in the list.
+
+## receiver.addUser (user)
+
+Adds a user to the receiver's user authorization list.  If a user of the same name
+is in the list, this call deletes the existing user, and replaces it with the supplied
+user, ensuring that only one user with a given name will exist in the list.  The user
+object is in the same format as that used for the `session.createV3Session()` call.
+
+    var user = {
+        name: "elsa"
+        level: snmp.SecurityLevel.authPriv,
+        authProtocol: snmp.AuthProtocols.sha,
+        authKey: "imlettingitgo",
+        privProtocol: snmp.PrivProtocols.des,
+        privKey: "intotheunknown"
+    };
+
+    receiver.addUser (elsa);
+
+## receiver.getUser (userName)
+
+Returns a user object if a user with the supplied name is stored in the receiver's
+user authorization list, otherwise returns `null`.
+
+## receiver.getUsers ()
+
+Returns the receiver's user authorization list.
+
+## receiver.deleteUser (userName)
+
+Deletes a user from the receiver's user authorization list.  Does nothing if the user
+with the supplied name is not in the list.
+
+## receiver.close ()
+
+Closes the receiver's listening socket, ending the operation of the receiver.
+
 # Example Programs
 
 Example programs are included under the module's `example` directory.
@@ -1357,6 +1541,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.0.0 - 16/01/2020
 
  * Add SNMPv3 support
+
+## Version 1.4.0 - 13/01/2020
+
+ * Add trap and inform receiver
 
 # License
 
