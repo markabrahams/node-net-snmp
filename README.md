@@ -1354,11 +1354,13 @@ Example programs are included under the module's `example` directory.
 
  * Remove redundant sections from README.md
 
-## Version 1.3.0 - 08/01/2020
+## Version 2.0.0 - 16/01/2020
 
  * Add SNMPv3 support
 
 # License
+
+Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
 
 Copyright (c) 2018 NoSpaceships Ltd <hello@nospaceships.com>
 
