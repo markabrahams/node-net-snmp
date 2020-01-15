@@ -1542,7 +1542,7 @@ Example programs are included under the module's `example` directory.
 
  * Add SNMPv3 support
 
-## Version 1.4.0 - 13/01/2020
+## Version 2.1.0 - 16/01/2020
 
  * Add trap and inform receiver
 
