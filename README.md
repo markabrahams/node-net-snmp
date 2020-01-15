@@ -1,7 +1,7 @@
 
 # net-snmp
 
-This module implements version 1 and 2c of the [Simple Network Management
+This module implements versions 1, 2c and 3 of the [Simple Network Management
 Protocol (SNMP)][SNMP].
 
 This module is installed using [node package manager (npm)][npm]:
@@ -49,24 +49,25 @@ This module aims to be fully compliant with the following RFCs:
  * [1155][1155] - Structure and Identification of Management Information
  * [1098][1098] - A Simple Network Management Protocol (version 1)
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
- * [3416][3416] - Simple Network Management Protocol (SNMP) (version 2c)
-
-However, this module does not implement, or export any method that might help
-to implement, the SNMP version 2c report request type.
+ * [3414][3414] - User-based Security Model (USM) for version 3 of the Simple Network Management Protocol (SNMPv3)
+ * [3416][3416] - Version 2 of the Protocol Operations for the Simple Network Management Protocol (SNMP)
+ * [3417][3417] - Transport Mappings for the Simple Network Management Protocol (SNMP)
 
 [1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
 [1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
 [2578]: https://tools.ietf.org/rfc/rfc2578.txt "RFC 2578"
+[3414]: https://tools.ietf.org/rfc/rfc3414.txt "RFC 3414"
 [3416]: https://tools.ietf.org/rfc/rfc3416.txt "RFC 3416"
+[3417]: https://tools.ietf.org/rfc/rfc3417.txt "RFC 3417"
 
 # Constants
 
 The following sections describe constants exported and used by this module.
 
-## snmp.Version1 & snmp.Version2c
+## snmp.Version1, snmp.Version2c, snmp.Version3
 
-These constants are used to specify which of the two versions supported by
-this module should be used.
+These constants are used to specify which of version supported by this module
+should be used.
 
 ## snmp.ErrorStatus
 
@@ -142,6 +143,33 @@ constants are passed to the `trap()` and `inform()` methods exposed by the
  * `EgpNeighborLoss`
  * `EnterpriseSpecific`
 
+## snmp.SecurityLevel
+
+This object contains constants to specify the security of an SNMPv3 message as per
+RFC 3414:
+ * `noAuthNoPriv` - for no message authentication or encryption
+ * `authNoPriv` - for message authentication and no encryption
+ * `authPriv` - for message authentication and encryption
+
+## snmp.AuthProtocols
+
+This object contains constants to select a supported digest algorithm for SNMPv3
+messages that require authentication:
+ * `md5` - for MD5 message authentication
+ * `sha` - for SHA message authentication
+
+These are the two hash algorithms specified in RFC 3414.  Other digest algorithms
+are not supported.
+
+## snmp.PrivProtocols
+
+This object contains constants to select a supported encryption algorithm for
+SNMPv3 messages that require privacy:
+ * `des` - for DES encryption
+
+This is the sole encryption algorithms specified in RFC 3414.  Other encryption
+algorithms are not supported.
+
 # OID Strings & Varbinds
 
 Some parts of this module accept simple OID strings, e.g.:
@@ -213,8 +241,9 @@ When defined, the error parameter is always an instance of the `Error` class,
 or a sub-class described in one of the sub-sections contained in this section.
 
 The semantics of error handling is slightly different between SNMP version
-1 and 2c.  In SNMP version 1 if an error occurs when calculating the value for
-one OID the request as a whole will fail, i.e. no OIDs will have a value.
+1 and subsequent versions 2c and 3.  In SNMP version 1 if an error occurs when
+calculating the value for one OID the request as a whole will fail, i.e. no
+OIDs will have a value.
 
 This failure manifests itself within the error-status and error-index fields
 of the response.  When the error-status field in the response is non-zero,
@@ -234,8 +263,8 @@ no error object is passed to the `callback`, i.e.:
         }
     });
 
-In SNMP version 2c instead of using the error-status and error-index fields of
-the response to signal an error, the value for the varbind placed in the
+In SNMP versions 2c and 3, instead of using the error-status and error-index
+fields of the response to signal an error, the value for the varbind placed in the
 response for an OID will have an object syntax describing an error.  The
 error-status and error-index fields of the response will indicate the request
 was successul, i.e. `snmp.ErrorStatus.NoError`.
@@ -317,13 +346,16 @@ This error indicates a failure to parse a response message.  The exposed
 # Using This Module
 
 All SNMP requests are made using an instance of the `Session` class.  This
-module exports the `createSession()` function which is used to create
-instances of the `Session` class.
+module exports two functions that are used to create instances of the
+`Session` class:
+
+ * `createSession()` - for v1 and v2c sessions
+ * `createV3Session()` - for v3 sessions
 
 ## snmp.createSession ([target], [community], [options])
 
 The `createSession()` function instantiates and returns an instance of the
-`Session` class:
+`Session` class for SNMPv1 or SNMPv2c:
 
     // Default options
     var options = {
@@ -333,7 +365,7 @@ The `createSession()` function instantiates and returns an instance of the
         transport: "udp4",
         trapPort: 162,
         version: snmp.Version1,
-        idBitsSize: 16
+        idBitsSize: 32
     };
     
     var session = snmp.createSession ("127.0.0.1", "public", options);
@@ -362,6 +394,57 @@ is an object, and can contain the following items:
 When a session has been finished with it should be closed:
 
     session.close ();
+
+## snmp.createV3Session (target, user, [options])
+
+The `createV3Session()` function instantiates and returns an instance of the
+same `Session` class as `createSession()`, only instead initialized for SNMPv3:
+    
+    // Default options for v3
+    var options = {
+        port: 161,
+        retries: 1,
+        timeout: 5000,
+        transport: "udp4",
+        trapPort: 162,
+        version: snmp.Version3,
+        idBitsSize: 32
+    };
+
+    // Example user
+    var user = {
+        name: "blinkybill",
+        level: snmp.SecurityLevel.authPriv,
+        authProtocol: snmp.AuthProtocols.sha,
+        authKey: "madeahash",
+        privProtocol: snmp.PrivProtocols.des,
+        privKey: "privycouncil"
+    };
+    
+    var session = snmp.createV3Session ("127.0.0.1", user, options);
+
+The `target` and `user` parameters are mandatory.  The optional `options` parameter
+has the same meaning as for the `createSession()` call.
+
+The `user` object must contain a `name` and `level` field.  The `level` field can
+take these values from the `snmp.SecurityLevel` object:
+ * `snmp.SecurityLevel.noAuthNoPriv` - for no message authentication or encryption
+ * `snmp.SecurityLevel.authNoPriv` - for message authentication and no encryption
+ * `snmp.SecurityLevel.authPriv` - for message authentication and encryption
+
+The meaning of these are as per RFC3414.  If the `level` supplied is `authNoPriv` or
+`authPriv`, then the `authProtocol` and `authKey` fields must also be present.  The
+`authProtocol` field can take values from the `snmp.AuthProtocols` object:
+ * `snmp.AuthProtocols.md5` - for MD5 message authentication
+ * `snmp.AuthProtocols.sha` - for SHA message authentication
+
+If the `level` supplied is `authPriv`, then the `privProtocol` and `privKey` fields
+must also be present.  The `privProtocol` field can take the single value from the
+`snmp.PrivProtocols` object:
+ * `snmp.PrivProtocols.des` - for DES encryption
+
+Once a v3 session is created, the same set of `session` methods are available as
+for v1 and v2c.
 
 ## session.on ("close", callback)
 
@@ -703,7 +786,7 @@ sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
 
 The `subtree()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
-there base.  For example, the OIDs sysName (`1.3.6.1.2.1.1.5.0`) and
+their base.  For example, the OIDs sysName (`1.3.6.1.2.1.1.5.0`) and
 sysLocation (`1.3.6.1.2.1.1.6.0`) both have the same base system
 (`1.3.6.1.2.1.1`) OID.
 
@@ -767,7 +850,7 @@ The following example fetches all OIDS under the system (`1.3.6.1.2.1.1`) OID:
 
 The `table()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
-there base, much like the `subtree()` method.
+their base, much like the `subtree()` method.
 
 This method is designed to fetch conceptial tables, for example the ifTable
 (`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will be structured
@@ -1119,7 +1202,7 @@ ifTable (`1.3.6.1.2.1.2.2`) OID:
 
 # Example Programs
 
-Example programs are included under the modules `example` directory.
+Example programs are included under the module's `example` directory.
 
 # Changes
 
@@ -1270,6 +1353,10 @@ Example programs are included under the modules `example` directory.
 ## Version 1.2.4 - 07/06/2018
 
  * Remove redundant sections from README.md
+
+## Version 1.3.0 - 08/01/2020
+
+ * Add SNMPv3 support
 
 # License
 

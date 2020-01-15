@@ -9,6 +9,9 @@
   "dependencies": {
     "asn1-ber": "*"
   },
+  "devDependencies": {
+    "getopts": "*"
+  },
   "contributors": [
     {
       "name": "Stephen Vickers",

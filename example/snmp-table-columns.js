@@ -2,24 +2,12 @@
 // Copyright 2013 Stephen Vickers
 
 var snmp = require ("../");
+var options = require("./option-parser");
 
-if (process.argv.length < 7) {
-	console.log ("usage: snmp-table-columns <target> <community> <version> "
-			+ "<oid> <col> [<col> ...]");
-	process.exit (1);
-}
-
-var target = process.argv[2];
-var community = process.argv[3];
-var version = (process.argv[4] == "2c") ? snmp.Version2c : snmp.Version1;
-
-var oid = process.argv[5];
-var columns = [];
-
-for (var i = 6; i < process.argv.length; i++)
-	columns.push (process.argv[i]);
-
-var session = snmp.createSession (target, community, {version: version});
+var session = options.session;
+var oid = options.oids[0];
+var columns = options.columns;
+var maxRepetitions = options.maxRepetitions || 20;
 
 function sortInt (a, b) {
 	if (a > b)
@@ -54,8 +42,4 @@ function responseCb (error, table) {
 	}
 }
 
-var maxRepetitions = 20;
-
-// The maxRepetitions argument is optional, and will be ignored unless using
-// SNMP verison 2c
 session.tableColumns (oid, columns, maxRepetitions, responseCb);
