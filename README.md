@@ -29,8 +29,6 @@ and send SNMP traps or informs:
                 else
                     console.log (varbinds[i].oid + " = " + varbinds[i].value);
         }
-
-        // If done, close the session
         session.close ();
     });
 
@@ -41,6 +39,41 @@ and send SNMP traps or informs:
 
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
 [npm]: https://npmjs.org/ "npm"
+
+# Functionality
+
+RFC 3413 describes five types of SNMP applications:
+
+ 1. Command Generator Applications &mdash; which initiate read or write requests
+ 2. Command Responder Applications &mdash; which respond to received read or write requests
+ 3. Notification Originator Applications &mdash; which generate notifications (traps or informs)
+ 4. Notification Receiver Applications &mdash; which receive notifications (traps or informs)
+ 5. Proxy Forwarder Applications &mdash; which forward SNMP messages
+
+This library provides an API for (1) and (3) in the section
+[Using This Module: Command & Notification Generator](#using-this-module:-command-&-notification-generator),
+and an API for (4) in the section [Using This Module: Notification Receiver](#using-this-module:-notification-receiver).
+It does not provide support for (2) &mdash; traditionally known as "SNMP agents" &mdash; nor for (5).
+
+Features:
+ * Support for all SNMP versions: SNMPv1, SNMPv2c and SNMPv3
+ * SNMPv3 message authentication using MD5 and SHA, and DES encryption
+ * Community-based and user-based authorization
+ * SNMP initiator for these protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
+ * Convenience methods for MIB "walking", subtree collection, table and table column collection
+ * SNMPv3 context support
+ * SNMP receiver for traps and informs
+ * IPv4 and IPv6
+
+Not implemented, but on the roadmap:
+ * SNMP agent (Command Responder Application)
+ * AgentX ([RFC 2741][AgentX])
+
+Not implemented, but further down the priority list:
+ * MIB parsing
+ * Proxy Forwarder Application
+
+[AgentX]: https://tools.ietf.org/html/rfc2741 "AgentX"
 
 # Standards Compliance
 
@@ -364,7 +397,8 @@ This error indicates a failure to parse a response message.  The exposed
 
 # Using This Module: Command & Notification Generator
 
-RFC 3413 describes "Command Generator" and "Notification Originator" types of SNMP applications.  This library provides a `Session` class to provide support for building these two types of application.
+This library provides a `Session` class to provide support for building
+"Command Generator" and "Notification Originator" SNMP applications.
 
 All SNMP requests are made using an instance of the `Session` class.  This
 module exports two functions that are used to create instances of the
@@ -429,7 +463,8 @@ same `Session` class as `createSession()`, only instead initialized for SNMPv3:
         transport: "udp4",
         trapPort: 162,
         version: snmp.Version3,
-        idBitsSize: 32
+        idBitsSize: 32,
+        context: ""
     };
 
     // Example user
@@ -445,7 +480,9 @@ same `Session` class as `createSession()`, only instead initialized for SNMPv3:
     var session = snmp.createV3Session ("127.0.0.1", user, options);
 
 The `target` and `user` parameters are mandatory.  The optional `options` parameter
-has the same meaning as for the `createSession()` call.
+has the same meaning as for the `createSession()` call.  The one additional field
+in the options parameter is the `context` field, which adds an SNMPv3 context to
+the session.
 
 The `user` object must contain a `name` and `level` field.  The `level` field can
 take these values from the `snmp.SecurityLevel` object:
@@ -1224,7 +1261,8 @@ ifTable (`1.3.6.1.2.1.2.2`) OID:
 # Using This Module: Notification Receiver
 
 RFC 3413 classifies a "Notification Receiver" SNMP application that receives
-"Notification-Class" PDUs.  This library is able to receive these types of PDU:
+"Notification-Class" PDUs. Notifications include both SNMP traps and informs.
+This library is able to receive all types of notification PDU:
 
  * `Trap-PDU` (original v1 trap PDUs, which are now considered obselete)
  * `Trapv2-PDU` (unacknowledged notifications)
@@ -1538,15 +1576,29 @@ Example programs are included under the module's `example` directory.
 
  * Remove redundant sections from README.md
 
-## Version 1.3.0 - 08/01/2020
+## Version 2.0.0 - 16/01/2020
 
  * Add SNMPv3 support
 
-## Version 1.4.0 - 13/01/2020
+## Version 2.1.0 - 16/01/2020
 
  * Add trap and inform receiver
 
+## Version 2.1.1 - 17/01/2020
+
+ * Add CONTRIBUTING.md guidelines
+
+## Version 2.1.2 - 17/01/2020
+
+ * Add SNMPv3 context to Session class
+
+## Version 2.1.3 - 18/01/2020
+
+ * Add IPv6 option for tests
+
 # License
+
+Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
 
 Copyright (c) 2018 NoSpaceships Ltd <hello@nospaceships.com>
 

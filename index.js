@@ -456,6 +456,7 @@ SimplePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
 	this.id = id;
 	this.varbinds = varbinds;
 	this.options = options || {};
+	this.contextName = (options && options.context) ? options.context : "";
 }
 
 SimplePdu.prototype.initializeFromBuffer = function (reader) {
@@ -476,6 +477,7 @@ SimplePdu.createFromVariables = function (pduClass, id, varbinds, options) {
 	pdu.id = id;
 	pdu.varbinds = varbinds;
 	pdu.options = options || {};
+	pdu.contextName = (options && options.context) ? options.context : "";
 	return pdu;
 };
 
@@ -705,8 +707,8 @@ var readPdu = function (reader, scoped) {
 	return pdu;
 };
 
-var createDiscoveryPdu = function () {
-	return GetRequestPdu.createFromVariables(_generateId(), [], {});
+var createDiscoveryPdu = function (context) {
+	return GetRequestPdu.createFromVariables(_generateId(), [], {context: context});
 };
 
 var Authentication = {};
@@ -1053,7 +1055,7 @@ Message.prototype.toBufferV3 = function () {
 	} else {
 		scopedPduWriter.writeBuffer (contextEngineID, ber.OctetString);
 	}
-	scopedPduWriter.writeString ("");
+	scopedPduWriter.writeString (this.pdu.contextName);
 	this.pdu.toBuffer (scopedPduWriter);
 	scopedPduWriter.endSequence ();
 
@@ -1168,7 +1170,7 @@ Message.prototype.isAuthenticationDisabled = function () {
 };
 
 
-Message.prototype.createReportResponseMessage = function(engineID, engineBoots, engineTime) {
+Message.prototype.createReportResponseMessage = function(engineID, engineBoots, engineTime, context) {
 	var user = {
 		name: "",
 		level: SecurityLevel.noAuthNoPriv
@@ -1182,6 +1184,7 @@ Message.prototype.createReportResponseMessage = function(engineID, engineBoots, 
 		msgPrivacyParameters: ""
 	};
 	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, [], {});
+	reportPdu.contextName = context;
 	var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, reportPdu);
 	responseMessage.msgGlobalData.msgID = this.msgGlobalData.msgID;
 	return responseMessage;
@@ -1292,7 +1295,7 @@ var Req = function (session, message, feedCb, responseCb, options) {
 	this.onResponse = session.onSimpleGetResponse;
 	this.feedCb = feedCb;
 	this.port = (options && options.port) ? options.port : session.port;
-
+	this.context = session.context;
 };
 
 Req.prototype.getId = function() {
@@ -1344,6 +1347,8 @@ var Session = function (target, authenticator, options) {
 	this.idBitsSize = (options && options.idBitsSize)
 			? parseInt(options.idBitsSize)
 			: 32;
+
+	this.context = (options && options.context) ? options.context : "";
 
 	DEBUG = options.debug;
 
@@ -1709,6 +1714,7 @@ Session.prototype.onMsg = function (buffer) {
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
+				req.originalPdu.contextName = this.context;
 				this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
@@ -1840,10 +1846,10 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 
 		if ( this.version == Version3 ) {
 			if ( this.msgSecurityParameters ) {
-				this.sendV3Req(pdu, feedCb, responseCb, options, this.port);
+				this.sendV3Req (pdu, feedCb, responseCb, options, this.port);
 			} else {
 				// SNMPv3 discovery
-				var discoveryPdu = createDiscoveryPdu();
+				var discoveryPdu = createDiscoveryPdu(this.context);
 				var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
 				var discoveryReq = new Req (this, discoveryMessage, feedCb, responseCb, options);
 				discoveryReq.originalPdu = pdu;
@@ -2334,6 +2340,7 @@ Receiver = function (options, callback) {
 	} else {
 		this.generateEngineID ();
 	}
+	this.context = (options && options.context) ? options.context : "";
 };
 
 Receiver.prototype.startListening = function () {
@@ -2444,7 +2451,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime);
+		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime, this.context);
 		this.send (reportMessage, rinfo);
 		return;
 	};
