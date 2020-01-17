@@ -36,6 +36,7 @@ if ( snmpOptions.version == snmp.Version3 ) {
 		user.privProtocol = snmp.PrivProtocols[options.x.toLowerCase()];
         user.privKey = options.X;
     }
+    snmpOptions.context = options.o;
 } else {
 	community = options.c;
 }

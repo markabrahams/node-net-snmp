@@ -461,7 +461,8 @@ same `Session` class as `createSession()`, only instead initialized for SNMPv3:
         transport: "udp4",
         trapPort: 162,
         version: snmp.Version3,
-        idBitsSize: 32
+        idBitsSize: 32,
+        context: ""
     };
 
     // Example user
@@ -477,7 +478,9 @@ same `Session` class as `createSession()`, only instead initialized for SNMPv3:
     var session = snmp.createV3Session ("127.0.0.1", user, options);
 
 The `target` and `user` parameters are mandatory.  The optional `options` parameter
-has the same meaning as for the `createSession()` call.
+has the same meaning as for the `createSession()` call.  The one additional field
+in the options parameter is the `context` field, which adds an SNMPv3 context to
+the session.
 
 The `user` object must contain a `name` and `level` field.  The `level` field can
 take these values from the `snmp.SecurityLevel` object:
@@ -1582,6 +1585,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.1.1 - 17/01/2020
 
  * Add CONTRIBUTING.md guidelines
+
+## Version 2.1.2 - 17/01/2020
+
+ * Add SNMPv3 context to Session class
 
 # License
 

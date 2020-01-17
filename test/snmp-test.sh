@@ -14,19 +14,19 @@ CMDS=/var/tmp/snmp-test.$$
 # Auth parameters - change as necessary
 RO_COMMUNITY=public
 RW_COMMUNITY=private
-USER_NONE=none
-USER_AUTH=shaonly
-USER_PRIV=shades
-USER_TRAP_NONE=trapnone
-USER_TRAP_AUTH=trapshaonly
-USER_TRAP_PRIV=trapshades
+USER_NONE=fred
+USER_AUTH=betty
+USER_PRIV=wilma
+USER_TRAP_NONE=fred
+USER_TRAP_AUTH=betty
+USER_TRAP_PRIV=wilma
 USER_SET_NONE=trapnone
 USER_SET_AUTH=trapshaonly
 USER_SET_PRIV=trapshades
 AUTH_PROTOCOL=sha
-AUTH_KEY=testpasswd
+AUTH_KEY=illhavesomeauth
 PRIV_PROTOCOL=des
-PRIV_KEY=testpasswd
+PRIV_KEY=andsomepriv
 
 usage() {
     echo "Usage: $0 [ -e <engineId> ] [ -h <host> ] [ -l v1 | v2c | noauthnopriv | authnopriv | authpriv ] [ -p ]"
