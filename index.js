@@ -9,6 +9,8 @@ var crypto = require("crypto");
 
 var DEBUG = false;
 
+var MAX_INT32 = 2147483647;
+
 function debug (line) {
 	if ( DEBUG ) {
 		console.debug (line);
@@ -2234,6 +2236,82 @@ Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) 
 	this.send (req);
 };
 
+var Engine = function (engineID, engineBoots, engineTime) {
+	if ( engineID ) {
+		this.engineID = Buffer.from (engineID, 'hex');
+	} else {
+		this.generateEngineID ();
+	}
+	this.engineBoots = 0;
+	this.engineTime = 10;
+};
+
+Engine.prototype.generateEngineID = function() {
+	// generate a 17-byte engine ID in the following format:
+	// 0x80 + 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
+	this.engineID = Buffer.alloc (17);
+	this.engineID.fill ('8000B98380', 'hex', 0, 5);
+	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
+}
+
+var Listener = function (options) {
+	//this.callback = callback;
+	this.family = options.transport || 'udp4';
+	this.port = options.port || 161;
+	this.disableAuthorization = options.disableAuthorization || false;
+};
+
+var Authorizer = function () {
+	this.communities = [];
+	this.users = [];
+}
+
+Authorizer.prototype.addCommunity = function (community) {
+	if ( this.getCommunity (community) ) {
+		return;
+	} else {
+		this.communities.push (community);
+	}
+};
+
+Authorizer.prototype.getCommunity = function (community) {
+	return this.communities.filter( localCommunity => localCommunity == community )[0] || null;
+};
+
+Authorizer.prototype.getCommunities = function () {
+	return this.communities;
+};
+
+Authorizer.prototype.deleteCommunity = function (community) {
+	var index = this.communities.indexOf(community);
+	if ( index > -1 ) {
+		this.communities.splice(index, 1);
+	}
+};
+
+Authorizer.prototype.addUser = function (user) {
+	if ( this.getUser (user.name) ) {
+		this.deleteUser (user.name);
+	}
+	this.users.push (user);
+};
+
+Authorizer.prototype.getUser = function (userName) {
+	return this.users.filter( localUser => localUser.name == userName )[0] || null;
+};
+
+Authorizer.prototype.getUsers = function () {
+	return this.users;
+};
+
+Authorizer.prototype.deleteUser = function (userName) {
+	var index = this.users.findIndex(localUser => localUser.name == userName );
+	if ( index > -1 ) {
+		this.users.splice(index, 1);
+	}
+};
+
+
 
 /*****************************************************************************
  ** Receiver class definition
@@ -2428,6 +2506,234 @@ Receiver.create = function (options, callback) {
 	return receiver;
 };
 
+var MibNode = function(address, parent) {
+	this.address = address;
+	this.oid = this.address.join('.');;
+	this.parent = parent;
+	this.children = {};
+};
+
+MibNode.prototype.child = function (index) {
+	return this.children[index];
+};
+
+MibNode.prototype.listChildren = function (lowest) {
+	var sorted = [];
+
+	lowest = lowest || 0;
+
+	this.children.forEach (function (c, i) {
+		if (i >= lowest)
+			sorted.push (i);
+	});
+
+	sorted.sort (function (a, b) {
+		return (a - b);
+	});
+
+	return sorted;
+};
+
+MibNode.prototype.isDescendant = function (address) {
+	return oidIsDescended(this.address, address);
+};
+
+MibNode.prototype.isAncestor = function (address) {
+	return oidIsDescended (address, this.address);
+};
+
+MibNode.prototype.dump = function () {
+	console.log(this.oid);
+	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
+		this.children[node].dump ();
+	}
+};
+
+MibNode.oidIsDescended = function (oid, ancestor) {
+	var ancestorAddress = Mib.convertOidToAddress(ancestor);
+	var address = Mib.convertOidToAddress(oid);
+	var isAncestor = true;
+
+	if (address.length <= ancestorAddress.length) {
+		return false;
+	}
+
+	ancestorAddress.forEach (function (o, i) {
+		if (address[i] !== ancestorAddress[i]) {
+			isAncestor = false;
+		}
+	});
+
+	return isAncestor;
+};
+
+var Mib = function () {
+	this.root = new MibNode ([], null);
+};
+
+Mib.prototype.add = function add (oidString) {
+	var address;
+	var node;
+	var i;
+
+	address = Mib.convertOidToAddress (oidString);
+	node = this.root;
+
+	for (i = 0; i < address.length; i++) {
+		if ( ! node.children.hasOwnProperty (address[i]) ) {
+			node.children[address[i]] = new MibNode (address.slice(0, i + 1), node);
+		}
+		node = node.children[address[i]];
+	}
+
+	return node;
+};
+
+Mib.prototype.lookup = function (oid) {
+	var address;
+	var i;
+	var node;
+
+	address = Mib.convertOidToAddress (oid);
+	node = this.root;
+	for (i = 0; i < address.length; i++) {
+		if ( ! node.children.hasOwnProperty (address[i]))
+			break;
+		node = node.children[address[i]];
+	}
+
+	return node;
+};
+
+Mib.prototype.nextMatch = function (arg) {
+	var childIndices;
+	var sub;
+	var i;
+
+	if (typeof (arg) !== 'object')
+		throw new TypeError('arg (object) is required');
+	if (typeof (arg.node) !== 'object' || ! (arg.node instanceof MibNode) )
+		throw new TypeError('arg.node (object) is required');
+	if (typeof (arg.match) !== 'function')
+		throw new TypeError('arg.match (function) is required');
+	if (typeof (arg.start) !== 'undefined' &&
+	    typeof (arg.start) !== 'number')
+		throw new TypeError('arg.start must be a number');
+
+	if (arg.match (arg.node) === true)
+		return (arg.node);
+
+	childIndices = arg.node.listChildren (arg.start);
+	for (i = 0; i < childIndices.length; i++) {
+		sub = this.nextMatch ({
+			node: arg.node._children[childIndices[i]],
+			match: arg.match
+		});
+		if (sub)
+			return (sub);
+	}
+	if (!arg.node._parent)
+		return (null);
+
+	return this.nextMatch ({
+		node: arg.node._parent,
+		match: arg.match,
+		start: arg.node._addr[arg.node._addr.length - 1] + 1
+	});
+};
+
+Mib.prototype.dump = function () {
+	this.root.dump ();
+};
+
+Mib.convertOidToAddress = function (oid) {
+	var address;
+	var oidArray;
+	var i;
+
+	if (typeof (oid) === 'object' && util.isArray(oid)) {
+		address = oid;
+	} else if (typeof (oid) === 'string') {
+		address = oid.split('.');
+	} else {
+		throw new TypeError('oid (string or array) is required');
+	}
+
+	if (address.length < 3)
+		throw new RangeError('object identifier is too short');
+
+	oidArray = [];
+	for (i = 0; i < address.length; i++) {
+		var n;
+
+		if (address[i] === '')
+			continue;
+
+		if (address[i] === true || address[i] === false) {
+			throw new TypeError('object identifier component ' +
+			    address[i] + ' is malformed');
+		}
+
+		n = Number(address[i]);
+
+		if (isNaN(n)) {
+			throw new TypeError('object identifier component ' +
+			    address[i] + ' is malformed');
+		}
+		if (n % 1 !== 0) {
+			throw new TypeError('object identifier component ' +
+			    address[i] + ' is not an integer');
+		}
+		if (i === 0 && n > 2) {
+			throw new RangeError('object identifier does not ' +
+			    'begin with 0, 1, or 2');
+		}
+		if (i === 1 && n > 39) {
+			throw new RangeError('object identifier second ' +
+			    'component ' + n + ' exceeds encoding limit of 39');
+		}
+		if (n < 0) {
+			throw new RangeError('object identifier component ' +
+			    address[i] + ' is negative');
+		}
+		if (n > MAX_INT32) {
+			throw new RangeError('object identifier component ' +
+			    address[i] + ' is too large');
+		}
+		oidArray.push(n);
+	}
+
+	return oidArray;
+
+};
+
+var Agent = function (options) {
+	this.listener = new Listener (options);
+	this.engine = new Engine (options.engineID);
+	this.authorizer = new Authorizer ();
+	this.mib = new Mib ();
+};
+
+Agent.prototype.getAuthorizer = function () {
+	return this.authorizer;
+};
+
+Agent.prototype.addProvider = function (provider) {
+	node = this.mib.add (provider.oid);
+
+	if (provider.columns) {
+		for ( column of provider.columns ) {
+			node = this.mib.add (provider.oid + '.' + column);
+		};
+	}
+
+};
+
+Agent.create = function (options) {
+	var agent = new Agent (options);
+	return agent;
+};
+
 /*****************************************************************************
  ** Exports
  **/
@@ -2452,6 +2758,7 @@ exports.createV3Session = function (target, user, options) {
 };
 
 exports.createReceiver = Receiver.create;
+exports.createAgent = Agent.create;
 
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;
