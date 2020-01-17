@@ -18,6 +18,7 @@ if ( ! options.v ) {
 
 snmpOptions.version = snmp.Version[options.v];
 snmpOptions.debug = options.d;
+snmpOptions.transport = options.t
 if ( snmpOptions.version == snmp.Version3 ) {
     var engineID;
     if ( options.e ) {
@@ -36,12 +37,12 @@ if ( snmpOptions.version == snmp.Version3 ) {
 		user.privProtocol = snmp.PrivProtocols[options.x.toLowerCase()];
         user.privKey = options.X;
     }
-    snmpOptions.context = options.o;
+    snmpOptions.context = options.n;
 } else {
 	community = options.c;
 }
 
-nonRepeaters = options.n;
+nonRepeaters = options.o;
 maxRepetitions = options.r;
 
 if (options._.length < 2) {

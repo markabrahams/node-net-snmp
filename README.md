@@ -61,7 +61,9 @@ Features:
  * Community-based and user-based authorization
  * SNMP initiator for these protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
  * Convenience methods for MIB "walking", subtree collection, table and table column collection
+ * SNMPv3 context support
  * SNMP receiver for traps and informs
+ * IPv4 and IPv6
 
 Not implemented, but on the roadmap:
  * SNMP agent (Command Responder Application)
@@ -1589,6 +1591,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.1.2 - 17/01/2020
 
  * Add SNMPv3 context to Session class
+
+## Version 2.1.3 - 18/01/2020
+
+ * Add IPv6 option for tests
 
 # License
 
