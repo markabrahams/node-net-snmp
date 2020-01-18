@@ -1,12 +1,13 @@
-
-// Copyright 2013 Stephen Vickers
-
 var snmp = require ("../");
 var getopts = require ("getopts");
 
 var options = getopts(process.argv.slice(2));
-
 var verbose = options.v;
+var snmpOptions = {
+    disableAuthorization: options.n,
+    port: options.p,
+    engineID: options.e
+};
 
 var cb = function(error, trap) {
     var now = new Date().toLocaleString();
@@ -27,12 +28,6 @@ var cb = function(error, trap) {
         }
     }
 }
-
-var snmpOptions = {
-    disableAuthorization: options.n,
-    port: options.p,
-    engineID: options.e
-};
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
 receiver.addCommunity ("public");

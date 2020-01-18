@@ -472,6 +472,15 @@ SimplePdu.prototype.initializeFromBuffer = function (reader) {
 
 };
 
+SimplePdu.prototype.getResponsePduForRequest = function () {
+	var responsePdu = GetResponsePdu.createFromVariables(this.id, [], {});
+	if ( this.contextEngineID ) {
+		responsePdu.contextEngineID = this.contextEngineID;
+		responsePdu.contextName = this.contextName;
+	}
+	return responsePdu;
+};
+
 SimplePdu.createFromVariables = function (pduClass, id, varbinds, options) {
 	var pdu = new pduClass (id, varbinds, options);
 	pdu.id = id;
@@ -650,6 +659,12 @@ util.inherits (GetResponsePdu, SimpleResponsePdu);
 GetResponsePdu.createFromBuffer = function (reader) {
 	var pdu = new GetResponsePdu ();
 	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
+GetResponsePdu.createFromVariables = function (id, varbinds, options) {
+	var pdu = new GetResponsePdu();
+	pdu.initializeFromVariables (id, varbinds, options);
 	return pdu;
 };
 
@@ -1164,13 +1179,16 @@ Message.prototype.setReportable = function (flag) {
 	}
 };
 
-
 Message.prototype.isAuthenticationDisabled = function () {
 	return this.disableAuthentication;
 };
 
+Message.prototype.hasAuthoritativeEngineID = function () {
+	return this.msgSecurityParameters && this.msgSecurityParameters.msgAuthoritativeEngineID &&
+		this.msgSecurityParameters.msgAuthoritativeEngineID != "";
+};
 
-Message.prototype.createReportResponseMessage = function(engineID, engineBoots, engineTime, context) {
+Message.prototype.createReportResponseMessage = function (engineID, engineBoots, engineTime, context) {
 	var user = {
 		name: "",
 		level: SecurityLevel.noAuthNoPriv
@@ -1190,8 +1208,46 @@ Message.prototype.createReportResponseMessage = function(engineID, engineBoots, 
 	return responseMessage;
 };
 
-Message.createRequestCommunity = function (version, community, pdu) {
-	var message = new Message();
+Message.prototype.createResponseForRequest = function (responsePdu) {
+	if ( this.version == Version3 ) {
+		return this.createV3ResponseFromRequest(responsePdu);
+	} else {
+		return this.createCommunityResponseFromRequest(responsePdu);
+	}
+};
+
+Message.prototype.createCommunityResponseFromRequest = function (responsePdu) {
+	return Message.createCommunity(this.version, this.community, responsePdu);
+};
+
+Message.prototype.createV3ResponseFromRequest = function (responsePdu) {
+	var responseUser = {
+		name: this.user.name,
+		level: this.user.name,
+		authProtocol: this.user.authProtocol,
+		authKey: this.user.authKey,
+		privProtocol: this.user.privProtocol,
+		privKey: this.user.privKey
+	};
+	var responseSecurityParameters = {
+		msgAuthoritativeEngineID: this.msgSecurityParameters.msgAuthoritativeEngineID,
+		msgAuthoritativeEngineBoots: this.msgSecurityParameters.msgAuthoritativeEngineBoots,
+		msgAuthoritativeEngineTime: this.msgSecurityParameters.msgAuthoritativeEngineTime,
+		msgUserName: this.msgSecurityParameters.msgUserName,
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	};
+	var responseGlobalData = {
+		msgID: this.msgGlobalData.msgID,
+		msgMaxSize: 65507,
+		msgFlags: this.msgGlobalData.msgFlags & (255 - 4),
+		msgSecurityModel: 3
+	};
+	return Message.createV3 (responseUser, responseGlobalData, responseSecurityParameters, responsePdu);
+};
+
+Message.createCommunity = function (version, community, pdu) {
+	var message = new Message ();
 
 	message.version = version;
 	message.community = community;
@@ -1201,19 +1257,24 @@ Message.createRequestCommunity = function (version, community, pdu) {
 };
 
 Message.createRequestV3 = function (user, msgSecurityParameters, pdu) {
-	var message = new Message();
 	var authFlag = user.level == SecurityLevel.authNoPriv || user.level == SecurityLevel.authPriv ? 1 : 0;
 	var privFlag = user.level == SecurityLevel.authPriv ? 1 : 0;
 	var reportableFlag = ( pdu.type == PduType.GetResponse || pdu.type == PduType.TrapV2 ) ? 0 : 1;
-
-	message.version = 3;
-	message.user = user;
-	message.msgGlobalData = {
+	var msgGlobalData = {
 		msgID: _generateId(), // random ID
 		msgMaxSize: 65507,
 		msgFlags: reportableFlag * 4 | privFlag * 2 | authFlag * 1,
 		msgSecurityModel: 3
 	};
+	return Message.createV3 (user, msgGlobalData, msgSecurityParameters, pdu);
+};
+
+Message.createV3 = function (user, msgGlobalData, msgSecurityParameters, pdu) {
+	var message = new Message ();
+
+	message.version = 3;
+	message.user = user;
+	message.msgGlobalData = msgGlobalData;
 	message.msgSecurityParameters = {
 		msgAuthoritativeEngineID: msgSecurityParameters.msgAuthoritativeEngineID || Buffer.from(""),
 		msgAuthoritativeEngineBoots: msgSecurityParameters.msgAuthoritativeEngineBoots || 0,
@@ -1856,7 +1917,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 				this.send (discoveryReq);
 			}
 		} else {
-			message = Message.createRequestCommunity (this.version, this.community, pdu);
+			message = Message.createCommunity (this.version, this.community, pdu);
 			req = new Req (this, message, feedCb, responseCb, options);
 			this.send (req);
 		}
@@ -2123,7 +2184,7 @@ Session.prototype.trap = function () {
 			};
 			message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
 		} else {
-			message = Message.createRequestCommunity (this.version, this.community, pdu);
+			message = Message.createCommunity (this.version, this.community, pdu);
 		}
 
 		req = {
@@ -2260,11 +2321,83 @@ Engine.prototype.generateEngineID = function() {
 	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
 }
 
-var Listener = function (options) {
-	//this.callback = callback;
+var Listener = function (options, receiver) {
+	this.receiver = receiver;
+	this.callback = receiver.onMsg;
 	this.family = options.transport || 'udp4';
 	this.port = options.port || 161;
 	this.disableAuthorization = options.disableAuthorization || false;
+};
+
+Listener.prototype.startListening = function (receiver) {
+	var me = this;
+	this.dgram = dgram.createSocket (this.family);
+	this.dgram.bind (this.port);
+	this.dgram.on ("message", me.callback.bind (me.receiver));
+};
+
+Listener.prototype.send = function (message, rinfo) {
+	var me = this;
+	
+	var buffer = message.toBuffer ();
+
+	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.address,
+			function (error, bytes) {
+		if (error) {
+			// me.callback (error);
+			console.error ("Error sending: " + error.message);
+		} else {
+			// debug ("Listener sent response message");
+		}
+	});
+};
+
+Listener.formatCallbackData = function (pdu, rinfo) {
+	if ( pdu.contextEngineID ) {
+		pdu.contextEngineID = pdu.contextEngineID.toString('hex');
+	}
+	delete pdu.nonRepeaters;
+	delete pdu.maxRepetitions;
+	return {
+		pdu: pdu,
+		rinfo: rinfo 
+	};
+};
+
+Listener.processIncoming = function (buffer, authorizer, callback) {
+	var message = Message.createFromBuffer (buffer);
+	var community;
+
+	// Authorization
+	if ( message.version == Version3 ) {
+		message.user = authorizer.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
+		message.disableAuthentication = authorizer.disableAuthorization;
+		if ( ! message.user ) {
+			if ( message.msgSecurityParameters.msgUserName != "" && ! authorizer.disableAuthorization ) {
+				callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else if ( message.hasAuthentication () ) {
+				callback (new RequestFailedError ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
+				return;
+			} else {
+				message.user = {
+					name: "",
+					level: SecurityLevel.noAuthNoPriv
+				};
+			}
+		}
+		if ( ! message.processIncomingSecurity (message.user, callback) ) {
+			return;
+		}
+	} else {
+		community = authorizer.communities.filter( localCommunity => localCommunity == message.community )[0];
+		if ( ! community && ! authorizer.disableAuthorization ) {
+			callback (new RequestFailedError ("Local community not found for message with community " + message.community));
+			return;
+		}
+	}
+
+	return message;
 };
 
 var Authorizer = function () {
@@ -2490,7 +2623,7 @@ Receiver.prototype.send = function (message, rinfo) {
 	
 	var buffer = message.toBuffer ();
 
-	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.host,
+	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.address,
 			function (error, bytes) {
 		if (error) {
 			// me.callback (error);
@@ -2542,15 +2675,19 @@ MibNode.prototype.listChildren = function (lowest) {
 };
 
 MibNode.prototype.isDescendant = function (address) {
-	return oidIsDescended(this.address, address);
+	return MibNode.oidIsDescended(this.address, address);
 };
 
 MibNode.prototype.isAncestor = function (address) {
-	return oidIsDescended (address, this.address);
+	return MibNode.oidIsDescended (address, this.address);
 };
 
 MibNode.prototype.dump = function () {
-	console.log(this.oid);
+	if ( this.handler ) {
+		console.log(this.oid + " [" + this.handler.name + "]");
+	} else {
+		console.log(this.oid);
+	}
 	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
 		this.children[node].dump ();
 	}
@@ -2649,6 +2786,11 @@ Mib.prototype.nextMatch = function (arg) {
 	});
 };
 
+Mib.prototype.addProvider = function (provider) {
+	node = this.lookup (provider.oid);
+	node.handler = provider.handler;
+};
+
 Mib.prototype.dump = function () {
 	this.root.dump ();
 };
@@ -2714,11 +2856,26 @@ Mib.convertOidToAddress = function (oid) {
 
 };
 
-var Agent = function (options) {
-	this.listener = new Listener (options);
+var ProviderRequest = function (op, oidString, node, iterate) {
+	this.op = op;
+	this.address = Mib.convertOidToAddress(oidString);
+	this.oid = this.address.join('.');
+	this.node = node;
+	this.iterate = iterate || 1;
+
+	if (node && node.isAncestor(this.address)) {
+		this.instance = this.address.slice(node.address.length, this.address.length);
+	}
+};
+
+var Agent = function (options, callback) {
+	DEBUG = options.debug;
+	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
 	this.authorizer = new Authorizer ();
 	this.mib = new Mib ();
+	this.callback = callback || function () {};
+	this.context = "";
 };
 
 Agent.prototype.getAuthorizer = function () {
@@ -2734,10 +2891,94 @@ Agent.prototype.addProvider = function (provider) {
 		};
 	}
 
+	this.mib.addProvider (provider);
 };
 
-Agent.create = function (options) {
-	var agent = new Agent (options);
+Agent.prototype.onMsg = function (buffer, rinfo) {
+	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+	var responseMessage;
+	var reportMessage;
+
+	if ( ! message ) {
+		return;
+	}
+
+	// SNMPv3 discovery
+	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
+			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
+		reportMessage = message.createReportResponseMessage (this.engine.engineID, this.engine.engineBoots, this.engine.engineTime, this.context);
+		this.listener.send (reportMessage, rinfo);
+		return;
+	}
+
+	// Get processing
+	debug (JSON.stringify (message.pdu, null, 2));
+	if ( message.pdu.type == PduType.GetRequest ) {
+		responseMessage = this.get (message, rinfo);
+	} else if ( message.pdu.type == PduType.InformRequest ) {
+		message.pdu.type = PduType.GetResponse;
+		message.buffer = null;
+		message.user = user;
+		message.setReportable (false);
+		this.send (message, rinfo);
+		message.pdu.type = PduType.InformRequest;
+		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+	} else {
+		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
+	}
+
+	// this.callback (null, Listener.formatCallbackData (responseMessage.pdu, rinfo) );
+	// this.listener.send (responseMessage, rinfo);
+};
+
+Agent.prototype.get = function (requestMessage, rinfo) {
+	var me = this;
+	var varbindsLength = requestMessage.pdu.varbinds.length;
+	var varbindsCompleted = 0;
+	var responsePdu = requestMessage.pdu.getResponsePduForRequest();
+
+	for ( var i = 0; i < requestMessage.pdu.varbinds.length; i++ ) {
+		var varbind = requestMessage.pdu.varbinds[i];
+		var node = this.mib.lookup(varbind.oid);
+		var prq = new ProviderRequest(requestMessage.pdu.type, varbind.oid, node);
+		var handler;
+
+		if ( ! node ) {
+			handler = function getNsoHandler(prqForNso) {
+				var nsoVarbind = {
+					oid: pr.oid,
+					type: ObjectType.Null,
+					value: null
+				}
+				prqForNso.done(nsoVarbind);
+			};
+		} else {
+			handler = node.handler;
+		}
+
+		prq.done = function (responseVarbind) {
+			me.setSingleVarbind(responsePdu, i, responseVarbind);
+			if ( ++varbindsCompleted == varbindsLength) {
+				me.sendResponse.call(me, rinfo, requestMessage, responsePdu);
+			}
+		};
+		handler (prq);
+	};
+};
+
+Agent.prototype.setSingleVarbind = function (responsePdu, index, responseVarbind) {
+	responsePdu.varbinds[index] = responseVarbind;
+};
+
+Agent.prototype.sendResponse = function (rinfo, requestMessage, responsePdu) {
+	var responseMessage = requestMessage.createResponseForRequest (responsePdu);
+	this.listener.send (responseMessage, rinfo);
+	this.callback (null, Listener.formatCallbackData (responseMessage.pdu, rinfo) );
+};
+
+Agent.create = function (options, callback) {
+	var agent = new Agent (options, callback);
+	agent.listener.startListening ();
 	return agent;
 };
 
