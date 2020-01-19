@@ -40,25 +40,29 @@ agent.getAuthorizer().addUser ({
 });
 // console.log(JSON.stringify(agent.getAuthorizer().getUsers(), null, 2));
 
-varbind = {
-    "oid": "1.3.6.1.2.1.1.1.0",
-    "type": 4,
-    "value": "At the agent!"
-};
-
-var provider = {
+var scalarProvider = {
+    name: "sysDescr",
+    type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
-    handler: function sysDescr(prq) {
-        prq.done(varbind);
+    valueType: snmp.ObjectType.OctetString,
+    handler: function sysDescr (mibRequest) {
+        mibRequest.done ();
     }
 };
-agent.addProvider (provider);
-provider = {
-    oid: "1.3.6.1.13.22.33.44",
-    handler: function bogusOid(prq) {
-        prq.done(varbind);
-    ;}
+agent.addProvider (scalarProvider);
+var tableProvider = {
+    name: "ifTable",
+    type: snmp.MibProviderType.Table,
+    oid: "1.3.6.1.2.1.2.2.1",
+    columns: [1, 2, 3],
+    index: [1],
+    handler: function ifTable (mibRequest) {
+        mibRequest.done ();
+    }
 };
-agent.addProvider (provider);
+agent.addProvider (tableProvider);
 
-// agent.mib.dump ();
+agent.mib.setScalarValue ("sysDescr", "Rage inside the machine!");
+agent.mib.addTableRow ("ifTable", [1, "eth0", 6]);
+
+agent.mib.dump (true, true);

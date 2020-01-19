@@ -127,6 +127,13 @@ var PrivProtocols = {
 
 _expandConstantObject (PrivProtocols);
 
+var MibProviderType = {
+	"1": "Scalar",
+	"2": "Table"
+};
+
+_expandConstantObject (MibProviderType);
+
 var Version1 = 0;
 var Version2c = 1;
 var Version3 = 3;
@@ -2682,14 +2689,24 @@ MibNode.prototype.isAncestor = function (address) {
 	return MibNode.oidIsDescended (address, this.address);
 };
 
-MibNode.prototype.dump = function () {
-	if ( this.handler ) {
-		console.log(this.oid + " [" + this.handler.name + "]");
+MibNode.prototype.getAncestorProvider = function () {
+	if ( this.provider ) {
+		return this;
+	} else if ( ! this.parent ) {
+		return null;
 	} else {
-		console.log(this.oid);
+		return this.parent.getAncestorProvider ();
+	}
+};
+
+MibNode.prototype.dump = function (leavesOnly, showProviders) {
+	if ( ( ! leavesOnly || showProviders ) && ( this.provider && this.provider.handler ) ) {
+		console.log (this.oid + " [" + MibProviderType[this.provider.type] + ": " + this.provider.name + "]");
+	} else if ( ( ! leavesOnly ) || Object.keys (this.children).length == 0 ) {
+		console.log (this.oid);
 	}
 	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
-		this.children[node].dump ();
+		this.children[node].dump (leavesOnly, showProviders);
 	}
 };
 
@@ -2713,14 +2730,19 @@ MibNode.oidIsDescended = function (oid, ancestor) {
 
 var Mib = function () {
 	this.root = new MibNode ([], null);
+	this.providerNodes = {};
 };
 
-Mib.prototype.add = function add (oidString) {
+Mib.prototype.addNodesForOid = function (oidString) {
+	var address = Mib.convertOidToAddress (oidString);
+	return this.addNodesForAddress (address);
+};
+
+Mib.prototype.addNodesForAddress = function (address) {
 	var address;
 	var node;
 	var i;
 
-	address = Mib.convertOidToAddress (oidString);
 	node = this.root;
 
 	for (i = 0; i < address.length; i++) {
@@ -2741,8 +2763,9 @@ Mib.prototype.lookup = function (oid) {
 	address = Mib.convertOidToAddress (oid);
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
-		if ( ! node.children.hasOwnProperty (address[i]))
-			break;
+		if ( ! node.children.hasOwnProperty (address[i])) {
+			return null
+		}
 		node = node.children[address[i]];
 	}
 
@@ -2786,13 +2809,93 @@ Mib.prototype.nextMatch = function (arg) {
 	});
 };
 
-Mib.prototype.addProvider = function (provider) {
-	node = this.lookup (provider.oid);
-	node.handler = provider.handler;
+Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
+	if ( instanceNode.provider ) {
+		// error
+		return;
+	}
+	return instanceNode.getAncestorProvider ();
 };
 
-Mib.prototype.dump = function () {
-	this.root.dump ();
+Mib.prototype.addProvider = function (provider) {
+	var node = this.addNodesForOid (provider.oid);
+
+	node.provider = provider;
+	if ( provider.type == MibProviderType.Scalar ) {
+		node.scalar = provider.scalar;
+	} else {
+		if ( ! provider.index ) {
+			provider.index = [1];
+		}
+	}
+	this.providerNodes[provider.name] = node;
+};
+
+Mib.prototype.deleteProvider = function (name) {
+	var providerNode = this.providerNodes[name];
+	if ( providerNode ) {
+		if ( providerNode.provider ) {
+			delete providerNode.provider;
+		}
+		delete this.providerNodes[name];
+	}
+};
+
+Mib.prototype.getProvider = function (name) {
+	return this.providerNodes[name];
+};
+
+Mib.prototype.getProviders = function () {
+	return this.providerNodes;
+};
+
+Mib.prototype.getScalarValue = function (scalar) {
+	var providerNode = this.providerNodes[scalarName];
+	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
+		// error callback
+		return;
+	}
+	var instanceAddress = providerNode.address.concat ([0]);
+	if ( ! this.lookup (instanceAddress) ) {
+		// error callback
+		return;
+	}
+	var instanceNode = this.lookup (instanceAddress);
+	return instanceNode.value;
+};
+
+Mib.prototype.setScalarValue = function (scalarName, newValue) {
+	var providerNode = this.providerNodes[scalarName];
+	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
+		// error callback
+		return;
+	}
+	var instanceAddress = providerNode.address.concat ([0]);
+	if ( ! this.lookup (instanceAddress) ) {
+		this.addNodesForAddress (instanceAddress);
+	}
+	var instanceNode = this.lookup (instanceAddress);
+	instanceNode.value = newValue;
+};
+
+Mib.prototype.addTableRow = function (table, row) {
+	var providerNode = this.providerNodes[table];
+	var provider = providerNode.provider;
+	var instance = [];
+	if ( provider.type != MibProviderType.Table ) {
+		// throw new Error
+		return;
+	}
+	for ( var indexPart of provider.index ) {
+		instance.push(row[provider.columns.indexOf(indexPart)]);
+	}
+	for ( var column of providerNode.provider.columns ) {
+		this.addNodesForAddress (providerNode.address.concat(column).concat(instance));
+	}
+}
+
+Mib.prototype.dump = function (leavesOnly, showProviders) {
+	this.root.dump (leavesOnly, showProviders);
 };
 
 Mib.convertOidToAddress = function (oid) {
@@ -2856,16 +2959,18 @@ Mib.convertOidToAddress = function (oid) {
 
 };
 
-var ProviderRequest = function (op, oidString, node, iterate) {
-	this.op = op;
-	this.address = Mib.convertOidToAddress(oidString);
-	this.oid = this.address.join('.');
-	this.node = node;
-	this.iterate = iterate || 1;
+var MibRequest = function (requestDefinition) {
+	this.operation = requestDefinition.operation;
+	this.address = Mib.convertOidToAddress (requestDefinition.oid);
+	this.oid = this.address.join ('.');
+	this.providerNode = requestDefinition.providerNode;
+	this.instanceNode = requestDefinition.instanceNode;
+	this.iterate = requestDefinition.iterate || 1;
+};
 
-	if (node && node.isAncestor(this.address)) {
-		this.instance = this.address.slice(node.address.length, this.address.length);
-	}
+MibRequest.prototype.isScalar = function () {
+	return this.providerNode && this.providerNode.provider &&
+		this.providerNode.provider.type == MibProviderType.Scalar;
 };
 
 var Agent = function (options, callback) {
@@ -2883,14 +2988,6 @@ Agent.prototype.getAuthorizer = function () {
 };
 
 Agent.prototype.addProvider = function (provider) {
-	node = this.mib.add (provider.oid);
-
-	if (provider.columns) {
-		for ( column of provider.columns ) {
-			node = this.mib.add (provider.oid + '.' + column);
-		};
-	}
-
 	this.mib.addProvider (provider);
 };
 
@@ -2935,34 +3032,59 @@ Agent.prototype.get = function (requestMessage, rinfo) {
 	var me = this;
 	var varbindsLength = requestMessage.pdu.varbinds.length;
 	var varbindsCompleted = 0;
-	var responsePdu = requestMessage.pdu.getResponsePduForRequest();
+	var responsePdu = requestMessage.pdu.getResponsePduForRequest ();
 
 	for ( var i = 0; i < requestMessage.pdu.varbinds.length; i++ ) {
 		var varbind = requestMessage.pdu.varbinds[i];
-		var node = this.mib.lookup(varbind.oid);
-		var prq = new ProviderRequest(requestMessage.pdu.type, varbind.oid, node);
+		var instanceNode = this.mib.lookup (varbind.oid);
+		var providerNode;
+		var mibRequest;
 		var handler;
 
-		if ( ! node ) {
-			handler = function getNsoHandler(prqForNso) {
-				var nsoVarbind = {
-					oid: pr.oid,
-					type: ObjectType.Null,
-					value: null
-				}
-				prqForNso.done(nsoVarbind);
+		if ( ! instanceNode ) {
+			mibRequest = new MibRequest ({
+				operation: requestMessage.pdu.type,
+				oid: varbind.oid
+			});
+			handler = function getNsoHandler (mibRequestForNso) {
+				mibRequestForNso.done ({
+					errorStatus: ErrorStatus.NoSuchName,
+					errorIndex: i
+				});
 			};
 		} else {
-			handler = node.handler;
+			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
+			mibRequest = new MibRequest ({
+				operation: requestMessage.pdu.type,
+				providerNode: providerNode,
+				instanceNode: instanceNode,
+				oid: varbind.oid
+			});
+			handler = providerNode.provider.handler;
 		}
 
-		prq.done = function (responseVarbind) {
-			me.setSingleVarbind(responsePdu, i, responseVarbind);
+		mibRequest.done = function (error) {
+			if ( error ) {
+				responsePdu.errorStatus = error.errorStatus;
+				responsePdu.errorIndex = error.errorIndex;
+				responseVarbind = {
+					oid: mibRequest.oid,
+					type: ObjectType.Null,
+					value: null
+				};
+			} else if ( mibRequest.isScalar() ) {
+				responseVarbind = {
+					oid: mibRequest.oid,
+					type: mibRequest.providerNode.provider.valueType,
+					value: mibRequest.instanceNode.value
+				};
+			}
+			me.setSingleVarbind (responsePdu, i, responseVarbind);
 			if ( ++varbindsCompleted == varbindsLength) {
-				me.sendResponse.call(me, rinfo, requestMessage, responsePdu);
+				me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
 			}
 		};
-		handler (prq);
+		handler (mibRequest);
 	};
 };
 
@@ -3020,6 +3142,7 @@ exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
 exports.PduType = PduType;
+exports.MibProviderType = MibProviderType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;
