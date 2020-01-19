@@ -14,7 +14,7 @@ var callback = function (error, data) {
     if ( error ) {
         console.error (error);
     } else {
-        console.log (JSON.stringify(data, null, 2));
+        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
     }
 };
 
@@ -44,7 +44,7 @@ var scalarProvider = {
     name: "sysDescr",
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
-    valueType: snmp.ObjectType.OctetString,
+    scalarType: snmp.ObjectType.OctetString,
     handler: function sysDescr (mibRequest) {
         mibRequest.done ();
     }
@@ -54,7 +54,23 @@ var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
-    columns: [1, 2, 3],
+    columns: [
+        {
+            number: 1,
+            name: "ifIndex",
+            type: snmp.ObjectType.Integer
+        },
+        {
+            number: 2,
+            name: "ifDescr",
+            type: snmp.ObjectType.OctetString
+        },
+        {
+            number: 3,
+            name: "ifType",
+            type: snmp.ObjectType.Integer
+        }
+    ],
     index: [1],
     handler: function ifTable (mibRequest) {
         mibRequest.done ();
@@ -63,6 +79,22 @@ var tableProvider = {
 agent.addProvider (tableProvider);
 
 agent.mib.setScalarValue ("sysDescr", "Rage inside the machine!");
-agent.mib.addTableRow ("ifTable", [1, "eth0", 6]);
+//agent.mib.setScalarValue ("sysLocation", "Stuck in the middle with you");
+agent.mib.addTableRow ("ifTable", [1, "lo", 24]);
+agent.mib.addTableRow ("ifTable", [2, "eth0", 6]);
 
-agent.mib.dump (true, true);
+agent.mib.dump ({
+    leavesOnly: false,
+    showProviders: true,
+    showValues: true,
+    showTypes: true
+});
+
+// var data = agent.mib.getTableColumnDefinitions("ifTable");
+// var data = agent.mib.getTableCells("ifTable", true);
+// var data = agent.mib.getTableColumnCells("ifTable", 2);
+// var data = agent.mib.getTableRowCells("ifTable", [1]);
+// agent.mib.setTableSingleCell("ifTable", 2, [2], "changed!");
+var data = agent.mib.getTableSingleCell("ifTable", 2, [2]);
+
+console.log(JSON.stringify(data, null, 2));

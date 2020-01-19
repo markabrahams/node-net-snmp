@@ -2699,14 +2699,60 @@ MibNode.prototype.getAncestorProvider = function () {
 	}
 };
 
-MibNode.prototype.dump = function (leavesOnly, showProviders) {
-	if ( ( ! leavesOnly || showProviders ) && ( this.provider && this.provider.handler ) ) {
+MibNode.prototype.getInstanceNodeForTableRow = function () {
+	var childCount = Object.keys (this.children).length;
+	if ( childCount == 0 ) {
+		if ( this.value ) {
+			return this;
+		} else {
+			return null;
+		}
+	} else if ( childCount == 1 ) {
+		return this.children[0].getInstanceNodeForTableRow();
+	} else if ( childCount > 1 ) {
+		return null;
+	}
+};
+
+MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
+	var childCount = Object.keys (this.children).length;
+	if ( childCount == 0 ) {
+		if ( this.value ) {
+			return this;
+		} else {
+			// not found
+			return null;
+		}
+	} else if ( childCount > 1 ) {
+		if ( index.length == 0 ) {
+			return this.getInstanceNodeForTableRow();
+		} else {
+			var nextChildIndexPart = index[0];
+			if ( ! nextChildIndexPart ) {
+				return null;
+			}
+			remainingIndex = index.slice(1);
+			return this.children[nextChildIndexPart].getInstanceNodeForTableRowIndex(remainingIndex);
+		}
+	}
+};
+
+MibNode.prototype.dump = function (options) {
+	var valueString;
+	if ( ( ! options.leavesOnly || options.showProviders ) && ( this.provider && this.provider.handler ) ) {
 		console.log (this.oid + " [" + MibProviderType[this.provider.type] + ": " + this.provider.name + "]");
-	} else if ( ( ! leavesOnly ) || Object.keys (this.children).length == 0 ) {
-		console.log (this.oid);
+	} else if ( ( ! options.leavesOnly ) || Object.keys (this.children).length == 0 ) {
+		if ( this.value ) {
+			valueString = " = ";
+			valueString += options.showTypes ? ObjectType[this.valueType] + ": " : "";
+			valueString += options.showValues ? this.value : "";
+		} else {
+			valueString = "";
+		}
+		console.log (this.oid + valueString);
 	}
 	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
-		this.children[node].dump (leavesOnly, showProviders);
+		this.children[node].dump (options);
 	}
 };
 
@@ -2821,9 +2867,7 @@ Mib.prototype.addProvider = function (provider) {
 	var node = this.addNodesForOid (provider.oid);
 
 	node.provider = provider;
-	if ( provider.type == MibProviderType.Scalar ) {
-		node.scalar = provider.scalar;
-	} else {
+	if ( provider.type == MibProviderType.Table ) {
 		if ( ! provider.index ) {
 			provider.index = [1];
 		}
@@ -2866,36 +2910,149 @@ Mib.prototype.getScalarValue = function (scalar) {
 
 Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	var providerNode = this.providerNodes[scalarName];
+	var instanceNode;
+	
 	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
 		// error callback
 		return;
 	}
 	var instanceAddress = providerNode.address.concat ([0]);
-	if ( ! this.lookup (instanceAddress) ) {
+	instanceNode = this.lookup (instanceAddress);
+	if ( ! instanceNode ) {
 		this.addNodesForAddress (instanceAddress);
+		instanceNode = this.lookup (instanceAddress);
+		instanceNode.valueType = providerNode.provider.scalarType;
 	}
-	var instanceNode = this.lookup (instanceAddress);
 	instanceNode.value = newValue;
 };
 
-Mib.prototype.addTableRow = function (table, row) {
-	var providerNode = this.providerNodes[table];
-	var provider = providerNode.provider;
-	var instance = [];
-	if ( provider.type != MibProviderType.Table ) {
-		// throw new Error
-		return;
-	}
-	for ( var indexPart of provider.index ) {
-		instance.push(row[provider.columns.indexOf(indexPart)]);
-	}
-	for ( var column of providerNode.provider.columns ) {
-		this.addNodesForAddress (providerNode.address.concat(column).concat(instance));
-	}
-}
+Mib.prototype.getProviderNodeForTable = function (table) {
+	var providerNode;
+	var provider;
 
-Mib.prototype.dump = function (leavesOnly, showProviders) {
-	this.root.dump (leavesOnly, showProviders);
+	providerNode = this.providerNodes[table];
+	if ( ! providerNode ) {
+		throw new ReferenceError ("No MIB provider registered for " + table);
+	}
+	provider = providerNode.provider;
+	if ( ! providerNode ) {
+		throw new ReferenceError ("No MIB provider definition for registered provider " + table);
+	}
+	if ( provider.type != MibProviderType.Table ) {
+		throw new TypeError ("Registered MIB provider " + table +
+			" is not of the correct type (is type " + MibProviderType[provider.type] + ")");
+	}
+	return providerNode;
+};
+
+Mib.prototype.addTableRow = function (table, row) {
+	var providerNode;
+	var provider;
+	var instance = [];
+	var instanceAddress;
+	var instanceNode;
+
+	providerNode = this.getProviderNodeForTable (table);
+	provider = providerNode.provider;
+	for ( var indexPart of provider.index ) {
+		columnPosition = provider.columns.findIndex (column => column.number == indexPart);
+		instance.push(row[columnPosition]);
+	}
+	for ( var i = 0; i < providerNode.provider.columns.length ; i++ ) {
+		var column = providerNode.provider.columns[i];
+		instanceAddress = providerNode.address.concat(column.number).concat(instance);
+		this.addNodesForAddress (instanceAddress);
+		instanceNode = this.lookup (instanceAddress);
+		instanceNode.valueType = column.type;
+		instanceNode.value = row[i];
+	}
+};
+
+Mib.prototype.getTableColumnDefinitions = function (table) {
+	var providerNode;
+	var provider;
+
+	providerNode = this.getProviderNodeForTable (table);
+	provider = providerNode.provider;
+	return provider.columns;
+};
+
+Mib.prototype.getTableColumnCells = function (table, columnNumber) {
+	providerNode = this.getProviderNodeForTable (table);
+	columnNode = providerNode.children[columnNumber];
+	column = []
+	for ( var row of Object.keys (columnNode.children) ) {
+		instanceNode = columnNode.children[row].getInstanceNodeForTableRow ();
+		column.push (instanceNode.value);
+	}
+	return column;
+};
+
+Mib.prototype.getTableCells = function (table, byRows) {
+	var providerNode;
+	var columnNode;
+	var data = [];
+
+	providerNode = this.getProviderNodeForTable (table);
+	for ( var columnNumber of Object.keys (providerNode.children) ) {
+		columnNode = providerNode.children[columnNumber];
+		column = [];
+		data.push(column);
+		for ( var row of Object.keys (columnNode.children) ) {
+			instanceNode = columnNode.children[row].getInstanceNodeForTableRow ();
+			column.push (instanceNode.value);
+		}
+	}
+
+	if ( byRows ) {
+		return Object.keys (data[0]).map (function (c) {
+			return data.map (function (r) { return r[c]; });
+		});
+	} else {
+		return data;
+	}
+	
+};
+
+Mib.prototype.getTableRowCells = function (table, rowIndex) {
+	var providerNode;
+	var columnNode;
+	var instanceNode;
+	var row = [];
+
+	providerNode = this.getProviderNodeForTable (table);
+	for ( var columnNumber of Object.keys (providerNode.children) ) {
+		columnNode = providerNode.children[columnNumber];
+		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+		row.push (instanceNode.value);
+	}
+	return row;
+};
+
+Mib.prototype.getTableSingleCell = function (table, columnNumber, rowIndex) {
+	var providerNode;
+	var columnNode;
+	var instanceNode;
+
+	providerNode = this.getProviderNodeForTable (table);
+	columnNode = providerNode.children[columnNumber];
+	instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+	return instanceNode.value;
+};
+
+Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, value) {
+	var providerNode;
+	var columnNode;
+	var instanceNode;
+
+	providerNode = this.getProviderNodeForTable (table);
+	columnNode = providerNode.children[columnNumber];
+	instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+	instanceNode.value = value;
+};
+
+Mib.prototype.dump = function (dumpOptions) {
+	this.root.dump (dumpOptions);
 };
 
 Mib.convertOidToAddress = function (oid) {
@@ -2971,6 +3128,11 @@ var MibRequest = function (requestDefinition) {
 MibRequest.prototype.isScalar = function () {
 	return this.providerNode && this.providerNode.provider &&
 		this.providerNode.provider.type == MibProviderType.Scalar;
+};
+
+MibRequest.prototype.isTabular = function () {
+	return this.providerNode && this.providerNode.provider &&
+		this.providerNode.provider.type == MibProviderType.Table;
 };
 
 var Agent = function (options, callback) {
@@ -3072,10 +3234,11 @@ Agent.prototype.get = function (requestMessage, rinfo) {
 					type: ObjectType.Null,
 					value: null
 				};
-			} else if ( mibRequest.isScalar() ) {
+			//} else if ( mibRequest.isScalar() ) {
+			} else {
 				responseVarbind = {
 					oid: mibRequest.oid,
-					type: mibRequest.providerNode.provider.valueType,
+					type: mibRequest.instanceNode.valueType,
 					value: mibRequest.instanceNode.value
 				};
 			}
