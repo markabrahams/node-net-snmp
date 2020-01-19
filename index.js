@@ -3218,7 +3218,6 @@ Agent.prototype.addProvider = function (provider) {
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
-	var responseMessage;
 	var reportMessage;
 
 	if ( ! message ) {
@@ -3228,12 +3227,13 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	// SNMPv3 discovery
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
-		reportMessage = message.createReportResponseMessage (this.engine.engineID, this.engine.engineBoots, this.engine.engineTime, this.context);
+		reportMessage = message.createReportResponseMessage (this.engine.engineID,
+			this.engine.engineBoots, this.engine.engineTime, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
 	}
 
-	// Get processing
+	// Request processing
 	debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.GetRequest ) {
 		responseMessage = this.request (message, rinfo);
@@ -3241,12 +3241,13 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 		responseMessage = this.request (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetNextRequest ) {
 		responseMessage = this.getNextRequest (message, rinfo);
+	} else if ( message.pdu.type == PduType.GetBulkRequest ) {
+		responseMessage = this.getBulkRequest (message, rinfo);
 	} else {
-		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
+		this.callback (new RequestInvalidError ("Unexpected PDU type " +
+			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
 
-	// this.callback (null, Listener.formatCallbackData (responseMessage.pdu, rinfo) );
-	// this.listener.send (responseMessage, rinfo);
 };
 
 Agent.prototype.request = function (requestMessage, rinfo) {
@@ -3319,40 +3320,76 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	};
 };
 
+Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
+	var startNode = this.mib.lookup (startOid);
+	var getNextNode;
+
+	if ( ! startNode ) {
+		// Off-tree start specified
+		targetVarbinds.push ({
+			oid: requestVarbind.oid,
+			type: ObjectType.Null,
+			value: null
+		});
+	} else {
+		getNextNode = startNode.getNextInstanceNode();
+		if ( ! getNextNode ) {
+			// End of MIB
+			targetVarbinds.push ({
+				oid: requestVarbind.oid,
+				type: ObjectType.EndOfMibView,
+				value: null
+			});
+		} else {
+			// Normal response
+			targetVarbinds.push ({
+				oid: getNextNode.oid,
+				type: getNextNode.valueType,
+				value: getNextNode.value
+			});
+		}
+	}
+	return getNextNode;
+};
+
 Agent.prototype.getNextRequest = function (requestMessage, rinfo) {
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
 	var getNextVarbinds = [];
 
 	for (var i = 0 ; i < varbindsLength ; i++ ) {
-		requestVarbind = requestPdu.varbinds[i];
-		startNode = this.mib.lookup (requestVarbind.oid);
-		if ( ! startNode ) {
-			getNextVarbinds.push ({
-				oid: requestVarbind.oid,
-				type: ObjectType.Null,
-				value: null
-			});
-		} else {
-			getNextNode = startNode.getNextInstanceNode();
-			if ( ! getNextNode ) {
-				// End of MIB
-				getNextVarbinds.push ({
-					oid: requestVarbind.oid,
-					type: ObjectType.EndOfMibView,
-					value: null
-				});
-			} else {
-				getNextVarbinds.push ({
-					oid: getNextNode.oid,
-					type: getNextNode.valueType,
-					value: getNextNode.value
-				});
+		this.addGetNextVarbind (getNextVarbinds, requestPdu.varbinds[i].oid);
+	}
+
+	requestMessage.pdu.varbinds = getNextVarbinds;
+	this.request (requestMessage, rinfo);
+};
+
+Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
+	var requestPdu = requestMessage.pdu;
+	var requestVarbinds = requestPdu.varbinds;
+	var getBulkVarbinds = [];
+	var startOid = [];
+	var getNextNode;
+
+	for (var n = 0 ; n < requestPdu.nonRepeaters ; n++ ) {
+		this.addGetNextVarbind (getBulkVarbinds, requestVarbinds[n].oid);
+	}
+
+	for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
+		startOid.push (requestVarbinds[v].oid);
+	}
+
+	for (var r = 0 ; r < requestPdu.maxRepetitions ; r++ ) {
+		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
+			getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
+			if ( getNextNode ) {
+				startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
 			}
 		}
 	}
 
-	requestMessage.pdu.varbinds = getNextVarbinds;
+	requestMessage.pdu.varbinds = getBulkVarbinds;
 	this.request (requestMessage, rinfo);
 };
 
