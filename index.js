@@ -550,6 +550,12 @@ var SetRequestPdu = function () {
 
 util.inherits (SetRequestPdu, SimplePdu);
 
+SetRequestPdu.createFromBuffer = function (reader) {
+	var pdu = new SetRequestPdu ();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
 var TrapPdu = function () {
 	this.type = PduType.Trap;
 };
@@ -717,6 +723,8 @@ var readPdu = function (reader, scoped) {
 		pdu = InformRequestPdu.createFromBuffer (reader);
 	} else if (type == PduType.GetRequest ) {
 		pdu = GetRequestPdu.createFromBuffer (reader);
+	} else if (type == PduType.SetRequest ) {
+		pdu = SetRequestPdu.createFromBuffer (reader);
 	} else {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
 				+ "' in response");
@@ -3173,7 +3181,9 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	// Get processing
 	debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.GetRequest ) {
-		responseMessage = this.get (message, rinfo);
+		responseMessage = this.request (message, rinfo);
+	} else if ( message.pdu.type == PduType.SetRequest ) {
+		responseMessage = this.request (message, rinfo);
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
@@ -3190,23 +3200,24 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	// this.listener.send (responseMessage, rinfo);
 };
 
-Agent.prototype.get = function (requestMessage, rinfo) {
+Agent.prototype.request = function (requestMessage, rinfo) {
 	var me = this;
-	var varbindsLength = requestMessage.pdu.varbinds.length;
 	var varbindsCompleted = 0;
-	var responsePdu = requestMessage.pdu.getResponsePduForRequest ();
+	var requestPdu = requestMessage.pdu;
+	var varbindsLength = requestPdu.varbinds.length;
+	var responsePdu = requestPdu.getResponsePduForRequest ();
 
-	for ( var i = 0; i < requestMessage.pdu.varbinds.length; i++ ) {
-		var varbind = requestMessage.pdu.varbinds[i];
-		var instanceNode = this.mib.lookup (varbind.oid);
+	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
+		var requestVarbind = requestPdu.varbinds[i];
+		var instanceNode = this.mib.lookup (requestVarbind.oid);
 		var providerNode;
 		var mibRequest;
 		var handler;
 
 		if ( ! instanceNode ) {
 			mibRequest = new MibRequest ({
-				operation: requestMessage.pdu.type,
-				oid: varbind.oid
+				operation: requestPdu.type,
+				oid: requestVarbind.oid
 			});
 			handler = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
@@ -3217,10 +3228,10 @@ Agent.prototype.get = function (requestMessage, rinfo) {
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
 			mibRequest = new MibRequest ({
-				operation: requestMessage.pdu.type,
+				operation: requestPdu.type,
 				providerNode: providerNode,
 				instanceNode: instanceNode,
-				oid: varbind.oid
+				oid: requestVarbind.oid
 			});
 			handler = providerNode.provider.handler;
 		}
@@ -3234,8 +3245,10 @@ Agent.prototype.get = function (requestMessage, rinfo) {
 					type: ObjectType.Null,
 					value: null
 				};
-			//} else if ( mibRequest.isScalar() ) {
 			} else {
+				if ( requestPdu.type == PduType.SetRequest ) {
+					mibRequest.instanceNode.value = requestVarbind.value;
+				}
 				responseVarbind = {
 					oid: mibRequest.oid,
 					type: mibRequest.instanceNode.valueType,
