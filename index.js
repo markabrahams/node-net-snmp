@@ -423,6 +423,9 @@ function writeVarbinds (buffer, varbinds) {
 				buffer.writeBuffer (value, ObjectType.Opaque);
 			} else if (type == ObjectType.Counter64) {
 				writeUint64 (buffer, value);
+			} else if (type == ObjectType.EndOfMibView ) {
+				buffer.writeByte (130);
+				buffer.writeByte (0);
 			} else {
 				throw new RequestInvalidError ("Unknown type '" + type
 						+ "' in request");
@@ -504,12 +507,24 @@ var GetBulkRequestPdu = function () {
 
 util.inherits (GetBulkRequestPdu, SimplePdu);
 
+GetBulkRequestPdu.createFromBuffer = function (reader) {
+	var pdu = new GetBulkRequestPdu ();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
+
 var GetNextRequestPdu = function () {
 	this.type = PduType.GetNextRequest;
 	GetNextRequestPdu.super_.apply (this, arguments);
 };
 
 util.inherits (GetNextRequestPdu, SimplePdu);
+
+GetNextRequestPdu.createFromBuffer = function (reader) {
+	var pdu = new GetNextRequestPdu ();
+	pdu.initializeFromBuffer (reader);
+	return pdu;
+};
 
 var GetRequestPdu = function () {
 	this.type = PduType.GetRequest;
@@ -725,6 +740,10 @@ var readPdu = function (reader, scoped) {
 		pdu = GetRequestPdu.createFromBuffer (reader);
 	} else if (type == PduType.SetRequest ) {
 		pdu = SetRequestPdu.createFromBuffer (reader);
+	} else if (type == PduType.GetNextRequest ) {
+		pdu = GetNextRequestPdu.createFromBuffer (reader);
+	} else if (type == PduType.GetBulkRequest ) {
+		pdu = GetBulkRequestPdu.createFromBuffer (reader);
 	} else {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
 				+ "' in response");
@@ -2745,6 +2764,42 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 	}
 };
 
+MibNode.prototype.getNextInstanceNode = function () {
+
+	node = this;
+	if ( this.value ) {
+		// Need upwards traversal first
+		node = this;
+		while ( node ) {
+			siblingIndex = node.address.slice(-1)[0];
+			node = node.parent;
+			if ( ! node ) {
+				// end of MIB
+				return null;
+			} else {
+				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
+				siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
+				if ( siblingPosition + 1 < childrenAddresses.length ) {
+					node = node.children[childrenAddresses[siblingPosition + 1]];
+					break;
+				}
+			}
+		}
+	}
+	// Descent
+	while ( node ) {
+		if ( node.value ) { 
+			return node;
+		}
+		childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
+		node = node.children[childrenAddresses[0]];
+		if ( ! node ) {
+			// unexpected 
+			return null;
+		}
+	}
+};
+
 MibNode.prototype.dump = function (options) {
 	var valueString;
 	if ( ( ! options.leavesOnly || options.showProviders ) && ( this.provider && this.provider.handler ) ) {
@@ -3184,14 +3239,8 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 		responseMessage = this.request (message, rinfo);
 	} else if ( message.pdu.type == PduType.SetRequest ) {
 		responseMessage = this.request (message, rinfo);
-	} else if ( message.pdu.type == PduType.InformRequest ) {
-		message.pdu.type = PduType.GetResponse;
-		message.buffer = null;
-		message.user = user;
-		message.setReportable (false);
-		this.send (message, rinfo);
-		message.pdu.type = PduType.InformRequest;
-		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+	} else if ( message.pdu.type == PduType.GetNextRequest ) {
+		responseMessage = this.getNextRequest (message, rinfo);
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
@@ -3213,6 +3262,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var providerNode;
 		var mibRequest;
 		var handler;
+		var responseVarbindType;
 
 		if ( ! instanceNode ) {
 			mibRequest = new MibRequest ({
@@ -3249,9 +3299,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				if ( requestPdu.type == PduType.SetRequest ) {
 					mibRequest.instanceNode.value = requestVarbind.value;
 				}
+				if ( requestPdu.type == PduType.GetNextRequest && requestVarbind.type == ObjectType.EndOfMibView ) {
+					responseVarbindType = ObjectType.EndOfMibView;
+				} else {
+					responseVarbindType = mibRequest.instanceNode.valueType;
+				}
 				responseVarbind = {
 					oid: mibRequest.oid,
-					type: mibRequest.instanceNode.valueType,
+					type: responseVarbindType,
 					value: mibRequest.instanceNode.value
 				};
 			}
@@ -3262,6 +3317,43 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		};
 		handler (mibRequest);
 	};
+};
+
+Agent.prototype.getNextRequest = function (requestMessage, rinfo) {
+	var requestPdu = requestMessage.pdu;
+	var varbindsLength = requestPdu.varbinds.length;
+	var getNextVarbinds = [];
+
+	for (var i = 0 ; i < varbindsLength ; i++ ) {
+		requestVarbind = requestPdu.varbinds[i];
+		startNode = this.mib.lookup (requestVarbind.oid);
+		if ( ! startNode ) {
+			getNextVarbinds.push ({
+				oid: requestVarbind.oid,
+				type: ObjectType.Null,
+				value: null
+			});
+		} else {
+			getNextNode = startNode.getNextInstanceNode();
+			if ( ! getNextNode ) {
+				// End of MIB
+				getNextVarbinds.push ({
+					oid: requestVarbind.oid,
+					type: ObjectType.EndOfMibView,
+					value: null
+				});
+			} else {
+				getNextVarbinds.push ({
+					oid: getNextNode.oid,
+					type: getNextNode.valueType,
+					value: getNextNode.value
+				});
+			}
+		}
+	}
+
+	requestMessage.pdu.varbinds = getNextVarbinds;
+	this.request (requestMessage, rinfo);
 };
 
 Agent.prototype.setSingleVarbind = function (responsePdu, index, responseVarbind) {
