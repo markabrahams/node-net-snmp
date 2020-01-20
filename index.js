@@ -1222,15 +1222,15 @@ Message.prototype.hasAuthoritativeEngineID = function () {
 		this.msgSecurityParameters.msgAuthoritativeEngineID != "";
 };
 
-Message.prototype.createReportResponseMessage = function (engineID, engineBoots, engineTime, context) {
+Message.prototype.createReportResponseMessage = function (engine, context) {
 	var user = {
 		name: "",
 		level: SecurityLevel.noAuthNoPriv
 	};
 	var responseSecurityParameters = {
-		msgAuthoritativeEngineID: engineID,
-		msgAuthoritativeEngineBoots: engineBoots,
-		msgAuthoritativeEngineTime: engineTime,
+		msgAuthoritativeEngineID: engine.engineID,
+		msgAuthoritativeEngineBoots: engine.engineBoots,
+		msgAuthoritativeEngineTime: engine.engineTime,
 		msgUserName: user.name,
 		msgAuthenticationParameters: "",
 		msgPrivacyParameters: ""
@@ -2490,9 +2490,11 @@ Authorizer.prototype.deleteUser = function (userName) {
  ** Receiver class definition
  **/
 
-Receiver = function (options, callback) {
-	this.communities = [];
-	this.users = [];
+var Receiver = function (options, callback) {
+	DEBUG = options.debug;
+	this.listener = new Listener (options, this);
+	this.authorizer = new Authorizer ();
+	this.engine = new Engine (options.engineID);
 
 	this.engineBoots = 0;
 	this.engineTime = 10;
@@ -2501,109 +2503,50 @@ Receiver = function (options, callback) {
 	this.callback = callback;
 	this.family = options.transport || 'udp4';
 	this.port = options.port || 162;
+	options.port = this.port;
 	this.disableAuthorization = options.disableAuthorization || false;
-	if ( options.engineID ) {
-		this.engineID = Buffer.from (options.engineID, 'hex');
-	} else {
-		this.generateEngineID ();
-	}
 	this.context = (options && options.context) ? options.context : "";
-};
-
-Receiver.prototype.startListening = function () {
-	var me = this;
-
-	this.dgram = dgram.createSocket (this.family);
-	this.dgram.bind (this.port);
-	this.dgram.on ("message", me.onMsg.bind (me));
-
+	this.listener = new Listener (options, this);
 };
 
 Receiver.prototype.addCommunity = function (community) {
-	if ( this.getCommunity (community) ) {
-		return;
-	} else {
-		this.communities.push (community);
-	}
+	this.authorizer.addCommunity (community);
 };
 
 Receiver.prototype.getCommunity = function (community) {
-	return this.communities.filter( localCommunity => localCommunity == community )[0] || null;
+	return this.authorizer.getCommunity (community);
 };
 
 Receiver.prototype.getCommunities = function () {
-	return this.communities;
+	return this.authorizer.getCommunities ();
 };
 
 Receiver.prototype.deleteCommunity = function (community) {
-	var index = this.communities.indexOf(community);
-	if ( index > -1 ) {
-		this.communities.splice(index, 1);
-	}
+	this.authorizer.deleteCommunities (community);
 };
 
 Receiver.prototype.addUser = function (user) {
-	if ( this.getUser (user.name) ) {
-		this.deleteUser (user.name);
-	}
-	this.users.push (user);
+	this.authorizer.addUser (user);
 };
 
 Receiver.prototype.getUser = function (userName) {
-	return this.users.filter( localUser => localUser.name == userName )[0] || null;
+	return this.authorizer.getUser (userName);
 };
 
 Receiver.prototype.getUsers = function () {
-	return this.users;
+	return this.authorizer.getUsers ();
 };
 
 Receiver.prototype.deleteUser = function (userName) {
-	var index = this.users.findIndex(localUser => localUser.name == userName );
-	if ( index > -1 ) {
-		this.users.splice(index, 1);
-	}
+	this.authorizer.deleteUser (userName);
 };
 
-Receiver.prototype.generateEngineID = function() {
-	// generate a 17-byte engine ID in the following format:
-	// 0x80 + 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
-	this.engineID = Buffer.alloc (17);
-	this.engineID.fill ('8000B98380', 'hex', 0, 5);
-	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
-}
-
 Receiver.prototype.onMsg = function (buffer, rinfo) {
-	var message = Message.createFromBuffer (buffer);
-	var user;
-	var community;
+	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+	var reportMessage;
 
-	// Authorization
-	if ( message.version == Version3 ) {
-		user = this.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
-		message.disableAuthentication = this.disableAuthorization;
-		if ( ! user ) {
-			if ( message.msgSecurityParameters.msgUserName != "" && ! this.disableAuthorization ) {
-				this.callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
-				return;
-			} else if ( message.hasAuthentication () ) {
-				this.callback (new RequestFailedError ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
-				return;
-			} else {
-				user = {
-					name: "",
-					level: SecurityLevel.noAuthNoPriv
-				};
-			}
-		}
-		if ( ! message.processIncomingSecurity (user, this.callback) ) {
-			return;
-		}
-	} else {
-		community = this.communities.filter( localCommunity => localCommunity == message.community )[0];
-		if ( ! community && ! this.disableAuthorization ) {
-			this.callback (new RequestFailedError ("Local community not found for message with community " + message.community));
-			return;
-		}
+	if ( ! message ) {
+		return;
 	}
 
 	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
@@ -2618,8 +2561,8 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		var reportMessage = message.createReportResponseMessage (this.engineID, this.engineBoots, this.engineTime, this.context);
-		this.send (reportMessage, rinfo);
+		var reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		this.listener.send (reportMessage, rinfo);
 		return;
 	};
 
@@ -2630,9 +2573,8 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
-		message.user = user;
 		message.setReportable (false);
-		this.send (message, rinfo);
+		this.listener.send (message, rinfo);
 		message.pdu.type = PduType.InformRequest;
 		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
 	} else {
@@ -2652,31 +2594,13 @@ Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
 	};
 };
 
-Receiver.prototype.send = function (message, rinfo) {
-	var me = this;
-	
-	var buffer = message.toBuffer ();
-
-	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.address,
-			function (error, bytes) {
-		if (error) {
-			// me.callback (error);
-			console.error ("Error sending: " + error.message);
-		} else {
-			debug ("Receiver sent response message");
-		}
-	});
-	
-	return this;
-};
-
 Receiver.prototype.close  = function() {
-	this.dgram.close ();
+	this.listener.close ();
 };
 
 Receiver.create = function (options, callback) {
 	var receiver = new Receiver (options, callback);
-	receiver.startListening ();
+	receiver.listener.startListening ();
 	return receiver;
 };
 
@@ -3227,6 +3151,10 @@ var Agent = function (options, callback) {
 	this.context = "";
 };
 
+Agent.prototype.getMib = function () {
+	return this.mib;
+};
+
 Agent.prototype.getAuthorizer = function () {
 	return this.authorizer;
 };
@@ -3242,6 +3170,7 @@ Agent.prototype.deleteProvider = function (provider) {
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
 	var reportMessage;
+	var responseMessage;
 
 	if ( ! message ) {
 		return;
@@ -3250,8 +3179,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	// SNMPv3 discovery
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
-		reportMessage = message.createReportResponseMessage (this.engine.engineID,
-			this.engine.engineBoots, this.engine.engineTime, this.context);
+		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
 	}
