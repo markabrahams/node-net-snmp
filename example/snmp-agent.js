@@ -44,12 +44,9 @@ var scalarProvider = {
     name: "sysDescr",
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
-    scalarType: snmp.ObjectType.OctetString,
-    handler: function sysDescr (mibRequest) {
-        mibRequest.done ();
-    }
+    scalarType: snmp.ObjectType.OctetString
 };
-agent.addProvider (scalarProvider);
+agent.registerProvider (scalarProvider);
 var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
@@ -73,21 +70,22 @@ var tableProvider = {
     ],
     index: [1],
     handler: function ifTable (mibRequest) {
+        // e.g. can update the table before responding to the request here
         mibRequest.done ();
     }
 };
-agent.addProvider (tableProvider);
+agent.registerProvider (tableProvider);
 
 agent.mib.setScalarValue ("sysDescr", "Rage inside the machine!");
 //agent.mib.setScalarValue ("sysLocation", "Stuck in the middle with you");
 agent.mib.addTableRow ("ifTable", [1, "lo", 24]);
 agent.mib.addTableRow ("ifTable", [2, "eth0", 6]);
 // agent.mib.deleteTableRow ("ifTable", [2]);
-// agent.deleteProvider ("ifTable");
-// agent.deleteProvider ("sysDescr");
+// agent.unregisterProvider ("ifTable");
+// agent.unregisterProvider ("sysDescr");
 
 agent.mib.dump ({
-    leavesOnly: false,
+    leavesOnly: true,
     showProviders: true,
     showValues: true,
     showTypes: true

@@ -2404,14 +2404,17 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 
 	// Authorization
 	if ( message.version == Version3 ) {
-		message.user = authorizer.users.filter( localUser => localUser.name == message.msgSecurityParameters.msgUserName )[0];
+		message.user = authorizer.users.filter( localUser => localUser.name ==
+				message.msgSecurityParameters.msgUserName )[0];
 		message.disableAuthentication = authorizer.disableAuthorization;
 		if ( ! message.user ) {
 			if ( message.msgSecurityParameters.msgUserName != "" && ! authorizer.disableAuthorization ) {
-				callback (new RequestFailedError ("Local user not found for message with user " + message.msgSecurityParameters.msgUserName));
+				callback (new RequestFailedError ("Local user not found for message with user " +
+						message.msgSecurityParameters.msgUserName));
 				return;
 			} else if ( message.hasAuthentication () ) {
-				callback (new RequestFailedError ("Local user not found and message requires authentication with user " + message.msgSecurityParameters.msgUserName));
+				callback (new RequestFailedError ("Local user not found and message requires authentication with user " +
+						message.msgSecurityParameters.msgUserName));
 				return;
 			} else {
 				message.user = {
@@ -2747,7 +2750,7 @@ MibNode.prototype.pruneUpwards = function () {
 
 MibNode.prototype.dump = function (options) {
 	var valueString;
-	if ( ( ! options.leavesOnly || options.showProviders ) && ( this.provider && this.provider.handler ) ) {
+	if ( ( ! options.leavesOnly || options.showProviders ) && this.provider ) {
 		console.log (this.oid + " [" + MibProviderType[this.provider.type] + ": " + this.provider.name + "]");
 	} else if ( ( ! options.leavesOnly ) || Object.keys (this.children).length == 0 ) {
 		if ( this.value ) {
@@ -2834,10 +2837,6 @@ Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	return instanceNode.getAncestorProvider ();
 };
 
-Mib.prototype.addProvider = function (provider) {
-	this.providers[provider.name] = provider;
-};
-
 Mib.prototype.addProviderToNode = function (provider) {
 	var node = this.addNodesForOid (provider.oid);
 
@@ -2851,7 +2850,11 @@ Mib.prototype.addProviderToNode = function (provider) {
 	return node;
 };
 
-Mib.prototype.deleteProvider = function (name) {
+Mib.prototype.registerProvider = function (provider) {
+	this.providers[provider.name] = provider;
+};
+
+Mib.prototype.unregisterProvider = function (name) {
 	var providerNode = this.providerNodes[name];
 	if ( providerNode ) {
 		providerNodeParent = providerNode.parent;
@@ -2973,6 +2976,21 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber) {
 	return column;
 };
 
+Mib.prototype.getTableRowCells = function (table, rowIndex) {
+	var providerNode;
+	var columnNode;
+	var instanceNode;
+	var row = [];
+
+	providerNode = this.getProviderNodeForTable (table);
+	for ( var columnNumber of Object.keys (providerNode.children) ) {
+		columnNode = providerNode.children[columnNumber];
+		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+		row.push (instanceNode.value);
+	}
+	return row;
+};
+
 Mib.prototype.getTableCells = function (table, byRows) {
 	var providerNode;
 	var columnNode;
@@ -2997,21 +3015,6 @@ Mib.prototype.getTableCells = function (table, byRows) {
 		return data;
 	}
 	
-};
-
-Mib.prototype.getTableRowCells = function (table, rowIndex) {
-	var providerNode;
-	var columnNode;
-	var instanceNode;
-	var row = [];
-
-	providerNode = this.getProviderNodeForTable (table);
-	for ( var columnNumber of Object.keys (providerNode.children) ) {
-		columnNode = providerNode.children[columnNumber];
-		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
-		row.push (instanceNode.value);
-	}
-	return row;
 };
 
 Mib.prototype.getTableSingleCell = function (table, columnNumber, rowIndex) {
@@ -3057,8 +3060,17 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 	return row;
 };
 
-Mib.prototype.dump = function (dumpOptions) {
-	this.root.dump (dumpOptions);
+Mib.prototype.dump = function (options) {
+	if ( ! options ) {
+		options = {};
+	}
+	var completedOptions = {
+		leavesOnly: options.leavesOnly || true,
+		showProviders: options.leavesOnly || true,
+		showValues: options.leavesOnly || true,
+		showTypes: options.leavesOnly || true
+	};
+	this.root.dump (completedOptions);
 };
 
 Mib.convertOidToAddress = function (oid) {
@@ -3128,7 +3140,6 @@ var MibRequest = function (requestDefinition) {
 	this.oid = this.address.join ('.');
 	this.providerNode = requestDefinition.providerNode;
 	this.instanceNode = requestDefinition.instanceNode;
-	this.iterate = requestDefinition.iterate || 1;
 };
 
 MibRequest.prototype.isScalar = function () {
@@ -3159,12 +3170,20 @@ Agent.prototype.getAuthorizer = function () {
 	return this.authorizer;
 };
 
-Agent.prototype.addProvider = function (provider) {
-	this.mib.addProvider (provider);
+Agent.prototype.registerProvider = function (provider) {
+	this.mib.registerProvider (provider);
 };
 
-Agent.prototype.deleteProvider = function (provider) {
-	this.mib.deleteProvider (provider);
+Agent.prototype.unregisterProvider = function (provider) {
+	this.mib.unregisterProvider (provider);
+};
+
+Agent.prototype.getProvider = function (provider) {
+	return this.mib.getProvider (provider);
+};
+
+Agent.prototype.getProviders = function () {
+	return this.mib.getProviders ();
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -3267,7 +3286,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
 			}
 		};
-		handler (mibRequest);
+		if ( handler ) {
+			handler (mibRequest);
+		} else {
+			mibRequest.done ();
+		}
 	};
 };
 

@@ -40,7 +40,7 @@ and send SNMP traps or informs:
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
 [npm]: https://npmjs.org/ "npm"
 
-# Functionality
+# Applications
 
 RFC 3413 describes five types of SNMP applications:
 
@@ -50,23 +50,29 @@ RFC 3413 describes five types of SNMP applications:
  4. Notification Receiver Applications &mdash; which receive notifications (traps or informs)
  5. Proxy Forwarder Applications &mdash; which forward SNMP messages
 
-This library provides an API for (1) and (3) in the section
-[Using This Module: Command & Notification Generator](#using-this-module:-command-&-notification-generator),
-and an API for (4) in the section [Using This Module: Notification Receiver](#using-this-module:-notification-receiver).
-It does not provide support for (2) &mdash; traditionally known as "SNMP agents" &mdash; nor for (5).
+This library provides support for the above applications according to this table:
 
-Features:
+| Application | Common Use | Supported | Documentation |
+| ----------- | ---------- | --------- | ------------- |
+| Command Generator Applications | NMS / SNMP tools | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Command Responder Applications | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
+| Notification Originator Applications | SNMP agents / NMS-to-NMS notifications | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Notification Receiver Applications | NMS | yes | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
+| Proxy Forwarder Applications | SNMP agents | no | |
+
+# Features
+
  * Support for all SNMP versions: SNMPv1, SNMPv2c and SNMPv3
  * SNMPv3 message authentication using MD5 and SHA, and DES encryption
  * Community-based and user-based authorization
- * SNMP initiator for these protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
+ * SNMP initiator for all relevant protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
  * Convenience methods for MIB "walking", subtree collection, table and table column collection
+ * Notification receiver for traps and informs
+ * SNMP agent with MIB management for both scalar and tabular data
  * SNMPv3 context support
- * SNMP receiver for traps and informs
  * IPv4 and IPv6
 
 Not implemented, but on the roadmap:
- * SNMP agent (Command Responder Application)
  * AgentX ([RFC 2741][AgentX])
 
 Not implemented, but further down the priority list:
@@ -1272,27 +1278,9 @@ The library provides a `Receiver` class for receiving SNMP notifications. This
 module exports the `createReceiver()` function, which creates a new `Receiver`
 instance.
 
-The receiver maintains an authorization list of SNMP communities (for v1 and v2c
-notifications) and also an authorization list of SNMP users (for v3 notifications).
-These lists are used to authorize notification access to the receiver, and to store
-security protocol and key settings.  RFC 3414 terms the user list as the the
-"usmUserTable" stored in the receiver's "Local Configuration Database".
-
-If a v1 or v2c notification is received with a community that is not in the
-receiver's community authorization list, the receiver will not accept the notification,
-instead returning a error of class `RequestFailedError` to the supplied callback
-function.  Similarly, if a v3 notification is received with a user whose name is
-not in the receiver's user authorization list, the receiver will return a
-`RequestFailedError`.  If the `disableAuthorization` option is supplied for the
-receiver on start-up, then these local authorization list checks are disabled for
-community notifications and noAuthNoPriv user notifications.  Note that even with
-this setting, the user list is *still checked* for authNoPriv and authPriv notifications,
-as the library still requires access to the correct keys for the message authentication
-and encryption operations, and these keys are stored against a user in the user
-authorization list.
-
-The API allows the receiver's community authorization and user authorization lists
-to be managed with adds, queries and deletes.
+The receiver creates an `Authorizer` instance to control incoming access.  More
+detail on this is found below in the [Authorizer Module](#authorizer-module) section
+below.
 
 ## snmp.createReceiver (options, callback)
 
@@ -1317,10 +1305,15 @@ class:
 
     receiver = snmp.createReceiver (options, callback);
 
+Note that binding to the default port (162) on some systems requires the receiver process
+to be run with administrative privilege.  If this is not possible
+
 The `options` and `callback` parameters are mandatory.  The `options` parameter is
 an object, possibly empty, and can contain the following fields:
 
- * `port` - the port to list for notifications on - defaults to 162
+ * `port` - the port to listen for notifications on - defaults to 162.  Note that binding to
+ port 162 on some systems requires the receiver process to be run with administrative
+ privilege.  If this is not possible then choose a port greater than 1024.
  * `disableAuthorization` - disables local authorization for all community-based
  notifications received and for those user-based notifications received with no
  message authentication or privacy (noAuthNoPriv) - defaults to false
@@ -1361,32 +1354,138 @@ in the `rinfo` field.  For example:
         }
     }
 
-When a receiver is no longer required, it can be closed, which will stop it
-from listening on its notification port:
+## receiver.getAuthorizer ()
 
-    receiver.close ();
+Returns the receiver's `Authorizer` instance, used to control access
+to the receiver.  See the `Authorizer` section for further details.
 
-## receiver.addCommunity (community)
+## receiver.close ()
+
+Closes the receiver's listening socket, ending the operation of the receiver.
+
+# Using This Module: SNMP Agent
+
+The SNMP agent responds to all four "request class" PDUs relevant to a Command Responder
+application:
+
+ * **GetRequest** - request exactly matched OID instances
+ * **GetNextRequest** - request lexicographically "next" OID instances in the MIB tree
+ * **GetBulkRequest** - request a series of "next" OID instances in the MIB tree
+ * **SetRequest** - set values for specified OIDs
+
+The agent sends a **GetResponse** PDU to all four request PDU types, in conformance to RFC 3416.
+
+The agent - like the notification receiver - maintains an `Authorizer` instance
+to control access to the agent, details of which are in the [Authorizer Module](#authorizer-module)
+section below.
+
+The central data structure that the agent maintains is a `Mib` instance, the API of which is
+detailed in the [Mib Module](#mib-module) section below.  The agent allows the MIB to be queried
+and manipulated through the API, as well as queried and manipulated through the SNMP interface with
+the request-class PDUs.
+
+## snmp.createAgent (options, callback)
+
+The `createAgent()` function instantiates and returns an instance of the `Agent`
+class:
+
+    // Default options
+    var options = {
+        port: 161,
+        disableAuthorization: false,
+        engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+        transport: "udp4"
+    };
+
+    var callback = function (error, data) {
+        if ( error ) {
+            console.error (error);
+        } else {
+            console.log (JSON.stringify(data, null, 2));
+        }
+    };
+
+    agent = snmp.createAgent (options, callback);
+
+The `options` and `callback` parameters are mandatory.  The `options` parameter is
+an object, possibly empty, and can contain the following fields:
+
+ * `port` - the port for the agent to listen on - defaults to 161.  Note that
+ binding to port 161 on some systems requires the receiver processto be run with
+ administrative privilege.  If this is not possible, then choose a port greater
+ than 1024.
+ * `disableAuthorization` - disables local authorization for all community-based
+ notifications received and for those user-based notifications received with no
+ message authentication or privacy (noAuthNoPriv) - defaults to false
+ * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
+ defaults to a system-generated engineID containing elements of random
+ * `transport` - the transport family to use - defaults to `udp4`
+
+## agent.getAuthorizer ()
+
+Returns the agent's singleton `Authorizer` instance, used to control access
+to the agent.  See the `Authorizer` section for further details.
+
+## agent.getMib ()
+
+Returns the agent's singleton `Mib` instance, which holds all of the management data
+for the agent.
+
+## agent.close ()
+
+Closes the receiver's listening socket, ending the operation of the receiver.
+
+# Authorizer Module
+
+Both the receiver and agent maintain an singleton `Authorizer` instance, which is
+responsible for maintaining an authorization list of SNMP communities (for v1 and
+v2c notifications) and also an authorization list of SNMP users (for v3 notifications).
+These lists are used to authorize notification access to the receiver, and to store
+security protocol and key settings.  RFC 3414 terms the user list as the the
+"usmUserTable" stored in the receiver's "Local Configuration Database".
+
+If a v1 or v2c notification is received with a community that is not in the
+receiver's community authorization list, the receiver will not accept the notification,
+instead returning a error of class `RequestFailedError` to the supplied callback
+function.  Similarly, if a v3 notification is received with a user whose name is
+not in the receiver's user authorization list, the receiver will return a
+`RequestFailedError`.  If the `disableAuthorization` option is supplied for the
+receiver on start-up, then these local authorization list checks are disabled for
+community notifications and noAuthNoPriv user notifications.  Note that even with
+this setting, the user list is *still checked* for authNoPriv and authPriv notifications,
+as the library still requires access to the correct keys for the message authentication
+and encryption operations, and these keys are stored against a user in the user
+authorization list.
+
+The API allows the receiver's community authorization and user authorization lists
+to be managed with adds, queries and deletes.
+
+The authorizer instance can be obtained by using the `getAuthorizer()`
+call, for both the receiver and the agent.  For example:
+
+    receiver.getAuthorizer() .getCommunities();
+
+## authorizer.addCommunity (community)
 
 Adds a community string to the receiver's community authorization list.  Does
 nothing if the community is already in the list, ensuring there is only one
 occurence of any given community string in the list.
 
-## receiver.getCommunity (community)
+## authorizer.getCommunity (community)
 
 Returns a community string if it is stored in the receiver's community authorization
 list, otherwise returns `null`.
 
-## receiver.getCommunities ()
+## authorizer.getCommunities ()
 
 Returns the receiver's community authorization list.
 
-## receiver.deleteCommunity (community)
+## authorizer.deleteCommunity (community)
 
 Deletes a community string from the receiver's community authorization list.  Does
 nothing if the community is not in the list.
 
-## receiver.addUser (user)
+## authorizer.addUser (user)
 
 Adds a user to the receiver's user authorization list.  If a user of the same name
 is in the list, this call deletes the existing user, and replaces it with the supplied
@@ -1402,25 +1501,253 @@ object is in the same format as that used for the `session.createV3Session()` ca
         privKey: "intotheunknown"
     };
 
-    receiver.addUser (elsa);
+    receiver.getAuthorizer ().addUser (elsa);
 
-## receiver.getUser (userName)
+## authorizer.getUser (userName)
 
 Returns a user object if a user with the supplied name is stored in the receiver's
 user authorization list, otherwise returns `null`.
 
-## receiver.getUsers ()
+## authorizer.getUsers ()
 
 Returns the receiver's user authorization list.
 
-## receiver.deleteUser (userName)
+## authorizer.deleteUser (userName)
 
 Deletes a user from the receiver's user authorization list.  Does nothing if the user
 with the supplied name is not in the list.
 
-## receiver.close ()
+# Mib Module
 
-Closes the receiver's listening socket, ending the operation of the receiver.
+The MIB is a tree structure that holds management information.  Information is "addressed"
+in the tree by a series of integers, which form an Object ID (OID) from the root of the
+tree down.  There are only two kinds of data structures that hold data in a MIB:
+
+ * **scalar** data - the scalar variable is stored at a node in the MIB tree, and
+ the value of the variable is a single child node of the scalar variable node, always with
+ address "0".  For example, the sysDescr scalar variable is located at "1.3.6.1.2.1.1.1".
+ The value of the sysDescr variable is stored at "1.3.6.1.2.1.1.1.0"
+
+    ```
+    1.3.6.1.2.1.1.1   <= sysDescr (scalar variable)
+    1.3.6.1.2.1.1.1.0 = OctetString: MyAwesomeHost  <= sysDescr.0 (scalar variable value)
+    ```
+
+ * **table** data - the SNMP table stores data in columns and rows.  Typically, if a table
+ is stored at a node in the MIB, it has an "entry" object addressed as "1" directly
+ below the table OID.  Directly below the "entry" is a list of columns, which are typically
+ numbered from "1" upwards.  Directly below each column are a series of rows.  In the simplest
+ case a row is "indexed" by a single column in the table, but a row index can be a series of
+ columns, or columns that give multiple integers (e.g. an IPv4 address has four integers to
+ its index), or both.  Here is an example of the hierarchy of an SNMP table for part of the
+ ifTable:
+
+    ```
+    1.3.6.1.2.1.2.2   <= ifTable (table)
+    1.3.6.1.2.1.2.2.1   <= ifEntry (table entry)
+    1.3.6.1.2.1.2.2.1.1   <= ifIndex (column 1)
+    1.3.6.1.2.1.2.2.1.1.1 = Integer: 1   <= ifIndex row 1 value = 1
+    1.3.6.1.2.1.2.2.1.1.2 = Integer: 2   <= ifIndex row 2 value = 2
+    ```
+
+On creation, an `Agent` instance creates a singleton instance of the `Mib` module.  You can
+then register a "provider" to the agent's `Mib` instance that gives an interface to either a scalar
+data instance, or a table.
+
+    var myScalarProvider = {
+        name: "sysDescr",
+        type: snmp.MibProviderType.Scalar,
+        oid: "1.3.6.1.2.1.1.1",
+        scalarType: snmp.ObjectType.OctetString,
+        handler: function (mibRequest) {
+           // e.g. can update the MIB data before responding to the request here
+           mibRequest.done ();
+        }
+    };
+    var mib = agent.getMib ();
+    mib.registerProvider (myScalarProvider);
+    mib.setScalarValue ("sysDescr", "MyAwesomeHost");
+
+This code first gives the definition of a scalar "provider".  A further explanation of
+these fields is given in the `mib.registerProvider()` section.  Importantly, the `name`
+field is the unique identifier of the provider, and is used to select the specific
+provider in subsequent API calls.
+
+The `registerProvider()` call adds the provider to the list of providers that the MIB holds.
+Note that this call does not add the "oid" node to the MIB tree.  The first call of
+`setScalarValue()` will add the instance OID "1.3.6.1.2.1.1.1.0" to the MIB tree,
+along with its value.
+
+At this point, the agent will serve up the value of this MIB node when the instance OID
+"1.3.6.1.2.1.1.1.0" is queried via SNMP.
+
+A table provider has a similar definition:
+
+    var myTableProvider = {
+        name: "smallIfTable",
+        type: snmp.MibProviderType.Table,
+        oid: "1.3.6.1.2.1.2.2.1",
+        columns: [
+            {
+                number: 1,
+                name: "ifIndex",
+                type: snmp.ObjectType.Integer
+            },
+            {
+                number: 2,
+                name: "ifDescr",
+                type: snmp.ObjectType.OctetString
+            },
+            {
+                number: 3,
+                name: "ifType",
+                type: snmp.ObjectType.Integer
+            }
+        ],
+        index: [1]
+    };
+    var mib = agent.getMib ();
+    mib.registerProvider (myTableProvider);
+    mib.addTableRow ("smallIfTable", [1, "eth0", 6]);
+
+Here, the provider definition takes two additions fields: `columns` for the column defintions,
+and `index` for the columns used for row indexes.  In the example the `index` is the column
+number "1" i.e. the `ifIndex` column.  The `mib.registerProvider()` section has
+further details on the fields that make up the provider definition.
+
+The `oid` must be that of the "table entry" node, not its parent "table" node e.g. for
+`ifTable`, the `oid` in the provider is "1.3.6.1.2.1.2.2.1" (the OID for `ifEntry`).
+
+Note that there is no `handler` callback function in this particular example, so any interaction
+is directly between SNMP requests and MIB values with no other intervention.
+
+
+## mib.registerProvider (definition)
+
+Registers a provider definition with the MIB.  Doesn't add anything to the MIB tree.
+
+A provider definition has these fields:
+
+ * `name`  *(mandatory)* - the name of the provider, which serves as a unique key to reference the
+ provider for getting and setting values
+ * `type`  *(mandatory)* - must be either `snmp.MibProviderType.Scalar` or `snmp.MibProviderType.Table`
+ (mandatory)
+ * `oid`  *(mandatory)* - the OID where the provider is registered in the MIB tree.  Note that this
+ is **not** the "instance node" (the ".0" node), but the one above it.  In this case, the
+ provider registers at "1.3.6.1.2.1.1.1", to provide the value at "1.3.6.1.2.1.1.1.0".
+ * `scalarType`  *(mandatory for scalar types)* - only relevant to scalar provider type, this
+  give the type of the variable, selected from `snmp.ObjectType`
+ * `columns` *(mandatory for table types)* - gives any array of column definition objects for the
+ table.  Each column object must have a unique `number`, a `name` and a `type` from `snmp.ObjectType`.
+ * `index` *(mandatory for table types)* - gives an array of column numbers used for row indexes.
+ Use a single-element array for a single-column index, and multiple values for a composite index.
+ * `handler` *(optional)* - an optional callback function, which is called before the request to the
+ MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
+ the values are simply returned from (or set in) the MIB without any other processing.
+ The callback function takes a `MibRequest` instance, which has a `done()` function.  This
+ must be called when finished processing the request.  The `MibRequest` also has an `oid` field
+ with the instance OID being operated on, and an `operation` field with the request type from
+ `snmp.PduType`.
+
+After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
+
+While this call registers the provider to the MIB, it does not alter the MIB tree.
+
+## mib.unregisterProvider (name)
+
+Unregisters a provider from the MIB.  This also deletes all MIB nodes from the provider's `oid` down
+the tree.  It will also do upstream MIB tree pruning of any interior MIB nodes that only existed for
+the MIB tree to reach the provider `oid` node.
+
+## mib.getProviders ()
+
+Returns an object of provider definitions registered with the MIB, indexed by provider name.
+
+## mib.getProvider (name)
+
+Returns a single registered provider object for the given name.
+
+## mib.getScalarValue(scalarProviderName)
+
+Retrieves the value from a scalar provider.
+
+## mib.setScalarValue(scalarProviderName, value)
+
+Sets the value for a scalar provider.  If this is the first time the scalar is set
+since the provider has registered with the MIB, it will also add the instance (".0")
+node and all requires ancestors to the MIB tree.
+
+## mib.addTableRow (tableProviderName, row)
+
+Adds a table row - in the form of an array of values - to a table provider.  If
+the table is empty, this instantiates the provider's `oid` node and ancestors,
+its columns, before adding the row of values.
+
+## mib.getTableColumnDefinitions(tableProviderName)
+
+Returns a list of column definition objects for the provider.
+
+## mib.getTableCells(tableProviderName, byRow)
+
+Returns a two-dimensional array of the table data.  If `byRow` is false (the default),
+then the table data is given in a list of column arrays i.e. by column.  If `byRow`
+is `true`, then the data is instead a list of row arrays.
+
+## mib.getTableColumnCells(tableProviderName, columnNumber)
+
+Returns a single column of table data for the given column number.
+
+## mib.getTableRowCells (tableProviderName, rowIndex)
+
+Returns a single row of table data for the given row index.  The row index is an array
+of integers built from the node immediately under the column down to the node at the end
+of the row instance, which will be a leaf node in the MIB tree.
+
+## mib.getTableSingleCell(tableProviderName, columnIndex, rowIndex)
+
+Returns a single cell value from the column and row specified.  The row index array is specified
+in the same way as for the `getTableRowCells()` call.
+
+## mib.setTableSingleCell(tableProviderName, columnIndex, rowIndex, value)
+
+Sets a single cell value at the column and row specified.  The row index array is specified
+in the same way as for the `getTableRowCells()` call.
+
+## mib.deleteTableRow (tableProviderName, rowIndex)
+
+Deletes a table row at the row index specified.  The row index array is specified
+in the same way as for the `getTableRowCells()` call.  If this was the last row in the table,
+the table is pruned from the MIB, although the provider still remains registered with the MIB.
+Meaning that on the addition of another row, the table will be instantiated again.
+
+## mib.dump (options)
+
+Dumps the MIB in text format.  The `options` object controls the display of the dump with these
+options fields (all are booleans that default to `true`):
+
+ * `leavesOnly` - don't show interior nodes separately - only as prefix parts of leaf nodes
+ (instance nodes)
+ * `showProviders` - show nodes where providers are attached to the MIB
+ * `showTypes` - show instance value types
+ * `showValues` - show instance values
+
+For example:
+
+    mib.dump ();
+
+produces this sort of output:
+
+```
+1.3.6.1.2.1.1.1 [Scalar: sysDescr]
+1.3.6.1.2.1.1.1.0 = OctetString: Rage inside the machine!
+1.3.6.1.2.1.2.2.1 [Table: ifTable]
+1.3.6.1.2.1.2.2.1.1.1 = Integer: 1
+1.3.6.1.2.1.2.2.1.1.2 = Integer: 2
+1.3.6.1.2.1.2.2.1.2.1 = OctetString: lo
+1.3.6.1.2.1.2.2.1.2.2 = OctetString: eth0
+1.3.6.1.2.1.2.2.1.3.1 = Integer: 24
+1.3.6.1.2.1.2.2.1.3.2 = Integer: 6
+```
 
 # Example Programs
 
@@ -1595,6 +1922,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.1.3 - 18/01/2020
 
  * Add IPv6 option for tests
+
+## Version 2.2.0 - 21/01/2020
+
+ * Add SNMP agent
 
 # License
 
