@@ -82,6 +82,9 @@ agent.mib.setScalarValue ("sysDescr", "Rage inside the machine!");
 //agent.mib.setScalarValue ("sysLocation", "Stuck in the middle with you");
 agent.mib.addTableRow ("ifTable", [1, "lo", 24]);
 agent.mib.addTableRow ("ifTable", [2, "eth0", 6]);
+// agent.mib.deleteTableRow ("ifTable", [2]);
+// agent.deleteProvider ("ifTable");
+// agent.deleteProvider ("sysDescr");
 
 agent.mib.dump ({
     leavesOnly: false,
@@ -95,6 +98,7 @@ agent.mib.dump ({
 // var data = agent.mib.getTableColumnCells("ifTable", 2);
 // var data = agent.mib.getTableRowCells("ifTable", [1]);
 // agent.mib.setTableSingleCell("ifTable", 2, [2], "changed!");
-var data = agent.mib.getTableSingleCell("ifTable", 2, [2]);
+// var data = agent.mib.getTableSingleCell("ifTable", 2, [2]);
+var data = agent.mib.getScalarValue("sysDescr");
 
 console.log(JSON.stringify(data, null, 2));

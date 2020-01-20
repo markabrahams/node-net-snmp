@@ -2750,7 +2750,7 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 			// not found
 			return null;
 		}
-	} else if ( childCount > 1 ) {
+	} else {
 		if ( index.length == 0 ) {
 			return this.getInstanceNodeForTableRow();
 		} else {
@@ -2800,6 +2800,27 @@ MibNode.prototype.getNextInstanceNode = function () {
 	}
 };
 
+MibNode.prototype.delete = function () {
+	if ( Object.keys (this.children) > 0 ) {
+		throw new Error ("Cannot delete non-leaf MIB node");
+	}
+	addressLastPart = this.address.slice(-1)[0];
+	delete this.parent.children[addressLastPart];
+	this.parent = null;
+};
+
+MibNode.prototype.pruneUpwards = function () {
+	if ( ! this.parent ) {
+		return
+	}
+	if ( Object.keys (this.children).length == 0 ) {
+		var lastAddressPart = this.address.splice(-1)[0].toString();
+		delete this.parent.children[lastAddressPart];
+		this.parent.pruneUpwards();
+		this.parent = null;
+	}
+}
+
 MibNode.prototype.dump = function (options) {
 	var valueString;
 	if ( ( ! options.leavesOnly || options.showProviders ) && ( this.provider && this.provider.handler ) ) {
@@ -2839,6 +2860,7 @@ MibNode.oidIsDescended = function (oid, ancestor) {
 
 var Mib = function () {
 	this.root = new MibNode ([], null);
+	this.providers = {};
 	this.providerNodes = {};
 };
 
@@ -2881,52 +2903,18 @@ Mib.prototype.lookup = function (oid) {
 	return node;
 };
 
-Mib.prototype.nextMatch = function (arg) {
-	var childIndices;
-	var sub;
-	var i;
-
-	if (typeof (arg) !== 'object')
-		throw new TypeError('arg (object) is required');
-	if (typeof (arg.node) !== 'object' || ! (arg.node instanceof MibNode) )
-		throw new TypeError('arg.node (object) is required');
-	if (typeof (arg.match) !== 'function')
-		throw new TypeError('arg.match (function) is required');
-	if (typeof (arg.start) !== 'undefined' &&
-	    typeof (arg.start) !== 'number')
-		throw new TypeError('arg.start must be a number');
-
-	if (arg.match (arg.node) === true)
-		return (arg.node);
-
-	childIndices = arg.node.listChildren (arg.start);
-	for (i = 0; i < childIndices.length; i++) {
-		sub = this.nextMatch ({
-			node: arg.node._children[childIndices[i]],
-			match: arg.match
-		});
-		if (sub)
-			return (sub);
-	}
-	if (!arg.node._parent)
-		return (null);
-
-	return this.nextMatch ({
-		node: arg.node._parent,
-		match: arg.match,
-		start: arg.node._addr[arg.node._addr.length - 1] + 1
-	});
-};
-
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
-		// error
-		return;
+		throw new ReferenceError ("Instance node has provider which should never happen");
 	}
 	return instanceNode.getAncestorProvider ();
 };
 
 Mib.prototype.addProvider = function (provider) {
+	this.providers[provider.name] = provider;
+};
+
+Mib.prototype.addProviderToNode = function (provider) {
 	var node = this.addNodesForOid (provider.oid);
 
 	node.provider = provider;
@@ -2936,48 +2924,55 @@ Mib.prototype.addProvider = function (provider) {
 		}
 	}
 	this.providerNodes[provider.name] = node;
+	return node;
 };
 
 Mib.prototype.deleteProvider = function (name) {
 	var providerNode = this.providerNodes[name];
 	if ( providerNode ) {
-		if ( providerNode.provider ) {
-			delete providerNode.provider;
-		}
+		providerNodeParent = providerNode.parent;
+		providerNode.delete();
+		providerNodeParent.pruneUpwards();
 		delete this.providerNodes[name];
 	}
+	delete this.providers[name];
 };
 
 Mib.prototype.getProvider = function (name) {
-	return this.providerNodes[name];
+	return this.providers[name];
 };
 
 Mib.prototype.getProviders = function () {
-	return this.providerNodes;
+	return this.providers;
 };
 
-Mib.prototype.getScalarValue = function (scalar) {
+Mib.prototype.getScalarValue = function (scalarName) {
 	var providerNode = this.providerNodes[scalarName];
 	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
-		// error callback
-		return;
+		throw new ReferenceError ("Failed to get node for registered MIB provider " + scalarName);
 	}
 	var instanceAddress = providerNode.address.concat ([0]);
 	if ( ! this.lookup (instanceAddress) ) {
-		// error callback
-		return;
+		throw new Error ("Failed created instance node for registered MIB provider " + scalarName);
 	}
 	var instanceNode = this.lookup (instanceAddress);
 	return instanceNode.value;
 };
 
 Mib.prototype.setScalarValue = function (scalarName, newValue) {
-	var providerNode = this.providerNodes[scalarName];
+	var providerNode;
 	var instanceNode;
-	
+
+	if ( ! this.providers[scalarName] ) {
+		throw new ReferenceError ("Provider " + scalarName + " not registered with this MIB");
+	}
+
+	providerNode = this.providerNodes[scalarName];
+	if ( ! providerNode ) {
+		providerNode = this.addProviderToNode (this.providers[scalarName]);
+	}
 	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
-		// error callback
-		return;
+		throw new ReferenceError ("Could not find MIB node for registered provider " + scalarName);
 	}
 	var instanceAddress = providerNode.address.concat ([0]);
 	instanceNode = this.lookup (instanceAddress);
@@ -3015,6 +3010,9 @@ Mib.prototype.addTableRow = function (table, row) {
 	var instanceAddress;
 	var instanceNode;
 
+	if ( this.providers[table] && ! this.providerNodes[table] ) {
+		this.addProviderToNode (this.providers[table]);
+	}
 	providerNode = this.getProviderNodeForTable (table);
 	provider = providerNode.provider;
 	for ( var indexPart of provider.index ) {
@@ -3112,6 +3110,27 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	columnNode = providerNode.children[columnNumber];
 	instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
 	instanceNode.value = value;
+};
+
+Mib.prototype.deleteTableRow = function (table, rowIndex) {
+	var providerNode;
+	var columnNode;
+	var instanceNode;
+	var row = [];
+
+	providerNode = this.getProviderNodeForTable (table);
+	for ( var columnNumber of Object.keys (providerNode.children) ) {
+		columnNode = providerNode.children[columnNumber];
+		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+		if ( instanceNode ) {
+			instanceParentNode = instanceNode.parent;
+			instanceNode.delete();
+			instanceParentNode.pruneUpwards();
+		} else {
+			throw new ReferenceError ("Cannot find row for index " + rowIndex + " at registered provider " + table);
+		}
+	}
+	return row;
 };
 
 Mib.prototype.dump = function (dumpOptions) {
@@ -3214,6 +3233,10 @@ Agent.prototype.getAuthorizer = function () {
 
 Agent.prototype.addProvider = function (provider) {
 	this.mib.addProvider (provider);
+};
+
+Agent.prototype.deleteProvider = function (provider) {
+	this.mib.deleteProvider (provider);
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
