@@ -2024,6 +2024,10 @@ Example programs are included under the module's `example` directory.
 
  * Add SNMP agent
 
+## Version 2.3.0 - 22/01/2020
+
+ * Add MIB parser and module store
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
