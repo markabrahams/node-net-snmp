@@ -54,11 +54,11 @@ This library provides support for the above applications according to this table
 
 | Application | Common Use | Supported | Documentation |
 | ----------- | ---------- | --------- | ------------- |
-| Command Generator Applications | NMS / SNMP tools | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Command Responder Applications | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
-| Notification Originator Applications | SNMP agents / NMS-to-NMS notifications | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Notification Receiver Applications | NMS | yes | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
-| Proxy Forwarder Applications | SNMP agents | no | |
+| Command Generator | NMS / SNMP tools | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Command Responder | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
+| Notification Originator | SNMP agents / NMS-to-NMS notifications | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Notification Receiver | NMS | yes | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
+| Proxy Forwarder | SNMP agents | no | |
 
 # Features
 
@@ -68,6 +68,7 @@ This library provides support for the above applications according to this table
  * SNMP initiator for all relevant protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
  * Convenience methods for MIB "walking", subtree collection, table and table column collection
  * Notification receiver for traps and informs
+ * MIB parsing
  * SNMP agent with MIB management for both scalar and tabular data
  * SNMPv3 context support
  * IPv4 and IPv6
@@ -76,7 +77,6 @@ Not implemented, but on the roadmap:
  * AgentX ([RFC 2741][AgentX])
 
 Not implemented, but further down the priority list:
- * MIB parsing
  * Proxy Forwarder Application
 
 [AgentX]: https://tools.ietf.org/html/rfc2741 "AgentX"
@@ -1382,7 +1382,7 @@ section below.
 The central data structure that the agent maintains is a `Mib` instance, the API of which is
 detailed in the [Mib Module](#mib-module) section below.  The agent allows the MIB to be queried
 and manipulated through the API, as well as queried and manipulated through the SNMP interface with
-the request-class PDUs.
+the above four request-class PDUs.
 
 ## snmp.createAgent (options, callback)
 
@@ -1519,9 +1519,15 @@ with the supplied name is not in the list.
 
 # Mib Module
 
+An `Agent` instance, when created, in turn creates an instance of the `Mib` class.  There
+is no direct API call to create a `Mib` instance; this creation is the responsibility of
+the agent.  An agent always has one and only one `Mib` instance.
+
 The MIB is a tree structure that holds management information.  Information is "addressed"
 in the tree by a series of integers, which form an Object ID (OID) from the root of the
-tree down.  There are only two kinds of data structures that hold data in a MIB:
+tree down.
+
+There are only two kinds of data structures that hold data in a MIB:
 
  * **scalar** data - the scalar variable is stored at a node in the MIB tree, and
  the value of the variable is a single child node of the scalar variable node, always with
@@ -1653,6 +1659,11 @@ After registering the provider with the MIB, the provider is referenced by its `
 
 While this call registers the provider to the MIB, it does not alter the MIB tree.
 
+## mib.registerProviders ( [definitions] )
+
+Convenience method to register an array of providers in one call.  Simply calls `registerProvider()`
+for each provider definition in the array.
+
 ## mib.unregisterProvider (name)
 
 Unregisters a provider from the MIB.  This also deletes all MIB nodes from the provider's `oid` down
@@ -1748,6 +1759,92 @@ produces this sort of output:
 1.3.6.1.2.1.2.2.1.3.1 = Integer: 24
 1.3.6.1.2.1.2.2.1.3.2 = Integer: 6
 ```
+
+# Using This Module: Module Store
+
+The library supports MIB parsing by providing an interface to a `ModuleStore` instance into which
+you can load MIB modules from files, and fetch the resulting JSON MIB module representations.
+
+Additionally, once a MIB is loaded into the module store, you can produce a list of MIB "provider"
+definitions that an `Agent` can register (see the `Agent` documentation for more details), so
+that you can start manipulating all the values defined in your MIB file right away.
+
+    // Create a module store, load a MIB module, and fetch its JSON representation
+    var store = snmp.createModuleStore ();
+    store.loadFromFile ("/path/to/your/mibs/SNMPv2-MIB.mib");
+    var jsonModule = store.getModule ("SNMPv2-MIB");
+
+    // Fetch MIB providers, create an agent, and register the providers with your agent
+    var providers = store.getProvidersForModule ("SNMPv2-MIB");
+    // Not recommended - but authorization and callback turned of for example brevity
+    var agent = snmp.createAgent ({disableAuthorization: true}, function (error, data) {});
+    var mib = agent.getMib ();
+    mib.registerProviders (providers);
+
+    // Start manipulating the MIB through the registered providers using the `Mib` API calls
+    mib.setScalarValue ("sysDescr", "The most powerful system you can think of");
+    mib.setScalarValue ("sysName", "multiplied-by-six");
+    mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreamed up this MIB", 20]);
+
+    // Then hit those bad boys with your favourite SNMP tools (or library ;-), e.g.
+    snmpwalk -v 2c -c public localhost 1.3.6.1
+
+Meaning you can get right to the implementation of your MIB functionality with a minimum of
+boilerplate code.
+
+## store = snmp.createModuleStore ()
+
+Creates a new `ModuleStore` instance, which comes pre-loaded with some "base" MIB modules that
+that provide MIB definitions that other MIB modules commonly refer to ("import").  The list of
+pre-loaded "base" modules is:
+
+ * RFC1155-SMI
+ * RFC1158-MIB
+ * RFC-1212
+ * RFC1213-MIB
+ * SNMPv2-SMI
+ * SNMPv2-CONF
+ * SNMPv2-TC
+ * SNMPv2-MIB
+
+## store.loadFromFile (fileName)
+
+Loads all MIB modules in the given file into the module store.  By convention, there is
+typically only a single MIB module per file, but there can be multiple module definitions
+stored in a single file.  Loaded MIB modules are then referred to by this API by their
+MIB module name, not the source file name.  The MIB module name is the name preceding the 
+`DEFINITIONS ::= BEGIN` in the MIB file, and is often the very first thing present in
+a MIB file.
+
+Note that if your MIB dependends on ("imports") definitions from other MIB files, these must be
+loaded first e.g. the popular **IF-MIB** uses definitions from the **IANAifType-MIB**, which
+therefore must be loaded first.  These dependencies are listed in the **IMPORTS** section of
+a MIB module, usually near the top of a MIB file.  The pre-loaded "base" MIB modules contain
+many of the commonly used imports.
+
+## store.getModule (moduleName)
+
+Retrieves the named MIB module from the store as a JSON object.
+
+## store.getModules (includeBase)
+
+Retrieves all MIB modules from the store.  If the `includeBase` boolean is set to true,
+then the base MIB modules are included in the list.  The modules are returned as a single
+JSON "object of objects", keyed on the module name, with the values being entire JSON
+module represenations.
+
+## store.getModuleNames (includeBase)
+
+Retrieves a list of the names of all MIB modules loaded in the store.  If the `includeBase`
+boolean is set to true, then the base MIB modules names are included in the list.
+
+## store.getProvidersForModule (moduleName)
+
+Returns an array of `Mib` "provider" definitions corresponding to all scalar and table instance
+objects contained in the named MIB module.  The list of provider definitions are then
+ready to be registered to an agent's MIB by using the `agent.getMib().registerProviders()`
+call.
+
 
 # Example Programs
 

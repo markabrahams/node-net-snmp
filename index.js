@@ -5,8 +5,8 @@ var ber = require ("asn1-ber").Ber;
 var dgram = require ("dgram");
 var events = require ("events");
 var util = require ("util");
-var crypto = require("crypto");
-
+var crypto = require ("crypto");
+var mibparser = require ("./lib/mib");
 var DEBUG = false;
 
 var MAX_INT32 = 2147483647;
@@ -73,10 +73,31 @@ var ObjectType = {
 
 _expandConstantObject (ObjectType);
 
+// ASN.1
+ObjectType.INTEGER = ObjectType.Integer;
+ObjectType["OCTET STRING"] = ObjectType.OctetString;
+ObjectType["OBJECT IDENTIFIER"] = ObjectType.OID;
+// SNMPv2-SMI
 ObjectType.Integer32 = ObjectType.Integer;
 ObjectType.Counter32 = ObjectType.Counter;
 ObjectType.Gauge32 = ObjectType.Gauge;
 ObjectType.Unsigned32 = ObjectType.Gauge32;
+// SNMPv2-TC
+ObjectType.AutonomousType = ObjectType["OBJECT IDENTIFIER"];
+ObjectType.DateAndTime = ObjectType["OCTET STRING"];
+ObjectType.DisplayString = ObjectType["OCTET STRING"];
+ObjectType.InstancePointer = ObjectType["OBJECT IDENTIFIER"];
+ObjectType.MacAddress = ObjectType["OCTET STRING"];
+ObjectType.PhysAddress = ObjectType["OCTET STRING"];
+ObjectType.RowPointer = ObjectType["OBJECT IDENTIFIER"];
+ObjectType.RowStatus = ObjectType.INTEGER;
+ObjectType.StorageType = ObjectType.INTEGER;
+ObjectType.TestAndIncr = ObjectType.INTEGER;
+ObjectType.TimeStamp = ObjectType.TimeTicks;
+ObjectType.TruthValue = ObjectType.INTEGER;
+ObjectType.TAddress = ObjectType["OCTET STRING"];
+ObjectType.TDomain = ObjectType["OBJECT IDENTIFIER"];
+ObjectType.VariablePointer = ObjectType["OBJECT IDENTIFIER"];
 
 var PduType = {
 	160: "GetRequest",
@@ -2437,9 +2458,10 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 	return message;
 };
 
-var Authorizer = function () {
+var Authorizer = function (disableAuthorization) {
 	this.communities = [];
 	this.users = [];
+	this.disableAuthorization = disableAuthorization;
 }
 
 Authorizer.prototype.addCommunity = function (community) {
@@ -2496,7 +2518,7 @@ Authorizer.prototype.deleteUser = function (userName) {
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-	this.authorizer = new Authorizer ();
+	this.authorizer = new Authorizer (options.disableAuthorization);
 	this.engine = new Engine (options.engineID);
 
 	this.engineBoots = 0;
@@ -2606,6 +2628,166 @@ Receiver.create = function (options, callback) {
 	receiver.listener.startListening ();
 	return receiver;
 };
+
+var ModuleStore = function () {
+	this.parser = mibparser ();
+};
+
+ModuleStore.prototype.getSyntaxTypes = function () {
+	var syntaxTypes = {};
+	Object.assign (syntaxTypes, ObjectType);
+	var entryArray;
+
+	// var mibModule = this.parser.Modules[moduleName];
+	for ( var mibModule of Object.values (this.parser.Modules) ) {
+		entryArray = Object.values (mibModule);
+		for ( mibEntry of entryArray ) {
+			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
+				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
+					if ( typeof mibEntry.SYNTAX == "object" ) {
+						syntaxTypes[mibEntry.ObjectName] = syntaxTypes.Integer;
+					} else {
+						syntaxTypes[mibEntry.ObjectName] = syntaxTypes[mibEntry.SYNTAX];
+					}
+				}
+			}
+		}
+	}
+	return syntaxTypes;
+};
+
+ModuleStore.prototype.loadFromFile = function (fileName) {
+	this.parser.Import (fileName);
+	this.parser.Serialize ();
+};
+
+ModuleStore.prototype.getModule = function (moduleName) {
+	return this.parser.Modules[moduleName];
+};
+
+ModuleStore.prototype.getModules = function (includeBase) {
+	var modules = {};
+	for ( var moduleName of Object.keys(this.parser.Modules) ) {
+		if ( includeBase || ModuleStore.BASE_MODULES.indexOf (moduleName) == -1 ) {
+			modules[moduleName] = this.parser.Modules[moduleName];
+		}
+	}
+	return modules;
+};
+
+ModuleStore.prototype.getModuleNames = function (includeBase) {
+	var modules = [];
+	for ( var moduleName of Object.keys(this.parser.Modules) ) {
+		if ( includeBase || ModuleStore.BASE_MODULES.indexOf (moduleName) == -1 ) {
+			modules.push (moduleName);
+		}
+	}
+	return modules;
+};
+
+ModuleStore.prototype.getProvidersForModule = function (moduleName) {
+	var mibModule = this.parser.Modules[moduleName];
+	var scalars = [];
+	var tables = [];
+	var mibEntry;
+	var syntaxTypes;
+
+	if ( ! mibModule ) {
+		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
+	}
+	syntaxTypes = this.getSyntaxTypes ();
+	entryArray = Object.values (mibModule);
+	for ( var i = 0; i < entryArray.length ; i++ ) {
+		var mibEntry = entryArray[i];
+		var syntax = mibEntry.SYNTAX;
+
+		if ( syntax ) {
+			if ( typeof syntax == "object" ) {
+				syntax = "INTEGER";
+			}
+			if ( syntax.startsWith ("SEQUENCE OF") ) {
+				// start of table
+				currentTableProvider = {
+					tableName: mibEntry.ObjectName,
+					type: MibProviderType.Table,
+					//oid: mibEntry.OID,
+					columns: [],
+					index: [1]  // default - assume first column is index
+				};
+				// read table to completion
+				while ( currentTableProvider || i >= entryArray.length ) {
+					i++;
+					mibEntry = entryArray[i];
+					syntax = mibEntry.SYNTAX
+
+					if ( typeof syntax == "object" ) {
+						syntax = "INTEGER";
+					}
+
+					if ( mibEntry.MACRO == "SEQUENCE" ) {
+						// table entry sequence - ignore
+					} else  if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
+						// unexpected
+					} else {
+						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
+						if ( parentOid == currentTableProvider.tableName ) {
+							// table entry
+							currentTableProvider.name = mibEntry.ObjectName;
+							currentTableProvider.oid = mibEntry.OID;
+						} else if ( parentOid == currentTableProvider.name ) {
+							// table column
+							currentTableProvider.columns.push ({
+								number: mibEntry["OBJECT IDENTIFIER"].split (" ")[1],
+								name: mibEntry.ObjectName,
+								type: syntaxTypes[syntax]
+							});
+						} else {
+							// table finished
+							tables.push (currentTableProvider);
+							// console.log ("Table: " + currentTableProvider.name);
+							currentTableProvider = null;
+							i--;
+						}
+					}
+				}
+			} else if ( mibEntry.MACRO == "OBJECT-TYPE" ) {
+				// OBJECT-TYPE entries not in a table are scalars
+				scalars.push ({
+					name: mibEntry.ObjectName,
+					type: MibProviderType.Scalar,
+					oid: mibEntry.OID,
+					scalarType: syntaxTypes[syntax]
+				});
+				// console.log ("Scalar: " + mibEntry.ObjectName);
+			}
+		}
+	}
+	return scalars.concat (tables);
+};
+
+ModuleStore.prototype.loadBaseModules = function () {
+	for ( var mibModule of ModuleStore.BASE_MODULES ) {
+		this.parser.Import("mibs/" + mibModule + ".mib");
+	}
+	this.parser.Serialize ();
+};
+
+ModuleStore.create = function () {
+	store = new ModuleStore ();
+	store.loadBaseModules ();
+	return store;
+};
+
+ModuleStore.BASE_MODULES = [
+	"RFC1155-SMI",
+	"RFC1158-MIB",
+	"RFC-1212",
+	"RFC1213-MIB",
+	"SNMPv2-SMI",
+	"SNMPv2-CONF",
+	"SNMPv2-TC",
+	"SNMPv2-MIB"
+];
 
 var MibNode = function(address, parent) {
 	this.address = address;
@@ -2852,6 +3034,12 @@ Mib.prototype.addProviderToNode = function (provider) {
 
 Mib.prototype.registerProvider = function (provider) {
 	this.providers[provider.name] = provider;
+};
+
+Mib.prototype.registerProviders = function (providers) {
+	for ( var provider of providers ) {
+		this.registerProvider (provider);
+	}
 };
 
 Mib.prototype.unregisterProvider = function (name) {
@@ -3156,7 +3344,7 @@ var Agent = function (options, callback) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
-	this.authorizer = new Authorizer ();
+	this.authorizer = new Authorizer (options.disableAuthorization);
 	this.mib = new Mib ();
 	this.callback = callback || function () {};
 	this.context = "";
@@ -3172,6 +3360,10 @@ Agent.prototype.getAuthorizer = function () {
 
 Agent.prototype.registerProvider = function (provider) {
 	this.mib.registerProvider (provider);
+};
+
+Agent.prototype.registerProviders = function (providers) {
+	this.mib.registerProviders (providers);
 };
 
 Agent.prototype.unregisterProvider = function (provider) {
@@ -3270,7 +3462,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				if ( requestPdu.type == PduType.SetRequest ) {
 					mibRequest.instanceNode.value = requestVarbind.value;
 				}
-				if ( requestPdu.type == PduType.GetNextRequest && requestVarbind.type == ObjectType.EndOfMibView ) {
+				if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
+						requestVarbind.type == ObjectType.EndOfMibView ) {
 					responseVarbindType = ObjectType.EndOfMibView;
 				} else {
 					responseVarbindType = mibRequest.instanceNode.valueType;
@@ -3301,7 +3494,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	if ( ! startNode ) {
 		// Off-tree start specified
 		targetVarbinds.push ({
-			oid: requestVarbind.oid,
+			oid: startOid,
 			type: ObjectType.Null,
 			value: null
 		});
@@ -3310,7 +3503,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 		if ( ! getNextNode ) {
 			// End of MIB
 			targetVarbinds.push ({
-				oid: requestVarbind.oid,
+				oid: startOid,
 				type: ObjectType.EndOfMibView,
 				value: null
 			});
@@ -3345,6 +3538,7 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	var getBulkVarbinds = [];
 	var startOid = [];
 	var getNextNode;
+	var endOfMib = false;
 
 	for (var n = 0 ; n < requestPdu.nonRepeaters ; n++ ) {
 		this.addGetNextVarbind (getBulkVarbinds, requestVarbinds[n].oid);
@@ -3354,11 +3548,16 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 		startOid.push (requestVarbinds[v].oid);
 	}
 
-	for (var r = 0 ; r < requestPdu.maxRepetitions ; r++ ) {
+	while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
 		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
-			getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
-			if ( getNextNode ) {
-				startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
+			if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
+				if ( getNextNode ) {
+					startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
+					if ( getNextNode.type == ObjectType.EndOfMibView ) {
+						endOfMib = true;
+					}
+				}
 			}
 		}
 	}
@@ -3408,6 +3607,7 @@ exports.createV3Session = function (target, user, options) {
 
 exports.createReceiver = Receiver.create;
 exports.createAgent = Agent.create;
+exports.createModuleStore = ModuleStore.create;
 
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;

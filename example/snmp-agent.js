@@ -19,18 +19,19 @@ var callback = function (error, data) {
 };
 
 var agent = snmp.createAgent(snmpOptions, callback);
-agent.getAuthorizer().addCommunity ("public");
-agent.getAuthorizer().addUser ({
+var authorizer = agent.getAuthorizer ();
+authorizer.addCommunity ("public");
+authorizer.addUser ({
     name: "fred",
     level: snmp.SecurityLevel.noAuthNoPriv
 });
-agent.getAuthorizer().addUser ({
+authorizer.addUser ({
     name: "betty",
     level: snmp.SecurityLevel.authNoPriv,
     authProtocol: snmp.AuthProtocols.sha,
     authKey: "illhavesomeauth"
 });
-agent.getAuthorizer().addUser ({
+authorizer.addUser ({
     name: "wilma",
     level: snmp.SecurityLevel.authPriv,
     authProtocol: snmp.AuthProtocols.sha,
@@ -76,27 +77,33 @@ var tableProvider = {
 };
 agent.registerProvider (tableProvider);
 
-agent.mib.setScalarValue ("sysDescr", "Rage inside the machine!");
-//agent.mib.setScalarValue ("sysLocation", "Stuck in the middle with you");
-agent.mib.addTableRow ("ifTable", [1, "lo", 24]);
-agent.mib.addTableRow ("ifTable", [2, "eth0", 6]);
-// agent.mib.deleteTableRow ("ifTable", [2]);
-// agent.unregisterProvider ("ifTable");
-// agent.unregisterProvider ("sysDescr");
+var mib = agent.getMib ();
+mib.setScalarValue ("sysDescr", "Rage inside the machine!");
+mib.addTableRow ("ifTable", [1, "lo", 24]);
+mib.addTableRow ("ifTable", [2, "eth0", 6]);
+// mib.deleteTableRow ("ifTable", [2]);
+// mib.unregisterProvider ("ifTable");
+// mib.unregisterProvider ("sysDescr");
 
-agent.mib.dump ({
+// var store = snmp.createModuleStore ();
+// var providers = store.getProviders ("IF-MIB");
+// mib.registerProviders (providers);
+
+//console.log (JSON.stringify (providers, null, 2));
+
+mib.dump ({
     leavesOnly: true,
     showProviders: true,
     showValues: true,
     showTypes: true
 });
 
-// var data = agent.mib.getTableColumnDefinitions("ifTable");
-// var data = agent.mib.getTableCells("ifTable", true);
-// var data = agent.mib.getTableColumnCells("ifTable", 2);
-// var data = agent.mib.getTableRowCells("ifTable", [1]);
-// agent.mib.setTableSingleCell("ifTable", 2, [2], "changed!");
-// var data = agent.mib.getTableSingleCell("ifTable", 2, [2]);
-var data = agent.mib.getScalarValue("sysDescr");
+// var data = mib.getTableColumnDefinitions ("ifTable");
+// var data = mib.getTableCells ("ifTable", true);
+// var data = mib.getTableColumnCells ("ifTable", 2);
+// var data = mib.getTableRowCells ("ifTable", [1]);
+// mib.setTableSingleCell ("ifTable", 2, [2], "changed!");
+var data = mib.getTableSingleCell ("ifTable", 2, [2]);
+// var data = mib.getScalarValue ("sysDescr");
 
-console.log(JSON.stringify(data, null, 2));
+console.log(JSON.stringify (data, null, 2));
