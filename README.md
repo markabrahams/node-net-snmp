@@ -1,4 +1,3 @@
-
 # net-snmp
 
 This module implements versions 1, 2c and 3 of the [Simple Network Management
@@ -58,7 +57,7 @@ This library provides support for the above applications according to this table
 | Command Responder | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
 | Notification Originator | SNMP agents / NMS-to-NMS notifications | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
 | Notification Receiver | NMS | yes | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
-| Proxy Forwarder | SNMP agents | no | |
+| Proxy Forwarder | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
 
 # Features
 
@@ -67,17 +66,15 @@ This library provides support for the above applications according to this table
  * Community-based and user-based authorization
  * SNMP initiator for all relevant protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
  * Convenience methods for MIB "walking", subtree collection, table and table column collection
- * Notification receiver for traps and informs
- * MIB parsing
- * SNMP agent with MIB management for both scalar and tabular data
  * SNMPv3 context support
+ * Notification receiver for traps and informs
+ * MIB parsing and MIB module store
+ * SNMP agent with MIB management for both scalar and tabular data
+ * SNMP proxy forwarder for agent
  * IPv4 and IPv6
 
 Not implemented, but on the roadmap:
  * AgentX ([RFC 2741][AgentX])
-
-Not implemented, but further down the priority list:
- * Proxy Forwarder Application
 
 [AgentX]: https://tools.ietf.org/html/rfc2741 "AgentX"
 
@@ -88,6 +85,7 @@ This module aims to be fully compliant with the following RFCs:
  * [1155][1155] - Structure and Identification of Management Information
  * [1098][1098] - A Simple Network Management Protocol (version 1)
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
+ * [3413][3413] - Simple Network Management Protocol (SNMP) Applications
  * [3414][3414] - User-based Security Model (USM) for version 3 of the
  Simple Network Management Protocol (SNMPv3)
  * [3416][3416] - Version 2 of the Protocol Operations for the Simple
@@ -98,6 +96,7 @@ Protocol (SNMP)
 [1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
 [1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
 [2578]: https://tools.ietf.org/rfc/rfc2578.txt "RFC 2578"
+[3413]: https://tools.ietf.org/rfc/rfc3413.txt "RFC 3413"
 [3414]: https://tools.ietf.org/rfc/rfc3414.txt "RFC 3414"
 [3416]: https://tools.ietf.org/rfc/rfc3416.txt "RFC 3416"
 [3417]: https://tools.ietf.org/rfc/rfc3417.txt "RFC 3417"
@@ -1384,6 +1383,8 @@ detailed in the [Mib Module](#mib-module) section below.  The agent allows the M
 and manipulated through the API, as well as queried and manipulated through the SNMP interface with
 the above four request-class PDUs.
 
+The agent also supports SNMP proxy forwarder application.
+
 ## snmp.createAgent (options, callback)
 
 The `createAgent()` function instantiates and returns an instance of the `Agent`
@@ -1430,6 +1431,11 @@ to the agent.  See the `Authorizer` section for further details.
 
 Returns the agent's singleton `Mib` instance, which holds all of the management data
 for the agent.
+
+## agent.getForwarder ()
+
+Returns the agent's singleton `Forwarder` instance, which holds a list of registered
+proxies that specify context-based forwarding to remote hosts.
 
 ## agent.close ()
 
@@ -1521,7 +1527,8 @@ with the supplied name is not in the list.
 
 An `Agent` instance, when created, in turn creates an instance of the `Mib` class.  There
 is no direct API call to create a `Mib` instance; this creation is the responsibility of
-the agent.  An agent always has one and only one `Mib` instance.
+the agent.  An agent always has one and only one `Mib` instance.  The agent's `Mib`
+instance is accessed through the `agent.getMib ()` call.
 
 The MIB is a tree structure that holds management information.  Information is "addressed"
 in the tree by a series of integers, which form an Object ID (OID) from the root of the
@@ -1792,7 +1799,7 @@ that you can start manipulating all the values defined in your MIB file right aw
 Meaning you can get right to the implementation of your MIB functionality with a minimum of
 boilerplate code.
 
-## store = snmp.createModuleStore ()
+## snmp.createModuleStore ()
 
 Creates a new `ModuleStore` instance, which comes pre-loaded with some "base" MIB modules that
 that provide MIB definitions that other MIB modules commonly refer to ("import").  The list of
@@ -1844,6 +1851,82 @@ Returns an array of `Mib` "provider" definitions corresponding to all scalar and
 objects contained in the named MIB module.  The list of provider definitions are then
 ready to be registered to an agent's MIB by using the `agent.getMib().registerProviders()`
 call.
+
+# Forwarder Module
+
+An `Agent` instance, when created, in turn creates an instance of the `Forwarder` class.
+There is no direct API call to create a `Forwarder` instance; this creation is the
+responsibility of the agent.  An agent always has one and only one `Forwarder` instance.
+The agent's `Forwarder` instance is accessed through the `agent.getForwarder ()` call.
+
+A `Forwader` is what RFC 3413 terms a "Proxy Forwarder Application".  It maintains a list
+of "proxy" entries, each of which configures a named SNMPv3 context name to enable access 
+to a given target host with the given user credentials.  The `Forwarder` supports proxying
+of SNMPv3 sessions only.
+
+```
+var forwarder = agent.getForwarder ();
+forwarder.addProxy({
+    context: "slatescontext",
+    host: "bedrock",
+    user: {
+        name: "slate",
+        level: snmp.SecurityLevel.authNoPriv,
+        authProtocol: snmp.AuthProtocols.sha,
+        authKey: "quarryandgravel"
+    },
+});
+```
+
+Now requests to the agent with the context "slatescontext" supplied will be forwarded to host "bedrock",
+with the supplied credentials for user "slate".
+
+You can query the proxy with a local agent user (added with the agent's `Authorizer` instance).
+Assuming your proxy runs on localhost, port 161, you could add local user "fred", and access the proxy
+with the new "fred" user.
+
+```
+var authorizer = agent.getAuthorizer();
+authorizer.addUser ({
+    name: "fred",
+    level: snmp.SecurityLevel.noAuthNoPriv
+});
+
+// Test access using Net-SNMP tools (-n is the context option):
+
+snmpget -v 3 -u fred -l noAuthNoPriv -n slatescontext localhost
+```
+
+This proxies requests through to "bedrock" as per the proxy definition.
+
+## forwarder.addProxy (proxy)
+
+Adds a new proxy to the forwarder.  The proxy is an object with these fields.
+
+ * `context` *(mandatory)* - the name of the SNMPv3 context for this proxy entry.  This is the unique key
+    for proxy entries i.e. there cannot be two proxies with the same context name.
+ * `transport` *(optional)* - specifies the transport to use to reach the remote target.  Can be either
+    `udp4` or `udp6`, defaults to `udp4`.
+ * `target` *(mandatory)* - the remote host that will receive proxied requests.
+ * `port` *(optional)* - the port of the SNMP agent on the remote host.  Defaults to 161.
+ * `user` *(mandatory)* - the SNMPv3 user.  The format for the user is described in the `createV3Session()`
+    call documentation.
+
+## forwarder.deleteProxy (context)
+
+Delete the proxy for the given context from the forwarder.
+
+## forwarder.getProxy (context)
+
+Returns the forwarder's proxy for the given context.
+
+## forwarder.getProxies ()
+
+Returns an object containing a list of all registered proxies, keyed by context name.
+
+## forwarder.dumpProxies ()
+
+Prints a dump of all proxy definitions to the console.
 
 
 # Example Programs
@@ -2027,6 +2110,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.3.0 - 22/01/2020
 
  * Add MIB parser and module store
+
+## Version 2.4.0 - 24/01/2020
+
+ * Add proxy forwarder to agent
 
 # License
 

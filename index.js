@@ -1101,7 +1101,7 @@ Message.prototype.toBufferV3 = function () {
 	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
 	} else {
-		 msgSecurityParametersWriter.writeString ("");
+		msgSecurityParametersWriter.writeString ("");
 	}
 
 	if ( this.hasPrivacy() ) {
@@ -1212,12 +1212,30 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 
 };
 
+Message.prototype.setMsgFlags = function (bitPosition, flag) {
+	if ( this.msgGlobalData && this.msgGlobalData !== undefined && this.msgGlobalData !== null ) {
+		if ( flag ) {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | ( 2 ** bitPosition );
+		} else {
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 2 ** bitPosition );
+		}
+	}
+}
+
 Message.prototype.hasAuthentication = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
 };
 
+Message.prototype.setAuthentication = function (flag) {
+	this.setMsgFlags (0, flag);
+};
+
 Message.prototype.hasPrivacy = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 2;
+};
+
+Message.prototype.setPrivacy = function (flag) {
+	this.setMsgFlags (1, flag);
 };
 
 Message.prototype.isReportable = function () {
@@ -1225,13 +1243,7 @@ Message.prototype.isReportable = function () {
 };
 
 Message.prototype.setReportable = function (flag) {
-	if ( this.msgGlobalData && this.msgGlobalData.msgFlags ) {
-		if ( flag ) {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | 4;
-		} else {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 4 );
-		}
-	}
+	this.setMsgFlags (2, flag);
 };
 
 Message.prototype.isAuthenticationDisabled = function () {
@@ -1818,20 +1830,28 @@ Session.prototype.onMsg = function (buffer) {
 				req.responseCb (new ResponseInvalidError ("Community '"
 						+ req.message.community + "' in request does not match "
 						+ "community '" + message.community + "' in response"));
-			} else if (message.pdu.type == PduType.GetResponse) {
-				req.onResponse (req, message);
 			} else if (message.pdu.type == PduType.Report) {
-				if ( ! req.originalPdu ) {
-					req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
-					return;
-				}
 				this.msgSecurityParameters = {
 					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
 					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 				};
-				req.originalPdu.contextName = this.context;
-				this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
+				if ( this.proxy ) {
+					this.msgSecurityParameters.msgUserName = this.proxy.user.name;
+					this.msgSecurityParameters.msgAuthenticationParameters = "";
+					this.msgSecurityParameters.msgPrivacyParameters = "";
+				} else {
+					if ( ! req.originalPdu ) {
+						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
+						return;
+					}
+					req.originalPdu.contextName = this.context;
+					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
+				}
+			} else if ( this.proxy ) {
+				this.onProxyResponse (req, message);
+			} else if (message.pdu.type == PduType.GetResponse) {
+				req.onResponse (req, message);
 			} else {
 				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
 						+ message.pdu.type + "' in response"));
@@ -1964,12 +1984,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 			if ( this.msgSecurityParameters ) {
 				this.sendV3Req (pdu, feedCb, responseCb, options, this.port);
 			} else {
-				// SNMPv3 discovery
-				var discoveryPdu = createDiscoveryPdu(this.context);
-				var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
-				var discoveryReq = new Req (this, discoveryMessage, feedCb, responseCb, options);
-				discoveryReq.originalPdu = pdu;
-				this.send (discoveryReq);
+				this.sendV3Discovery (pdu, feedCb, responseCb, options);
 			}
 		} else {
 			message = Message.createCommunity (this.version, this.community, pdu);
@@ -2356,6 +2371,55 @@ Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) 
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
 	this.send (req);
+};
+
+Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, options) {
+	var discoveryPdu = createDiscoveryPdu(this.context);
+	var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
+	var discoveryReq = new Req (this, discoveryMessage, feedCb, responseCb, options);
+	discoveryReq.originalPdu = originalPdu;
+	this.send (discoveryReq);
+}
+
+Session.prototype.onProxyResponse = function (req, message) {
+	if ( message.version != Version3 ) {
+		this.callback (new RequestFailedError ("Only SNMP version 3 contexts are supported"));
+		return;
+	}
+	message.pdu.contextName = this.proxy.context;
+	message.user = req.proxiedUser;
+	message.setAuthentication ( ! (req.proxiedUser.level == SecurityLevel.noAuthNoPriv));
+	message.setPrivacy (req.proxiedUser.level == SecurityLevel.authPriv);
+	message.msgSecurityParameters = {
+		msgAuthoritativeEngineID: req.proxiedEngine.engineID,
+		msgAuthoritativeEngineBoots: req.proxiedEngine.engineBoots,
+		msgAuthoritativeEngineTime: req.proxiedEngine.engineTime,
+		msgUserName: req.proxiedUser.name,
+		msgAuthenticationParameters: "",
+		msgPrivacyParameters: ""
+	};
+	message.buffer = null;
+	message.pdu.contextEngineID = message.msgSecurityParameters.msgAuthoritativeEngineID;
+	message.pdu.contextName = this.proxy.context;
+	message.pdu.id = req.proxiedPduId;
+	this.proxy.listener.send (message, req.proxiedRinfo);
+};
+
+Session.create = function (target, community, options) {
+	if ( options.version && ! ( options.version == Version1 || options.version == Version2c ) ) {
+		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
+	} else {
+		return new Session (target, community, options);
+	}
+};
+
+Session.createV3 = function (target, user, options) {
+	if ( options.version && options.version != Version3 ) {
+		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
+	} else {
+		options.version = Version3;
+	}
+	return new Session (target, user, options);
 };
 
 var Engine = function (engineID, engineBoots, engineTime) {
@@ -3348,6 +3412,7 @@ var Agent = function (options, callback) {
 	this.mib = new Mib ();
 	this.callback = callback || function () {};
 	this.context = "";
+	this.forwarder = new Forwarder (this.listener, this.callback);
 };
 
 Agent.prototype.getMib = function () {
@@ -3397,7 +3462,9 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 
 	// Request processing
 	debug (JSON.stringify (message.pdu, null, 2));
-	if ( message.pdu.type == PduType.GetRequest ) {
+	if ( message.pdu.contextName != "" ) {
+		this.onProxyRequest (message, rinfo);
+	} else if ( message.pdu.type == PduType.GetRequest ) {
 		responseMessage = this.request (message, rinfo);
 	} else if ( message.pdu.type == PduType.SetRequest ) {
 		responseMessage = this.request (message, rinfo);
@@ -3576,11 +3643,105 @@ Agent.prototype.sendResponse = function (rinfo, requestMessage, responsePdu) {
 	this.callback (null, Listener.formatCallbackData (responseMessage.pdu, rinfo) );
 };
 
+Agent.prototype.onProxyRequest = function (message, rinfo) {
+	var contextName = message.pdu.contextName;
+	var proxy;
+	var proxiedPduId;
+	var proxiedUser;
+
+	if ( message.version != Version3 ) {
+		this.callback (new RequestFailedError ("Only SNMP version 3 contexts are supported"));
+		return;
+	}
+	proxy = this.forwarder.getProxy (contextName);
+	if ( ! proxy ) {
+		this.callback (new RequestFailedError ("No proxy found for message received with context " + contextName));
+		return;
+	}
+	if ( ! proxy.session.msgSecurityParameters ) {
+		// Discovery required - but chaining not implemented from here yet
+		proxy.session.sendV3Discovery (null, null, this.callback, {});
+	} else {
+		message.msgSecurityParameters = proxy.session.msgSecurityParameters;
+		message.setAuthentication ( ! (proxy.user.level == SecurityLevel.noAuthNoPriv));
+		message.setPrivacy (proxy.user.level == SecurityLevel.authPriv);
+		proxiedUser = message.user;
+		message.user = proxy.user;
+		message.buffer = null;
+		message.pdu.contextEngineID = proxy.session.msgSecurityParameters.msgAuthoritativeEngineID;
+		message.pdu.contextName = "";
+		proxiedPduId = message.pdu.id;
+		message.pdu.id = _generateId ();
+		var req = new Req (proxy.session, message, null, this.callback, {}, true);
+		req.port = proxy.port;
+		req.proxiedRinfo = rinfo;
+		req.proxiedPduId = proxiedPduId;
+		req.proxiedUser = proxiedUser;
+		req.proxiedEngine = this.engine;
+		proxy.session.send (req);
+	}
+};
+
+Agent.prototype.getForwarder = function () {
+	return this.forwarder;
+};
+
 Agent.create = function (options, callback) {
 	var agent = new Agent (options, callback);
 	agent.listener.startListening ();
 	return agent;
 };
+
+var Forwarder = function (listener, callback) {
+	this.proxies = {};
+	this.listener = listener;
+	this.callback = callback;
+};
+
+Forwarder.prototype.addProxy = function (proxy) {
+	var options = {
+		version: Version3,
+		port: proxy.port,
+		transport: proxy.transport
+	};
+	proxy.session = Session.createV3 (proxy.target, proxy.user, options);
+	proxy.session.proxy = proxy;
+	proxy.session.proxy.listener = this.listener;
+	this.proxies[proxy.context] = proxy;
+	proxy.session.sendV3Discovery (null, null, this.callback);
+};
+
+Forwarder.prototype.deleteProxy = function (proxyName) {
+	var proxy = this.proxies[proxyName];
+
+	if ( proxy && proxy.session ) {
+		proxy.session.close ();
+	}
+	delete this.proxies[proxyName];
+};
+
+Forwarder.prototype.getProxy = function (proxyName) {
+	return this.proxies[proxyName];
+};
+
+Forwarder.prototype.getProxies = function () {
+	return this.proxies;
+};
+
+Forwarder.prototype.dumpProxies = function () {
+	var dump = {};
+	for ( var proxy of Object.values (this.proxies) ) {
+		dump[proxy.context] = {
+			context: proxy.context,
+			target: proxy.target,
+			user: proxy.user,
+			port: proxy.port
+		}
+	}
+	console.log (JSON.stringify (dump, null, 2));
+};
+
+
 
 /*****************************************************************************
  ** Exports
@@ -3588,22 +3749,8 @@ Agent.create = function (options, callback) {
 
 exports.Session = Session;
 
-exports.createSession = function (target, community, options) {
-	if ( options.version && ! ( options.version == Version1 || options.version == Version2c ) ) {
-		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
-	} else {
-		return new Session (target, community, options);
-	}
-};
-
-exports.createV3Session = function (target, user, options) {
-	if ( options.version && options.version != Version3 ) {
-		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
-	} else {
-		options.version = Version3;
-	}
-	return new Session (target, user, options);
-};
+exports.createSession = Session.create;
+exports.createV3Session = Session.createV3;
 
 exports.createReceiver = Receiver.create;
 exports.createAgent = Agent.create;

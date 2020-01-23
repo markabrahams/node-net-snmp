@@ -202,6 +202,18 @@
         },
         {
             "type": "node",
+            "request": "launch",
+            "name": "SNMP proxy",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/example/snmp-proxy.js",
+            "args": [
+                "-p", "1161"
+            ]
+        },
+        {
+            "type": "node",
             "request": "attach",
             "name": "SNMP attach",
             "port": 9222,
