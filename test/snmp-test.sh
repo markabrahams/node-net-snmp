@@ -17,16 +17,16 @@ RO_COMMUNITY=public
 RW_COMMUNITY=private
 USER_NONE=fred
 USER_AUTH=betty
-USER_PRIV=wilma
+USER_PRIV=barney
 USER_TRAP_NONE=fred
 USER_TRAP_AUTH=betty
-USER_TRAP_PRIV=wilma
+USER_TRAP_PRIV=barney
 USER_SET_NONE=trapnone
 USER_SET_AUTH=trapshaonly
 USER_SET_PRIV=trapshades
 AUTH_PROTOCOL=sha
 AUTH_KEY=illhavesomeauth
-PRIV_PROTOCOL=des
+PRIV_PROTOCOL=aes
 PRIV_KEY=andsomepriv
 
 usage() {

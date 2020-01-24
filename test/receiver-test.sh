@@ -16,10 +16,10 @@ IPV6=0
 COMMUNITY=public
 USER_NONE=fred
 USER_AUTH=betty
-USER_PRIV=wilma
+USER_PRIV=barney
 AUTH_PROTOCOL=sha
 AUTH_KEY=illhavesomeauth
-PRIV_PROTOCOL=des
+PRIV_PROTOCOL=aes
 PRIV_KEY=andsomepriv
 
 usage() {

@@ -49,20 +49,21 @@ RFC 3413 describes five types of SNMP applications:
  4. Notification Receiver Applications &mdash; which receive notifications (traps or informs)
  5. Proxy Forwarder Applications &mdash; which forward SNMP messages
 
-This library provides support for the above applications according to this table:
+This library provides support for all of the above applications, with the documentation
+for each shown in this table:
 
-| Application | Common Use | Supported | Documentation |
-| ----------- | ---------- | --------- | ------------- |
-| Command Generator | NMS / SNMP tools | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Command Responder | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
-| Notification Originator | SNMP agents / NMS-to-NMS notifications | yes | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Notification Receiver | NMS | yes | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
-| Proxy Forwarder | SNMP agents | yes | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
+| Application | Common Use | Documentation |
+| ----------- | ---------- | ------------- |
+| Command Generator | NMS / SNMP tools | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Command Responder | SNMP agents | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
+| Notification Originator | SNMP agents / NMS-to-NMS notifications | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
+| Notification Receiver | NMS | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
+| Proxy Forwarder | SNMP agents | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
 
 # Features
 
  * Support for all SNMP versions: SNMPv1, SNMPv2c and SNMPv3
- * SNMPv3 message authentication using MD5 and SHA, and DES encryption
+ * SNMPv3 message authentication using MD5 or SHA, and privacy using DES or AES encryption
  * Community-based and user-based authorization
  * SNMP initiator for all relevant protocol operations: Get, GetNext, GetBulk, Set, Trap, Inform
  * Convenience methods for MIB "walking", subtree collection, table and table column collection
@@ -92,6 +93,8 @@ This module aims to be fully compliant with the following RFCs:
 Network Management Protocol (SNMP)
  * [3417][3417] - Transport Mappings for the Simple Network Management
 Protocol (SNMP)
+ * [3826][3826] - The Advanced Encryption Standard (AES) Cipher Algorithm
+in the SNMP User-based Security Model
 
 [1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
 [1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
@@ -100,6 +103,7 @@ Protocol (SNMP)
 [3414]: https://tools.ietf.org/rfc/rfc3414.txt "RFC 3414"
 [3416]: https://tools.ietf.org/rfc/rfc3416.txt "RFC 3416"
 [3417]: https://tools.ietf.org/rfc/rfc3417.txt "RFC 3417"
+[3826]: https://tools.ietf.org/rfc/rfc3826.txt "RFC 3826"
 
 # Constants
 
@@ -212,8 +216,8 @@ RFC 3414:
 
 This object contains constants to select a supported digest algorithm for SNMPv3
 messages that require authentication:
- * `md5` - for MD5 message authentication
- * `sha` - for SHA message authentication
+ * `md5` - for MD5 message authentication (HMAC-MD5-96)
+ * `sha` - for SHA message authentication (HMAC-SHA-96)
 
 These are the two hash algorithms specified in RFC 3414.  Other digest algorithms
 are not supported.
@@ -222,10 +226,12 @@ are not supported.
 
 This object contains constants to select a supported encryption algorithm for
 SNMPv3 messages that require privacy:
- * `des` - for DES encryption
+ * `des` - for DES encryption (CBC-DES)
+ * `aes` - for AES encryption (CFB-AES-128)
 
-This is the sole encryption algorithms specified in RFC 3414.  Other encryption
-algorithms are not supported.
+DES is the sole encryption algorithm specified in the original SNMPv3 User-Based
+Security Model RFC (RFC 3414); AES for SNMPv3 was added later in RFC 3826.  Other
+encryption algorithms are not supported.
 
 # OID Strings & Varbinds
 
@@ -502,9 +508,10 @@ The meaning of these are as per RFC3414.  If the `level` supplied is `authNoPriv
  * `snmp.AuthProtocols.sha` - for SHA message authentication
 
 If the `level` supplied is `authPriv`, then the `privProtocol` and `privKey` fields
-must also be present.  The `privProtocol` field can take the single value from the
+must also be present.  The `privProtocol` field can take values from the
 `snmp.PrivProtocols` object:
  * `snmp.PrivProtocols.des` - for DES encryption
+ * `snmp.PrivProtocols.aes` - for AES encryption
 
 Once a v3 session is created, the same set of `session` methods are available as
 for v1 and v2c.
@@ -2114,6 +2121,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.4.0 - 24/01/2020
 
  * Add proxy forwarder to agent
+
+## Version 2.5.0 - 25/01/2020
+
+ * Add AES-128 encryption
 
 # License
 

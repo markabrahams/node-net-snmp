@@ -30,22 +30,31 @@ var cb = function(error, trap) {
 }
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
-receiver.addCommunity ("public");
-receiver.addUser ({
+var authorizer = receiver.getAuthorizer ();
+authorizer.addCommunity ("public");
+authorizer.addUser ({
     name: "fred",
     level: snmp.SecurityLevel.noAuthNoPriv
 });
-receiver.addUser ({
+authorizer.addUser ({
     name: "betty",
     level: snmp.SecurityLevel.authNoPriv,
     authProtocol: snmp.AuthProtocols.sha,
     authKey: "illhavesomeauth"
 });
-receiver.addUser ({
+authorizer.addUser ({
     name: "wilma",
     level: snmp.SecurityLevel.authPriv,
     authProtocol: snmp.AuthProtocols.sha,
     authKey: "illhavesomeauth",
     privProtocol: snmp.PrivProtocols.des,
+    privKey: "andsomepriv"
+});
+authorizer.addUser ({
+    name: "barney",
+    level: snmp.SecurityLevel.authPriv,
+    authProtocol: snmp.AuthProtocols.sha,
+    authKey: "illhavesomeauth",
+    privProtocol: snmp.PrivProtocols.aes,
     privKey: "andsomepriv"
 });

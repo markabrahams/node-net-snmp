@@ -143,7 +143,8 @@ _expandConstantObject (AuthProtocols);
 
 var PrivProtocols = {
 	"1": "none",
-	"2": "des"
+	"2": "des",
+	"4": "aes"
 };
 
 _expandConstantObject (PrivProtocols);
@@ -911,13 +912,20 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 
 var Encryption = {};
 
-Encryption.INPUT_KEY_LENGTH = 16;
-Encryption.DES_KEY_LENGTH = 8;
-Encryption.DES_BLOCK_LENGTH = 8;
-Encryption.CRYPTO_DES_ALGORITHM = 'des-cbc';
 Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex');
 
-Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authProtocol, engineID) {
+Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authProtocol, engine) {
+	var encryptFunction = Encryption.algorithms[privProtocol].encryptPdu;
+	return encryptFunction (scopedPdu, privPassword, authProtocol, engine);
+}
+
+Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
+	var decryptFunction = Encryption.algorithms[privProtocol].decryptPdu;
+	return decryptFunction (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
+}
+
+Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engine) {
+	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var encryptionKey;
 	var preIv;
@@ -927,38 +935,37 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	var paddedScopedPduLength;
 	var paddedScopedPdu;
 	var encryptedPdu;
-	var cbcProtocol = Encryption.CRYPTO_DES_ALGORITHM;
 
-	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
-	encryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
-	privLocalizedKey.copy (encryptionKey, 0, 0, Encryption.DES_KEY_LENGTH);
-	preIv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
-	privLocalizedKey.copy (preIv, 0, Encryption.DES_KEY_LENGTH, Encryption.DES_KEY_LENGTH + Encryption.DES_BLOCK_LENGTH);
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
+	encryptionKey = Buffer.alloc (des.KEY_LENGTH);
+	privLocalizedKey.copy (encryptionKey, 0, 0, des.KEY_LENGTH);
+	preIv = Buffer.alloc (des.BLOCK_LENGTH);
+	privLocalizedKey.copy (preIv, 0, des.KEY_LENGTH, des.KEY_LENGTH + des.BLOCK_LENGTH);
 
-	salt = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	salt = Buffer.alloc (des.BLOCK_LENGTH);
 	// set local SNMP engine boots part of salt to 1, as we have no persistent engine state
 	salt.fill ('00000001', 0, 4, 'hex');
 	// set local integer part of salt to random
 	salt.fill (crypto.randomBytes (4), 4, 8);
-	iv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	iv = Buffer.alloc (des.BLOCK_LENGTH);
 	for (i = 0; i < iv.length; i++) {
 		iv[i] = preIv[i] ^ salt[i];
 	}
 	
-	if (scopedPdu.length % Encryption.DES_BLOCK_LENGTH == 0) {
+	if (scopedPdu.length % des.BLOCK_LENGTH == 0) {
 		paddedScopedPdu = scopedPdu;
 	} else {
-		paddedScopedPduLength = Encryption.DES_BLOCK_LENGTH * (Math.floor (scopedPdu.length / Encryption.DES_BLOCK_LENGTH) + 1);
+		paddedScopedPduLength = des.BLOCK_LENGTH * (Math.floor (scopedPdu.length / des.BLOCK_LENGTH) + 1);
 		paddedScopedPdu = Buffer.alloc (paddedScopedPduLength);
 		scopedPdu.copy (paddedScopedPdu, 0, 0, scopedPdu.length);
 	}
-	cipher = crypto.createCipheriv (cbcProtocol, encryptionKey, iv);
+	cipher = crypto.createCipheriv (des.CRYPTO_ALGORITHM, encryptionKey, iv);
 	encryptedPdu = cipher.update (paddedScopedPdu);
 	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
-	debug ("Key: " + encryptionKey.toString ('hex'));
-	debug ("IV:  " + iv.toString ('hex'));
-	debug ("Plain:     " + paddedScopedPdu.toString ('hex'));
-	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// debug ("Key: " + encryptionKey.toString ('hex'));
+	// debug ("IV:  " + iv.toString ('hex'));
+	// debug ("Plain:     " + paddedScopedPdu.toString ('hex'));
+	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
 
 	return {
 		encryptedPdu: encryptedPdu,
@@ -966,7 +973,8 @@ Encryption.encryptPdu = function (scopedPdu, privProtocol, privPassword, authPro
 	};
 };
 
-Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engineID, forceAutoPaddingDisable ) {
+Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
+	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var decryptionKey;
 	var preIv;
@@ -974,21 +982,20 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 	var iv;
 	var i;
 	var decryptedPdu;
-	var cbcProtocol = Encryption.CRYPTO_DES_ALGORITHM;;
 
-	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
-	decryptionKey = Buffer.alloc (Encryption.DES_KEY_LENGTH);
-	privLocalizedKey.copy (decryptionKey, 0, 0, Encryption.DES_KEY_LENGTH);
-	preIv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
-	privLocalizedKey.copy (preIv, 0, Encryption.DES_KEY_LENGTH, Encryption.DES_KEY_LENGTH + Encryption.DES_BLOCK_LENGTH);
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
+	decryptionKey = Buffer.alloc (des.KEY_LENGTH);
+	privLocalizedKey.copy (decryptionKey, 0, 0, des.KEY_LENGTH);
+	preIv = Buffer.alloc (des.BLOCK_LENGTH);
+	privLocalizedKey.copy (preIv, 0, des.KEY_LENGTH, des.KEY_LENGTH + des.BLOCK_LENGTH);
 
 	salt = privParameters;
-	iv = Buffer.alloc (Encryption.DES_BLOCK_LENGTH);
+	iv = Buffer.alloc (des.BLOCK_LENGTH);
 	for (i = 0; i < iv.length; i++) {
 		iv[i] = preIv[i] ^ salt[i];
 	}
 	
-	decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
+	decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
 	if ( forceAutoPaddingDisable ) {
 		decipher.setAutoPadding(false);
 	}
@@ -1001,23 +1008,111 @@ Encryption.decryptPdu = function (encryptedPdu, privProtocol, privParameters, pr
 		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	} catch (error) {
 		// debug("Decrypt error: " + error);
-		decipher = crypto.createDecipheriv (cbcProtocol, decryptionKey, iv);
+		decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
 		decipher.setAutoPadding(false);
 		decryptedPdu = decipher.update (encryptedPdu);
 		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	}
-	debug ("Key: " + decryptionKey.toString ('hex'));
-	debug ("IV:  " + iv.toString ('hex'));
-	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
-	debug ("Plain:     " + decryptedPdu.toString ('hex'));
+	// debug ("Key: " + decryptionKey.toString ('hex'));
+	// debug ("IV:  " + iv.toString ('hex'));
+	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// debug ("Plain:     " + decryptedPdu.toString ('hex'));
 
 	return decryptedPdu;
+};
 
+Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[PrivProtocols.aes];
+	var privLocalizedKey;
+	var encryptionKey;
+	var salt;
+	var iv;
+	var encryptedPdu;
+
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
+	encryptionKey = Buffer.alloc (aes.KEY_LENGTH);
+	privLocalizedKey.copy (encryptionKey, 0, 0, aes.KEY_LENGTH);
+
+	// iv = engineBoots(4) | engineTime(4) | salt(8)
+	iv = Buffer.alloc (aes.BLOCK_LENGTH);
+	engineBootsBuffer = Buffer.alloc (4);
+	engineBootsBuffer.writeUInt32BE (engine.engineBoots);
+	engineTimeBuffer = Buffer.alloc (4);
+	engineTimeBuffer.writeUInt32BE (engine.engineTime);
+	salt = Buffer.alloc (8);
+	salt.fill (crypto.randomBytes (8), 0, 8);
+	engineBootsBuffer.copy (iv, 0, 0, 4);
+	engineTimeBuffer.copy (iv, 4, 0, 4);
+	salt.copy (iv, 8, 0, 8);
+
+	cipher = crypto.createCipheriv (aes.CRYPTO_ALGORITHM, encryptionKey, iv);
+	encryptedPdu = cipher.update (scopedPdu);
+	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
+	// debug ("Key: " + encryptionKey.toString ('hex'));
+	// debug ("IV:  " + iv.toString ('hex'));
+	// debug ("Plain:     " + scopedPdu.toString ('hex'));
+	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+
+	return {
+		encryptedPdu: encryptedPdu,
+		msgPrivacyParameters: salt
+	};
+};
+
+Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[PrivProtocols.aes];
+	var privLocalizedKey;
+	var decryptionKey;
+	var iv;
+	var decryptedPdu;
+
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
+	decryptionKey = Buffer.alloc (aes.KEY_LENGTH);
+	privLocalizedKey.copy (decryptionKey, 0, 0, aes.KEY_LENGTH);
+
+	// iv = engineBoots(4) | engineTime(4) | salt(8)
+	iv = Buffer.alloc (aes.BLOCK_LENGTH);
+	engineBootsBuffer = Buffer.alloc (4);
+	engineBootsBuffer.writeUInt32BE (engine.engineBoots);
+	engineTimeBuffer = Buffer.alloc (4);
+	engineTimeBuffer.writeUInt32BE (engine.engineTime);
+	salt = Buffer.alloc (8);
+	engineBootsBuffer.copy (iv, 0, 0, 4);
+	engineTimeBuffer.copy (iv, 4, 0, 4);
+	privParameters.copy (iv, 8, 0, 8);
+
+	decipher = crypto.createDecipheriv (aes.CRYPTO_ALGORITHM, decryptionKey, iv);
+	decryptedPdu = decipher.update (encryptedPdu);
+	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	// debug ("Key: " + decryptionKey.toString ('hex'));
+	// debug ("IV:  " + iv.toString ('hex'));
+	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// debug ("Plain:     " + decryptedPdu.toString ('hex'));
+
+	return decryptedPdu;
 };
 
 Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
 	privacyParametersOffset = messageBuffer.indexOf (Encryption.PRIV_PARAMETERS_PLACEHOLDER);
 	msgPrivacyParameters.copy (messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
+};
+
+Encryption.algorithms = {};
+
+Encryption.algorithms[PrivProtocols.des] = {
+	CRYPTO_ALGORITHM: 'des-cbc',
+	KEY_LENGTH: 8,
+	BLOCK_LENGTH: 8,
+	encryptPdu: Encryption.encryptPduDes,
+	decryptPdu: Encryption.decryptPduDes
+};
+
+Encryption.algorithms[PrivProtocols.aes] = {
+	CRYPTO_ALGORITHM: 'aes-128-cfb',
+	KEY_LENGTH: 16,
+	BLOCK_LENGTH: 16,
+	encryptPdu: Encryption.encryptPduAes,
+	decryptPdu: Encryption.decryptPduAes
 };
 
 /*****************************************************************************
@@ -1130,7 +1225,13 @@ Message.prototype.toBufferV3 = function () {
 	scopedPduWriter.endSequence ();
 
 	if ( this.hasPrivacy() ) {
-		encryptionResult = Encryption.encryptPdu(scopedPduWriter.buffer, this.user.privProtocol, this.user.privKey, this.user.authProtocol, this.msgSecurityParameters.msgAuthoritativeEngineID);
+		var authoritativeEngine = {
+			engineID: this.msgSecurityParameters.msgAuthoritativeEngineID,
+			engineBoots: this.msgSecurityParameters.msgAuthoritativeEngineBoots,
+			engineTime: this.msgSecurityParameters.msgAuthoritativeEngineTime,
+		};
+		encryptionResult = Encryption.encryptPdu (this.user.privProtocol, scopedPduWriter.buffer,
+				this.user.privKey, this.user.authProtocol, authoritativeEngine);
 		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
 	} else {
 		writer.writeBuffer (scopedPduWriter.buffer);
@@ -1170,9 +1271,14 @@ Message.prototype.decryptPdu = function (user, responseCb) {
 	var decryptedPdu;
 	var decryptedPduReader;
 	try {
-		decryptedPdu = Encryption.decryptPdu(this.encryptedPdu, user.privProtocol,
+		var authoratitiveEngine = {
+			engineID: this.msgSecurityParameters.msgAuthoritativeEngineID,
+			engineBoots: this.msgSecurityParameters.msgAuthoritativeEngineBoots,
+			engineTime: this.msgSecurityParameters.msgAuthoritativeEngineTime
+		};
+		decryptedPdu = Encryption.decryptPdu(user.privProtocol, this.encryptedPdu,
 				this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
-				this.msgSecurityParameters.msgAuthoritativeEngineID);
+				authoratitiveEngine);
 		decryptedPduReader = new ber.Reader (decryptedPdu);
 		this.pdu = readPdu(decryptedPduReader, true);
 		return true;
@@ -1182,7 +1288,7 @@ Message.prototype.decryptPdu = function (user, responseCb) {
 	// this try-catch provides the workaround for this condition
 	} catch (possibleTruncationError) {
 		try {
-			decryptedPdu = Encryption.decryptPdu(this.encryptedPdu, user.privProtocol,
+			decryptedPdu = Encryption.decryptPdu(user.privProtocol, this.encryptedPdu,
 					this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
 					this.msgSecurityParameters.msgAuthoritativeEngineID, true);
 			decryptedPduReader = new ber.Reader (decryptedPdu);
@@ -1480,6 +1586,7 @@ var Session = function (target, authenticator, options) {
 
 	DEBUG = options.debug;
 
+	this.engine = new Engine ();
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -2598,36 +2705,8 @@ var Receiver = function (options, callback) {
 	this.listener = new Listener (options, this);
 };
 
-Receiver.prototype.addCommunity = function (community) {
-	this.authorizer.addCommunity (community);
-};
-
-Receiver.prototype.getCommunity = function (community) {
-	return this.authorizer.getCommunity (community);
-};
-
-Receiver.prototype.getCommunities = function () {
-	return this.authorizer.getCommunities ();
-};
-
-Receiver.prototype.deleteCommunity = function (community) {
-	this.authorizer.deleteCommunities (community);
-};
-
-Receiver.prototype.addUser = function (user) {
-	this.authorizer.addUser (user);
-};
-
-Receiver.prototype.getUser = function (userName) {
-	return this.authorizer.getUser (userName);
-};
-
-Receiver.prototype.getUsers = function () {
-	return this.authorizer.getUsers ();
-};
-
-Receiver.prototype.deleteUser = function (userName) {
-	this.authorizer.deleteUser (userName);
+Receiver.prototype.getAuthorizer = function () {
+	return this.authorizer;
 };
 
 Receiver.prototype.onMsg = function (buffer, rinfo) {
