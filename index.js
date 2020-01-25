@@ -917,12 +917,37 @@ Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex')
 Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authProtocol, engine) {
 	var encryptFunction = Encryption.algorithms[privProtocol].encryptPdu;
 	return encryptFunction (scopedPdu, privPassword, authProtocol, engine);
-}
+};
 
 Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
 	var decryptFunction = Encryption.algorithms[privProtocol].decryptPdu;
 	return decryptFunction (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
-}
+};
+
+Encryption.debugEncrypt = function (encryptionKey, iv, plainPdu, encryptedPdu) {
+	debug ("Key: " + encryptionKey.toString ('hex'));
+	debug ("IV:  " + iv.toString ('hex'));
+	debug ("Plain:     " + plainPdu.toString ('hex'));
+	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+};
+
+Encryption.debugDecrypt = function (decryptionKey, iv, encryptedPdu, plainPdu) {
+	debug ("Key: " + decryptionKey.toString ('hex'));
+	debug ("IV:  " + iv.toString ('hex'));
+	debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	debug ("Plain:     " + plainPdu.toString ('hex'));
+};
+
+Encryption.generateLocalizedKey = function (algorithm, authProtocol, privPassword, engineID) {
+	var privLocalizedKey;
+	var encryptionKey;
+
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
+	encryptionKey = Buffer.alloc (algorithm.KEY_LENGTH);
+	privLocalizedKey.copy (encryptionKey, 0, 0, algorithm.KEY_LENGTH);
+
+	return encryptionKey;
+};
 
 Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engine) {
 	var des = Encryption.algorithms[PrivProtocols.des];
@@ -936,6 +961,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	var paddedScopedPdu;
 	var encryptedPdu;
 
+	encryptionKey = Encryption.generateLocalizedKey (des, authProtocol, privPassword, engine.engineID);
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
 	encryptionKey = Buffer.alloc (des.KEY_LENGTH);
 	privLocalizedKey.copy (encryptionKey, 0, 0, des.KEY_LENGTH);
@@ -962,10 +988,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	cipher = crypto.createCipheriv (des.CRYPTO_ALGORITHM, encryptionKey, iv);
 	encryptedPdu = cipher.update (paddedScopedPdu);
 	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
-	// debug ("Key: " + encryptionKey.toString ('hex'));
-	// debug ("IV:  " + iv.toString ('hex'));
-	// debug ("Plain:     " + paddedScopedPdu.toString ('hex'));
-	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// Encryption.debugEncrypt (encryptionKey, iv, paddedScopedPdu, encryptedPdu);
 
 	return {
 		encryptedPdu: encryptedPdu,
@@ -1013,45 +1036,42 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 		decryptedPdu = decipher.update (encryptedPdu);
 		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	}
-	// debug ("Key: " + decryptionKey.toString ('hex'));
-	// debug ("IV:  " + iv.toString ('hex'));
-	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
-	// debug ("Plain:     " + decryptedPdu.toString ('hex'));
+	// Encryption.debugDecrypt (decryptionKey, iv, encryptedPdu, decryptedPdu);
 
 	return decryptedPdu;
 };
 
-Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
-	var aes = Encryption.algorithms[PrivProtocols.aes];
-	var privLocalizedKey;
-	var encryptionKey;
-	var salt;
+Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	var iv;
-	var encryptedPdu;
-
-	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
-	encryptionKey = Buffer.alloc (aes.KEY_LENGTH);
-	privLocalizedKey.copy (encryptionKey, 0, 0, aes.KEY_LENGTH);
 
 	// iv = engineBoots(4) | engineTime(4) | salt(8)
 	iv = Buffer.alloc (aes.BLOCK_LENGTH);
 	engineBootsBuffer = Buffer.alloc (4);
-	engineBootsBuffer.writeUInt32BE (engine.engineBoots);
+	engineBootsBuffer.writeUInt32BE (engineBoots);
 	engineTimeBuffer = Buffer.alloc (4);
-	engineTimeBuffer.writeUInt32BE (engine.engineTime);
-	salt = Buffer.alloc (8);
-	salt.fill (crypto.randomBytes (8), 0, 8);
+	engineTimeBuffer.writeUInt32BE (engineTime);
 	engineBootsBuffer.copy (iv, 0, 0, 4);
 	engineTimeBuffer.copy (iv, 4, 0, 4);
 	salt.copy (iv, 8, 0, 8);
 
+	return iv;
+}
+
+Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[PrivProtocols.aes];
+	var encryptionKey;
+	var salt;
+	var iv;
+	var cipher;
+	var encryptedPdu;
+
+	encryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	salt = Buffer.alloc (8).fill (crypto.randomBytes (8), 0, 8);
+	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, salt);
 	cipher = crypto.createCipheriv (aes.CRYPTO_ALGORITHM, encryptionKey, iv);
 	encryptedPdu = cipher.update (scopedPdu);
 	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
-	// debug ("Key: " + encryptionKey.toString ('hex'));
-	// debug ("IV:  " + iv.toString ('hex'));
-	// debug ("Plain:     " + scopedPdu.toString ('hex'));
-	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
+	// Encryption.debugEncrypt (encryptionKey, iv, scopedPdu, encryptedPdu);
 
 	return {
 		encryptedPdu: encryptedPdu,
@@ -1061,33 +1081,17 @@ Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engi
 
 Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine) {
 	var aes = Encryption.algorithms[PrivProtocols.aes];
-	var privLocalizedKey;
 	var decryptionKey;
 	var iv;
+	var decipher;
 	var decryptedPdu;
 
-	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
-	decryptionKey = Buffer.alloc (aes.KEY_LENGTH);
-	privLocalizedKey.copy (decryptionKey, 0, 0, aes.KEY_LENGTH);
-
-	// iv = engineBoots(4) | engineTime(4) | salt(8)
-	iv = Buffer.alloc (aes.BLOCK_LENGTH);
-	engineBootsBuffer = Buffer.alloc (4);
-	engineBootsBuffer.writeUInt32BE (engine.engineBoots);
-	engineTimeBuffer = Buffer.alloc (4);
-	engineTimeBuffer.writeUInt32BE (engine.engineTime);
-	salt = Buffer.alloc (8);
-	engineBootsBuffer.copy (iv, 0, 0, 4);
-	engineTimeBuffer.copy (iv, 4, 0, 4);
-	privParameters.copy (iv, 8, 0, 8);
-
+	decryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, privParameters);
 	decipher = crypto.createDecipheriv (aes.CRYPTO_ALGORITHM, decryptionKey, iv);
 	decryptedPdu = decipher.update (encryptedPdu);
 	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
-	// debug ("Key: " + decryptionKey.toString ('hex'));
-	// debug ("IV:  " + iv.toString ('hex'));
-	// debug ("Encrypted: " + encryptedPdu.toString ('hex'));
-	// debug ("Plain:     " + decryptedPdu.toString ('hex'));
+	// Encryption.debugDecrypt (decryptionKey, iv, encryptedPdu, decryptedPdu);
 
 	return decryptedPdu;
 };

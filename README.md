@@ -58,7 +58,7 @@ for each shown in this table:
 | Command Responder | SNMP agents | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
 | Notification Originator | SNMP agents / NMS-to-NMS notifications | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
 | Notification Receiver | NMS | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
-| Proxy Forwarder | SNMP agents | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
+| Proxy Forwarder | SNMP agents | [Forwarder Module](#forwarder-module) |
 
 # Features
 
@@ -1390,7 +1390,8 @@ detailed in the [Mib Module](#mib-module) section below.  The agent allows the M
 and manipulated through the API, as well as queried and manipulated through the SNMP interface with
 the above four request-class PDUs.
 
-The agent also supports SNMP proxy forwarder application.
+The agent also supports SNMP proxy forwarder applications with its singleton `Forwarder` instance,
+which is documented in the [Forwarder Module](#forwarder-module) section below.
 
 ## snmp.createAgent (options, callback)
 
