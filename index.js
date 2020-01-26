@@ -2858,8 +2858,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					tableName: mibEntry.ObjectName,
 					type: MibProviderType.Table,
 					//oid: mibEntry.OID,
-					columns: [],
-					index: [1]  // default - assume first column is index
+					tableColumns: [],
+					tableIndex: [1]  // default - assume first column is index
 				};
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
@@ -2881,10 +2881,37 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							// table entry
 							currentTableProvider.name = mibEntry.ObjectName;
 							currentTableProvider.oid = mibEntry.OID;
+							if ( mibEntry.INDEX ) {
+								currentTableProvider.tableIndex = [];
+								for ( var indexEntry of mibEntry.INDEX ) {
+									indexEntry = indexEntry.trim ();
+									if ( indexEntry.includes(" ") ) {
+										if ( indexEntry.split(" ")[0] == "IMPLIED" ) {
+											currentTableProvider.tableIndex.push ({
+												columnName: indexEntry.split(" ")[1],
+												implied: true
+											});
+										} else {
+											// unknown condition - guess that last token is name
+											currentTableProvider.tableIndex.push ({
+												columnName: indexEntry.split(" ").slice(-1)[0],
+											});
+										}
+									} else {
+										currentTableProvider.tableIndex.push ({
+											columnName: indexEntry
+										});
+									}
+								}
+							}
+							if ( mibEntry.AUGMENTS ) {
+								currentTableProvider.tableAugments = mibEntry.AUGMENTS[0].trim();
+								currentTableProvider.tableIndex = null;
+							}
 						} else if ( parentOid == currentTableProvider.name ) {
 							// table column
-							currentTableProvider.columns.push ({
-								number: mibEntry["OBJECT IDENTIFIER"].split (" ")[1],
+							currentTableProvider.tableColumns.push ({
+								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
 								type: syntaxTypes[syntax]
 							});
@@ -2985,7 +3012,7 @@ MibNode.prototype.getAncestorProvider = function () {
 MibNode.prototype.getInstanceNodeForTableRow = function () {
 	var childCount = Object.keys (this.children).length;
 	if ( childCount == 0 ) {
-		if ( this.value ) {
+		if ( this.value != null ) {
 			return this;
 		} else {
 			return null;
@@ -3000,7 +3027,7 @@ MibNode.prototype.getInstanceNodeForTableRow = function () {
 MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 	var childCount = Object.keys (this.children).length;
 	if ( childCount == 0 ) {
-		if ( this.value ) {
+		if ( this.value != null ) {
 			return this;
 		} else {
 			// not found
@@ -3020,10 +3047,24 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 	}
 };
 
+MibNode.prototype.getInstanceNodesForColumn = function () {
+	var columnNode = this;
+	var instanceNode = this;
+	var instanceNodes = [];
+
+	while (instanceNode && ( instanceNode == columnNode || columnNode.isAncestor (instanceNode.address) ) ) {
+		instanceNode = instanceNode.getNextInstanceNode ();
+		if ( instanceNode && columnNode.isAncestor (instanceNode.address) ) {
+			instanceNodes.push (instanceNode);
+		}
+	}
+	return instanceNodes;
+};
+
 MibNode.prototype.getNextInstanceNode = function () {
 
 	node = this;
-	if ( this.value ) {
+	if ( this.value != null ) {
 		// Need upwards traversal first
 		node = this;
 		while ( node ) {
@@ -3044,7 +3085,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 	}
 	// Descent
 	while ( node ) {
-		if ( node.value ) { 
+		if ( node.value != null ) {
 			return node;
 		}
 		childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
@@ -3082,7 +3123,7 @@ MibNode.prototype.dump = function (options) {
 	if ( ( ! options.leavesOnly || options.showProviders ) && this.provider ) {
 		console.log (this.oid + " [" + MibProviderType[this.provider.type] + ": " + this.provider.name + "]");
 	} else if ( ( ! options.leavesOnly ) || Object.keys (this.children).length == 0 ) {
-		if ( this.value ) {
+		if ( this.value != null ) {
 			valueString = " = ";
 			valueString += options.showTypes ? ObjectType[this.valueType] + ": " : "";
 			valueString += options.showValues ? this.value : "";
@@ -3171,16 +3212,103 @@ Mib.prototype.addProviderToNode = function (provider) {
 
 	node.provider = provider;
 	if ( provider.type == MibProviderType.Table ) {
-		if ( ! provider.index ) {
-			provider.index = [1];
+		if ( ! provider.tableIndex ) {
+			provider.tableIndex = [1];
 		}
 	}
 	this.providerNodes[provider.name] = node;
 	return node;
 };
 
+Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
+	var column = null;
+	if ( indexEntry.columnName ) {
+		column = provider.tableColumns.filter (column => column.name == indexEntry.columnName )[0];
+	} else if ( indexEntry.columnName ) {
+		column = provider.tableColumns.filter (column => column.number == indexEntry.columnNumber )[0];
+	}
+	return column;
+};
+
+Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry) {
+	var column = null;
+	var tableProviders;
+	if ( ! indexEntry.columnName && ! indexEntry.columnNumber ) {
+		throw new Error ("Index entry " + i + ": does not have either a columnName or columnNumber");
+	}
+	if ( indexEntry.foreign ) {
+		// Explicit foreign table is first to search
+		column = this.getColumnFromProvider (this.providers[indexEntry.foreign], indexEntry);
+	} else {
+		// If foreign table isn't given, search the local table next
+		column = this.getColumnFromProvider (localProvider, indexEntry);
+		if ( ! column ) {
+			// as a last resort, try to find the column in a foreign table
+			tableProviders = Object.values(this.providers).
+					filter ( prov => prov.type == MibProviderType.Table );
+			for ( var provider of tableProviders ) {
+				column = this.getColumnFromProvider (provider, indexEntry);
+				if ( column ) {
+					indexEntry.foreign = provider.name;
+					break;
+				}
+			}
+		}
+	}
+	if ( ! column ) {
+		throw new Error ("Could not find column for index entry with column " + indexEntry.columnName);
+	}
+	if ( indexEntry.columnName && indexEntry.columnName != column.name ) {
+		throw new Error ("Index entry " + i + ": Calculated column name " + calculatedColumnName +
+				"does not match supplied column name " + indexEntry.columnName);
+	}
+	if ( indexEntry.columnNumber && indexEntry.columnNumber != column.number ) {
+		throw new Error ("Index entry " + i + ": Calculated column number " + calculatedColumnNumber +
+				" does not match supplied column number " + indexEntry.columnNumber);
+	}
+	if ( ! indexEntry.columnName ) {
+		indexEntry.columnName = column.name;
+	}
+	if ( ! indexEntry.columnNumber ) {
+		indexEntry.columnNumber = column.number;
+	}
+	indexEntry.type = column.type;
+
+};
+
 Mib.prototype.registerProvider = function (provider) {
 	this.providers[provider.name] = provider;
+	if ( provider.type == MibProviderType.Table ) {
+		if ( provider.tableAugments ) {
+			if ( provider.tableAugments == provider.name ) {
+				throw new Error ("Table " + provider.name + " cannot augment itself");
+			}
+			augmentProvider = this.providers[provider.tableAugments];
+			if ( ! augmentProvider ) {
+				throw new Error ("Cannot find base table " + provider.tableAugments + " to augment");
+			}
+			provider.tableIndex = JSON.parse(JSON.stringify(augmentProvider.tableIndex));
+			provider.tableIndex.map (index => index.foreign = augmentProvider.name);
+		} else {
+			if ( ! provider.tableIndex ) {
+				provider.tableIndex = [1]; // default to first column index
+			}
+			for ( var i = 0 ; i < provider.tableIndex.length ; i++ ) {
+				var indexEntry = provider.tableIndex[i];
+				if ( typeof indexEntry == 'number' ) {
+					provider.tableIndex[i] = {
+						columnNumber: indexEntry
+					};
+				} else if ( typeof indexEntry == 'string' ) {
+					provider.tableIndex[i] = {
+						columnName: indexEntry
+					};
+				}
+				indexEntry = provider.tableIndex[i];
+				this.populateIndexEntryFromColumn (provider, indexEntry);
+			}
+		}
+	}
 };
 
 Mib.prototype.registerProviders = function (providers) {
@@ -3206,6 +3334,14 @@ Mib.prototype.getProvider = function (name) {
 
 Mib.prototype.getProviders = function () {
 	return this.providers;
+};
+
+Mib.prototype.dumpProviders = function () {
+	var extraInfo;
+	for ( var provider of Object.values(this.providers) ) {
+		extraInfo = provider.type == MibProviderType.Scalar ? ObjectType[provider.scalarType] : "Columns = " + provider.tableColumns.length;
+		console.log(MibProviderType[provider.type] + ": " + provider.name + " (" + provider.oid + "): " + extraInfo);
+	}
 };
 
 Mib.prototype.getScalarValue = function (scalarName) {
@@ -3265,6 +3401,59 @@ Mib.prototype.getProviderNodeForTable = function (table) {
 	return providerNode;
 };
 
+Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
+	var oidComponents;
+	switch ( indexPart.type ) {
+		case ObjectType.OID:
+		case ObjectType.IpAddress:
+			oidComponents = value.split (".");
+			break;
+		case ObjectType.OctetString:
+			oidComponents = [...value].map (c => c.charCodeAt());
+			break;
+		default:
+			return [value];
+	}
+	if ( ! indexPart.implied && ! indexPart.length ) {
+		oidComponents.unshift (oidComponents.length);
+	}
+	return oidComponents;
+};
+
+Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
+	var rowIndex = [];
+	var foreignColumnParts;
+	var localColumnParts;
+	var localColumnPosition;
+	var oidArrayForValue;
+
+	// foreign columns are first in row
+	foreignColumnParts = provider.tableIndex.filter ( indexPart => indexPart.foreign );
+	for ( var i = 0; i < foreignColumnParts.length ; i++ ) {
+		//rowIndex.push (row[i]);
+		oidArrayForValue = this.getOidAddressFromValue (row[i], foreignColumnParts[i]);
+		rowIndex = rowIndex.concat (oidArrayForValue);
+	}
+	// then local columns
+	localColumnParts = provider.tableIndex.filter ( indexPart => ! indexPart.foreign );
+	for ( var localColumnPart of localColumnParts ) {
+		localColumnPosition = provider.tableColumns.findIndex (column => column.number == localColumnPart.columnNumber);
+		oidArrayForValue = this.getOidAddressFromValue (row[foreignColumnParts.length + localColumnPosition], localColumnPart);
+		rowIndex = rowIndex.concat (oidArrayForValue);
+	}
+	return rowIndex;
+};
+
+Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
+	rowIndexOid = [];
+	for ( var i = 0; i < provider.tableIndex.length ; i++ ) {
+		indexPart = provider.tableIndex[i];
+		keyPart = rowIndex[i];
+		rowIndexOid = rowIndexOid.concat (this.getOidAddressFromValue (keyPart, indexPart));
+	}
+	return rowIndexOid;
+};
+
 Mib.prototype.addTableRow = function (table, row) {
 	var providerNode;
 	var provider;
@@ -3277,17 +3466,15 @@ Mib.prototype.addTableRow = function (table, row) {
 	}
 	providerNode = this.getProviderNodeForTable (table);
 	provider = providerNode.provider;
-	for ( var indexPart of provider.index ) {
-		columnPosition = provider.columns.findIndex (column => column.number == indexPart);
-		instance.push(row[columnPosition]);
-	}
-	for ( var i = 0; i < providerNode.provider.columns.length ; i++ ) {
-		var column = providerNode.provider.columns[i];
-		instanceAddress = providerNode.address.concat(column.number).concat(instance);
+	rowValueOffset = provider.tableIndex.filter ( indexPart => indexPart.foreign ).length;
+	instance = this.getTableRowInstanceFromRow (provider, row);
+	for ( var i = 0; i < provider.tableColumns.length ; i++ ) {
+		var column = provider.tableColumns[i];
+		instanceAddress = providerNode.address.concat (column.number).concat (instance);
 		this.addNodesForAddress (instanceAddress);
 		instanceNode = this.lookup (instanceAddress);
 		instanceNode.valueType = column.type;
-		instanceNode.value = row[i];
+		instanceNode.value = row[rowValueOffset + i];
 	}
 };
 
@@ -3297,48 +3484,59 @@ Mib.prototype.getTableColumnDefinitions = function (table) {
 
 	providerNode = this.getProviderNodeForTable (table);
 	provider = providerNode.provider;
-	return provider.columns;
+	return provider.tableColumns;
 };
 
-Mib.prototype.getTableColumnCells = function (table, columnNumber) {
-	providerNode = this.getProviderNodeForTable (table);
-	columnNode = providerNode.children[columnNumber];
-	column = []
-	for ( var row of Object.keys (columnNode.children) ) {
-		instanceNode = columnNode.children[row].getInstanceNodeForTableRow ();
-		column.push (instanceNode.value);
+Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstances) {
+	var providerNode = this.getProviderNodeForTable (table);
+	var columnNode = providerNode.children[columnNumber];
+	var instanceNodes = columnNode.getInstanceNodesForColumn ();
+	var indexValues = [];
+	var columnValues = [];
+
+	for ( var instanceNode of instanceNodes ) {
+		indexValues.push (instanceNode.oid);
+		columnValues.push (instanceNode.value);
 	}
-	return column;
+	if ( includeInstances ) {
+		return [ indexValues, columnValues ];
+	} else {
+		return columnValues;
+	}
 };
 
 Mib.prototype.getTableRowCells = function (table, rowIndex) {
+	var provider;
 	var providerNode;
 	var columnNode;
+	var instanceAddress;
 	var instanceNode;
 	var row = [];
 
+	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
+	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	for ( var columnNumber of Object.keys (providerNode.children) ) {
 		columnNode = providerNode.children[columnNumber];
-		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+		instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 		row.push (instanceNode.value);
 	}
 	return row;
 };
 
-Mib.prototype.getTableCells = function (table, byRows) {
+Mib.prototype.getTableCells = function (table, byRows, includeInstances) {
 	var providerNode;
-	var columnNode;
+	var column;
 	var data = [];
 
 	providerNode = this.getProviderNodeForTable (table);
 	for ( var columnNumber of Object.keys (providerNode.children) ) {
-		columnNode = providerNode.children[columnNumber];
-		column = [];
-		data.push(column);
-		for ( var row of Object.keys (columnNode.children) ) {
-			instanceNode = columnNode.children[row].getInstanceNodeForTableRow ();
-			column.push (instanceNode.value);
+		column = this.getTableColumnCells (table, columnNumber, includeInstances);
+		if ( includeInstances ) {
+			data.push (...column);
+			includeInstances = false;
+		} else {
+			data.push (column);
 		}
 	}
 
@@ -3353,37 +3551,47 @@ Mib.prototype.getTableCells = function (table, byRows) {
 };
 
 Mib.prototype.getTableSingleCell = function (table, columnNumber, rowIndex) {
+	var provider;
 	var providerNode;
+	var instanceAddress;
 	var columnNode;
 	var instanceNode;
 
+	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
+	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	columnNode = providerNode.children[columnNumber];
-	instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 	return instanceNode.value;
 };
 
 Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, value) {
+	var provider;
 	var providerNode;
 	var columnNode;
 	var instanceNode;
 
+	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
+	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	columnNode = providerNode.children[columnNumber];
-	instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 	instanceNode.value = value;
 };
 
 Mib.prototype.deleteTableRow = function (table, rowIndex) {
+	var provider;
 	var providerNode;
+	var instanceAddress;
 	var columnNode;
 	var instanceNode;
-	var row = [];
 
+	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
+	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	for ( var columnNumber of Object.keys (providerNode.children) ) {
 		columnNode = providerNode.children[columnNumber];
-		instanceNode = columnNode.getInstanceNodeForTableRowIndex (rowIndex);
+		instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 		if ( instanceNode ) {
 			instanceParentNode = instanceNode.parent;
 			instanceNode.delete();
@@ -3392,7 +3600,7 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 			throw new ReferenceError ("Cannot find row for index " + rowIndex + " at registered provider " + table);
 		}
 	}
-	return row;
+	return true;
 };
 
 Mib.prototype.dump = function (options) {
