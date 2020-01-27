@@ -2148,6 +2148,10 @@ Example programs are included under the module's `example` directory.
 
  * Add AES-128 encryption
 
+## Version 2.5.1 - 27/01/2020
+
+ * Add non-integer, composite key, foreign key and augmented table index handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
