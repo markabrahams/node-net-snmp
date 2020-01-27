@@ -1608,7 +1608,7 @@ A table provider has a similar definition:
         name: "smallIfTable",
         type: snmp.MibProviderType.Table,
         oid: "1.3.6.1.2.1.2.2.1",
-        columns: [
+        tableColumns: [
             {
                 number: 1,
                 name: "ifIndex",
@@ -1625,16 +1625,20 @@ A table provider has a similar definition:
                 type: snmp.ObjectType.Integer
             }
         ],
-        index: [1]
+        tableIndex: [
+            {
+                columnName: "ifIndex"
+            }
+        ]
     };
     var mib = agent.getMib ();
     mib.registerProvider (myTableProvider);
     mib.addTableRow ("smallIfTable", [1, "eth0", 6]);
 
-Here, the provider definition takes two additions fields: `columns` for the column defintions,
-and `index` for the columns used for row indexes.  In the example the `index` is the column
-number "1" i.e. the `ifIndex` column.  The `mib.registerProvider()` section has
-further details on the fields that make up the provider definition.
+Here, the provider definition takes two additions fields: `tableColumns` for the column defintions,
+and `tableIndex` for the columns used for row indexes.  In the example the `tableIndex` is the
+`ifIndex` column.  The `mib.registerProvider()` section has further details on the fields that
+make up the provider definition.
 
 The `oid` must be that of the "table entry" node, not its parent "table" node e.g. for
 `ifTable`, the `oid` in the provider is "1.3.6.1.2.1.2.2.1" (the OID for `ifEntry`).
@@ -1658,10 +1662,18 @@ A provider definition has these fields:
  provider registers at "1.3.6.1.2.1.1.1", to provide the value at "1.3.6.1.2.1.1.1.0".
  * `scalarType`  *(mandatory for scalar types)* - only relevant to scalar provider type, this
   give the type of the variable, selected from `snmp.ObjectType`
- * `columns` *(mandatory for table types)* - gives any array of column definition objects for the
+ * `tableColumns` *(mandatory for table types)* - gives any array of column definition objects for the
  table.  Each column object must have a unique `number`, a `name` and a `type` from `snmp.ObjectType`.
- * `index` *(mandatory for table types)* - gives an array of column numbers used for row indexes.
+ * `tableIndex` *(optional for table types)* - gives an array of index entry objects used for row indexes.
  Use a single-element array for a single-column index, and multiple values for a composite index.
+ An index entry object has a `columnName` field, and if the entry is in another provider's table, then
+ include a `foreign` field with the name of the foreign table's provider.
+ If the `tableAugments` field is absent, `tableIndex` is mandatory.
+ * `tableAugments` *(optional for table types)* - gives the name of another registered provider that
+ this table "augments".  This means that the index information is taken from the given provider's
+ table, and doesn't exist in the local table's column definitions.  If the `tableIndex` field is
+ absent, `tableAugments` is mandatory i.e. one of `tableIndex` and `tableAugments` needs to be
+ present to define the table index.
  * `handler` *(optional)* - an optional callback function, which is called before the request to the
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
@@ -1693,11 +1705,11 @@ Returns an object of provider definitions registered with the MIB, indexed by pr
 
 Returns a single registered provider object for the given name.
 
-## mib.getScalarValue(scalarProviderName)
+## mib.getScalarValue (scalarProviderName)
 
 Retrieves the value from a scalar provider.
 
-## mib.setScalarValue(scalarProviderName, value)
+## mib.setScalarValue (scalarProviderName, value)
 
 Sets the value for a scalar provider.  If this is the first time the scalar is set
 since the provider has registered with the MIB, it will also add the instance (".0")
@@ -1707,21 +1719,30 @@ node and all requires ancestors to the MIB tree.
 
 Adds a table row - in the form of an array of values - to a table provider.  If
 the table is empty, this instantiates the provider's `oid` node and ancestors,
-its columns, before adding the row of values.
+its columns, before adding the row of values.  Note that the row is an array of
+elements in the order of the table columns.  If the table has any foreign index
+columns (i.e. those not belonging to this table), then values for these must be
+included the at the start of the row array, in the order they appear in the
+MIB INDEX clause.
 
-## mib.getTableColumnDefinitions(tableProviderName)
+## mib.getTableColumnDefinitions (tableProviderName)
 
 Returns a list of column definition objects for the provider.
 
-## mib.getTableCells(tableProviderName, byRow)
+## mib.getTableCells (tableProviderName, byRow, includeInstances)
 
 Returns a two-dimensional array of the table data.  If `byRow` is false (the default),
 then the table data is given in a list of column arrays i.e. by column.  If `byRow`
-is `true`, then the data is instead a list of row arrays.
+is `true`, then the data is instead a list of row arrays.  If `includeInstances` is
+`true`, then, for the column view there will be an extra first column with instance
+index information.  If `includeInstances` is `true` for the row view, then there is
+an addition element at the start of each row with index information.
 
-## mib.getTableColumnCells(tableProviderName, columnNumber)
+## mib.getTableColumnCells (tableProviderName, columnNumber, includeInstances)
 
-Returns a single column of table data for the given column number.
+Returns a single column of table data for the given column number.  If `includeInstances`
+is `true`, then two arrays are returned: the first with instance index information,
+and the second with the column data.
 
 ## mib.getTableRowCells (tableProviderName, rowIndex)
 
@@ -1729,12 +1750,12 @@ Returns a single row of table data for the given row index.  The row index is an
 of integers built from the node immediately under the column down to the node at the end
 of the row instance, which will be a leaf node in the MIB tree.
 
-## mib.getTableSingleCell(tableProviderName, columnIndex, rowIndex)
+## mib.getTableSingleCell (tableProviderName, columnIndex, rowIndex)
 
 Returns a single cell value from the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.
 
-## mib.setTableSingleCell(tableProviderName, columnIndex, rowIndex, value)
+## mib.setTableSingleCell (tableProviderName, columnIndex, rowIndex, value)
 
 Sets a single cell value at the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.

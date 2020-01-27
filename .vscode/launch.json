@@ -16,7 +16,7 @@
                 "-v", "2c",
                 "-c", "public",
                 "127.0.0.1",
-                "1.3.6.1.2.1.1.1.0"
+                "1.3.6.1.2.1.31.1.1.1.6.1"
             ]
         },
         {
@@ -196,8 +196,9 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/example/mib-parser.js",
+            "program": "${workspaceFolder}/example/mib-parser-2.js",
             "args": [
+                "-n",
                 "-p", "1161"
             ]
         },

@@ -52,7 +52,7 @@ var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
-    columns: [
+    tableColumns: [
         {
             number: 1,
             name: "ifIndex",
@@ -69,7 +69,11 @@ var tableProvider = {
             type: snmp.ObjectType.Integer
         }
     ],
-    index: [1],
+    tableIndex: [
+        {
+            columnName: "ifIndex"
+        }
+    ],
     handler: function ifTable (mibRequest) {
         // e.g. can update the table before responding to the request here
         mibRequest.done ();
