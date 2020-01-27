@@ -3405,12 +3405,13 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 	var oidComponents;
 	switch ( indexPart.type ) {
 		case ObjectType.OID:
-		case ObjectType.IpAddress:
 			oidComponents = value.split (".");
 			break;
 		case ObjectType.OctetString:
 			oidComponents = [...value].map (c => c.charCodeAt());
 			break;
+		case ObjectType.IpAddress:
+			return value.split (".");
 		default:
 			return [value];
 	}
@@ -3418,6 +3419,10 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 		oidComponents.unshift (oidComponents.length);
 	}
 	return oidComponents;
+};
+
+Mib.prototype.getValueFromOidAddress = function (oid, indexPart) {
+
 };
 
 Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
@@ -3442,6 +3447,43 @@ Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 		rowIndex = rowIndex.concat (oidArrayForValue);
 	}
 	return rowIndex;
+};
+
+Mib.prototype.getRowIndexFromOid = function (oid, index) {
+	var addressRemaining = oid.split (".");
+	var length = 0;
+	var values = [];
+	for ( indexPart of index ) {
+		switch ( indexPart.type ) {
+			case ObjectType.OID:
+				if ( indexPart.implied ) {
+					length = addressRemaining.length;
+				} else {
+					length = addressRemaining.shift ();
+				}
+				value = addressRemaining.splice (0, length);
+				values.push (value.join ("."));
+				break;
+			case ObjectType.IpAddress:
+				length = 4;
+				value = addressRemaining.splice (0, length);
+				values.push (value.join ("."));
+				break;
+			case ObjectType.OctetString:
+				if ( indexPart.implied ) {
+					length = addressRemaining.length;
+				} else {
+					length = addressRemaining.shift ();
+				}
+				value = addressRemaining.splice (0, length);
+				value = value.map (c => String.fromCharCode(c)).join ("");
+				values.push (value);
+				break;
+			default:
+				values.push (parseInt (addressRemaining.shift ()) );
+		}
+	}
+	return values;
 };
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
@@ -3488,14 +3530,18 @@ Mib.prototype.getTableColumnDefinitions = function (table) {
 };
 
 Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstances) {
+	var provider = this.providers[table];
+	var providerIndex = provider.tableIndex;
 	var providerNode = this.getProviderNodeForTable (table);
 	var columnNode = providerNode.children[columnNumber];
 	var instanceNodes = columnNode.getInstanceNodesForColumn ();
+	var instanceOid;
 	var indexValues = [];
 	var columnValues = [];
 
 	for ( var instanceNode of instanceNodes ) {
-		indexValues.push (instanceNode.oid);
+		instanceOid = Mib.getSubOidFromBaseOid (instanceNode.oid, columnNode.oid);
+		indexValues.push (this.getRowIndexFromOid (instanceOid, providerIndex));
 		columnValues.push (instanceNode.value);
 	}
 	if ( includeInstances ) {
@@ -3677,6 +3723,10 @@ Mib.convertOidToAddress = function (oid) {
 
 };
 
+Mib.getSubOidFromBaseOid = function (oid, base) {
+	return oid.substring (base.length + 1);
+}
+
 var MibRequest = function (requestDefinition) {
 	this.operation = requestDefinition.operation;
 	this.address = Mib.convertOidToAddress (requestDefinition.oid);
@@ -3753,7 +3803,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 
 	// Request processing
 	debug (JSON.stringify (message.pdu, null, 2));
-	if ( message.pdu.contextName != "" ) {
+	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
 		this.onProxyRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
 		responseMessage = this.request (message, rinfo);
