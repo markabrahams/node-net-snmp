@@ -46,11 +46,31 @@ Guidelines for bug reports:
    latest `master` branch in the repository or the latest version of the
    net-snmp NPM.
 
-3. **Isolate the problem** &mdash; make sure that the code in the repository is
-_definitely_ responsible for the issue.
+3. **Isolate the problem to the library** &mdash; Make sure that the code
+in the node-net-snmp library is _definitely_ responsible for the issue.
 
-A good bug report shouldn't leave others needing to chase you up for more
-information. Please try to be as detailed as possible in your report.
+4. **Reduce the problem to a minimal reproducible example** Do some work to narrow the
+failure to the smallest possible use case.  For example, if a session `walk` fails,
+narrow this down to smaller part of the MIB with a `getBulk`.  Try to make a `getNext`
+call fail in the same way, or even better a `get` of a single MIB variable.  This
+may take some time - possibly from 10-30 minutes.  Please invest this time!  The 
+importance of this cannot be overstated.  With SNMP, there are a large number of
+devices with different MIB / behaviour variations.  We don't have your device, so
+we need a thorough piece of fault isolation from you, and reduction to a minimal
+reproduction of the problem.
+
+5. **Include packet captures** &mdash; Include a packet capture of the failed interaction,
+using a tool such as Wireshark or tcpdump.  Also, please include a second packet capture
+of another tool doing the equivalent operation against your device but succeeding.  The
+NetSNMP (not affiliated with node-net-snmp) command line tools are a good toolset for
+comparison.  Even if the captures show identical interactions (which they might if the
+failure is in the library's response handling), still include both.  If an issue is logged
+without these two packet captures, it is highly likely that your problem will be ignored,
+simply because we do not have the device in question to progress an investigation.
+
+A good bug report shouldn't leave others needing to chase you up for more information.
+Please try to be as detailed as possible in your report.  They say that "less is more",
+but they weren't talking about bug reports there.
 
 
 <a name="features"></a>
@@ -121,5 +141,5 @@ Adhering to the following process is the best way to get your work merged:
    git push origin <topic-branch-name>
    ```
 
-10. [Open a Pull Request](https://help.github.com/articles/using-pull-requests/)
+7. [Open a Pull Request](https://help.github.com/articles/using-pull-requests/)
     with a clear title and description.

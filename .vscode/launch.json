@@ -196,7 +196,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/example/mib-parser-2.js",
+            "program": "${workspaceFolder}/example/mib-parser.js",
             "args": [
                 "-n",
                 "-p", "1161"

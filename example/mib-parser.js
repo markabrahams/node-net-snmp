@@ -3,6 +3,7 @@ var getopts = require ("getopts");
 
 var options = getopts(process.argv.slice(2));
 var providers;
+var mibDir = '/var/tmp/mibs/';
 
 var counter64 = function (num) {
     var buf = Buffer.alloc (4);
@@ -33,8 +34,8 @@ var authorizer = agent.getAuthorizer ();
 authorizer.addCommunity ("public");
 
 // IF-MIB load and providers registration
-store.loadFromFile ("./mibs/IANAifType-MIB.mib");
-store.loadFromFile ("/var/tmp/mibs/IF-MIB.mib");
+store.loadFromFile (mibDir + "IANAifType-MIB.mib");
+store.loadFromFile (mibDir + "IF-MIB.wrong");
 providers = store.getProvidersForModule ("IF-MIB");
 mib.registerProviders (providers);
 
@@ -89,17 +90,17 @@ var ifRcvAddressEntryData3 = mib.getTableCells ("ifRcvAddressEntry", false, true
 var ifRcvAddressEntryData4 = mib.getTableCells ("ifRcvAddressEntry", true, true);
 
 // SNMP-COMMUNITY-MIB
-store.loadFromFile ("/var/tmp/mibs/SNMP-FRAMEWORK-MIB.mib");
-store.loadFromFile ("/var/tmp/mibs/SNMP-TARGET-MIB.mib");
-store.loadFromFile ("/var/tmp/mibs/SNMP-COMMUNITY-MIB.mib");
+store.loadFromFile (mibDir + "SNMP-FRAMEWORK-MIB.mib");
+store.loadFromFile (mibDir + "SNMP-TARGET-MIB.mib");
+store.loadFromFile (mibDir + "SNMP-COMMUNITY-MIB.mib");
 providers = store.getProvidersForModule ("SNMP-TARGET-MIB");
 mib.registerProviders (providers);
 providers = store.getProvidersForModule ("SNMP-COMMUNITY-MIB");
 mib.registerProviders (providers);
 mib.addTableRow ("snmpCommunityEntry", ["mark", "public", "publicsec", "80001234", "", "", 1, 1]);
 
-// SNMPv2-MIB
-store.loadFromFile ("./mibs/SNMPv2-MIB.mib");
+// SNMPv2-MIB - loaded as part of base module load
+// store.loadFromFile (mibDir + "SNMPv2-MIB.mib");
 providers = store.getProvidersForModule ("SNMPv2-MIB");
 mib.registerProviders (providers);
 mib.setScalarValue ("sysDescr", "The most powerful system you can think of");

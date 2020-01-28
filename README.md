@@ -71,6 +71,7 @@ for each shown in this table:
  * Notification receiver for traps and informs
  * MIB parsing and MIB module store
  * SNMP agent with MIB management for both scalar and tabular data
+ * Agent table index support for non-integer keys, foreign keys, composite keys and table augmentation
  * SNMP proxy forwarder for agent
  * IPv4 and IPv6
 
@@ -1923,7 +1924,7 @@ authorizer.addUser ({
 
 // Test access using Net-SNMP tools (-n is the context option):
 
-snmpget -v 3 -u fred -l noAuthNoPriv -n slatescontext localhost
+snmpget -v 3 -u fred -l noAuthNoPriv -n slatescontext localhost 1.3.6.1.2.1.1.1.0
 ```
 
 This proxies requests through to "bedrock" as per the proxy definition.
@@ -2151,6 +2152,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.5.1 - 27/01/2020
 
  * Add non-integer, composite key, foreign key and augmented table index handling
+
+## Version 2.5.2 - 29/01/2020
+
+ * Update CONTRIBUTING.md and parser example
 
 # License
 
