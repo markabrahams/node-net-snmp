@@ -4119,6 +4119,12 @@ AgentXPdu.prototype.toBuffer = function () {
 			AgentXPdu.writeOid (buffer, this.oid);
 			AgentXPdu.writeOctetString (buffer, this.descr);
 			break;
+		case AgentXPduType.Close:
+			buffer.writeUInt8 (5);  // reasonShutdown == 5
+			buffer.writeUInt8 (0);  // 3 x reserved bytes
+			buffer.writeUInt8 (0);
+			buffer.writeUInt8 (0);
+			break;
 		default:
 	}
 	buffer.writeUInt32BE (buffer.length - 20, 16);
@@ -4152,7 +4158,7 @@ AgentXPdu.prototype.readHeader = function (buffer) {
 
 AgentXPdu.createFromVariables = function (vars) {
 	var pdu = new AgentXPdu ();
-	pdu.flags = vars.flags ? vars.flags | 0x10 : 0x10;  // set NETWORK_BYTE_ORDER
+	pdu.flags = vars.flags ? vars.flags | 0x10 : 0x10;  // set NETWORK_BYTE_ORDER to big endian
 	pdu.pduType = vars.pduType || AgentXPduType.Open;
 	pdu.sessionID = vars.sessionID || 0;
 	pdu.transactionID = vars.transactionID || 0;
@@ -4237,7 +4243,6 @@ AgentXPdu.readOctetString = function (buffer) {
 	return octetString;
 };
 
-
 var Subagent = function (options, callback) {
 	DEBUG = options.debug;
 	//this.listener = new Listener (options, this);
@@ -4251,6 +4256,7 @@ var Subagent = function (options, callback) {
 	this.sessionID = 0;
 	this.transactionID = 0;
 	this.packetID = _generateId();
+	this.requestPdus = {};
 };
 
 Subagent.prototype.getMib = function () {
@@ -4258,9 +4264,9 @@ Subagent.prototype.getMib = function () {
 };
 
 Subagent.prototype.connectSocket = function () {
-	this.socket = new net.Socket();
-	this.socket.connect(this.masterPort, this.master, function () {
-		console.log ("Connected");
+	this.socket = new net.Socket ();
+	this.socket.connect (this.masterPort, this.master, function () {
+		// console.log ("Connected");
 	});
 
 	var me = this;
@@ -4272,6 +4278,7 @@ Subagent.prototype.connectSocket = function () {
 
 Subagent.prototype.open = function () {
 	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Open,
 		timeout: this.timeout,
 		oid: this.oid,
 		descr: this.descr
@@ -4279,19 +4286,63 @@ Subagent.prototype.open = function () {
 	this.sendPdu (pdu);
 };
 
+Subagent.prototype.close = function () {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Close,
+		sessionID: this.sessionID
+	});
+	this.sendPdu (pdu);
+};
+
 Subagent.prototype.sendPdu = function (pdu) {
+	debug ("Sending AgentX " + AgentXPduType[pdu.pduType] + " PDU");
+	debug (pdu);
 	var buffer = pdu.toBuffer ();
-	console.log(pdu);
-	this.socket.write(buffer);
+	this.socket.write (buffer);
+	if ( ! this.requestPdus[pdu.packetID] ) {
+		this.requestPdus[pdu.packetID] = pdu;
+	}
+
+	// Possible timeout / retry mechanism?
+	// var me = this;
+	// pdu.timer = setTimeout (function () {
+	// 	if (pdu.retries-- > 0) {
+	// 		this.sendPdu (pdu);
+	// 	} else {
+	// 		delete me.requestPdus[pdu.packetID];
+	// 		me.callback (new RequestTimedOutError (
+	// 				"Request timed out"));
+	// 	}
+	// }, this.timeout);
+
 };
 
 Subagent.prototype.onMsg = function (buffer, rinfo) {
 	var pdu = AgentXPdu.createFromBuffer (buffer);
 
-	// var requestPdu = this.unregisterRequest (pdu.packetID ());
-
-	console.log(JSON.stringify(pdu, null, 2));
-
+	//console.log(JSON.stringify(pdu, null, 2));
+	debug ("Received AgentX " + AgentXPduType[pdu.pduType] + " PDU");
+	debug (pdu);
+	if ( pdu.pduType == AgentXPduType.Response ) {
+		var requestPdu = this.requestPdus[pdu.packetID];
+		if (requestPdu) {
+			delete this.requestPdus[pdu.packetID];
+			// clearTimeout (pdu.timer);
+			// delete pdu.timer;
+			switch ( requestPdu.pduType ) {
+				case AgentXPduType.Open:
+					this.sessionID = pdu.sessionID;
+					break;
+				case AgentXPduType.Close:
+					this.socket.end ();
+					break;
+				default:
+					// Response PDU for request type not handled
+			}
+		} else {
+			// unexpected Response PDU
+		}
+	}
 };
 
 Subagent.create = function (options, callback) {

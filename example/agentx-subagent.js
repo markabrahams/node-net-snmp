@@ -18,8 +18,10 @@ var callback = function (error, data) {
 };
 
 var agent = snmp.createSubagent(snmpOptions, callback);
+agent.open();
 setTimeout( function() {
-    agent.open();
+    //agent.open();
+    agent.close();
 }, 2000);
 
 var mib = agent.getMib ();
@@ -88,7 +90,7 @@ mib.addTableRow ("ifTable", [2, "eth0", 6]);
 // var data = mib.getTableColumnCells ("ifTable", 2);
 // var data = mib.getTableRowCells ("ifTable", [1]);
 // mib.setTableSingleCell ("ifTable", 2, [2], "changed!");
-var data = mib.getTableSingleCell ("ifTable", 2, [2]);
+// var data = mib.getTableSingleCell ("ifTable", 2, [2]);
 // var data = mib.getScalarValue ("sysDescr");
 
-console.log(JSON.stringify (data, null, 2));
+// console.log(JSON.stringify (data, null, 2));
