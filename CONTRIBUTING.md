@@ -49,13 +49,13 @@ Guidelines for bug reports:
 3. **Isolate the problem to the library** &mdash; Make sure that the code
 in the node-net-snmp library is _definitely_ responsible for the issue.
 
-4. **Reduce the problem to a minimal reproducible example** Do some work to narrow the
-failure to the smallest possible use case.  For example, if a session `walk` fails,
-narrow this down to smaller part of the MIB with a `getBulk`.  Try to make a `getNext`
-call fail in the same way, or even better a `get` of a single MIB variable.  This
-may take some time - possibly from 10-30 minutes.  Please invest this time!  The 
-importance of this cannot be overstated.  With SNMP, there are a large number of
-devices with different MIB / behaviour variations.  We don't have your device, so
+4. **Reduce the problem to a minimal reproducible example** &mdash; Do some work to
+narrow the failure to the smallest possible use case.  For example, if a session
+`walk` fails, narrow this down to smaller part of the MIB with a `getBulk`.  Try to
+make a `getNext` call fail in the same way, or even better a `get` of a single MIB
+variable.  This may take some time - possibly from 10-30 minutes.  Please invest this
+time!  The importance of this cannot be overstated.  With SNMP, there are a large number
+of devices with different MIB / behaviour variations.  We don't have your device, so
 we need a thorough piece of fault isolation from you, and reduction to a minimal
 reproduction of the problem.
 

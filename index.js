@@ -2,7 +2,9 @@
 // Copyright 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
 var ber = require ("asn1-ber").Ber;
+var smartbuffer = require ("smart-buffer");
 var dgram = require ("dgram");
+var net = require ("net");
 var events = require ("events");
 var util = require ("util");
 var crypto = require ("crypto");
@@ -165,6 +167,29 @@ var Version = {
 	"2c": Version2c,
 	"3": Version3
 };
+
+var AgentXPduType = {
+	1: "Open",
+	2: "Close",
+	3: "Register",
+	4: "Unregister",
+	5: "Get",
+	6: "GetNext",
+	7: "GetBulk",
+	8: "TestSet",
+	9: "CommitSet",
+	10: "UndoSet",
+	11: "CleanupSet",
+	12: "Notify",
+	13: "Ping",
+	14: "IndexAllocate",
+	15: "IndexDeallocate",
+	16: "AddAgentCaps",
+	17: "RemoveAgentCaps",
+	18: "Response"
+};
+
+_expandConstantObject (AgentXPduType);
 
 /*****************************************************************************
  ** Exception class definitions
@@ -4082,6 +4107,198 @@ Forwarder.prototype.dumpProxies = function () {
 	console.log (JSON.stringify (dump, null, 2));
 };
 
+var AgentXPdu = function () {
+};
+
+AgentXPdu.prototype.toBuffer = function () {
+	var buffer = new smartbuffer.SmartBuffer();
+	this.writeHeader (buffer);
+	switch ( this.pduType ) {
+		case AgentXPduType.Open:
+			buffer.writeUInt32BE (this.timeout);
+			AgentXPdu.writeOid (buffer, this.oid);
+			AgentXPdu.writeOctetString (buffer, this.descr);
+			break;
+		default:
+	}
+	buffer.writeUInt32BE (buffer.length - 20, 16);
+	return buffer.toBuffer ();
+};
+
+AgentXPdu.prototype.writeHeader = function (buffer) {
+	this.flags = this.flags | 0x10;  // set NETWORK_BYTE_ORDER
+
+	buffer.writeUInt8 (1);  // h.version = 1
+	buffer.writeUInt8 (this.pduType);
+	buffer.writeUInt8 (this.flags);
+	buffer.writeUInt8 (0);  // reserved byte
+	buffer.writeUInt32BE (this.sessionID);
+	buffer.writeUInt32BE (this.transactionID);
+	buffer.writeUInt32BE (this.packetID);
+	buffer.writeUInt32BE (0);
+	return buffer;
+};
+
+AgentXPdu.prototype.readHeader = function (buffer) {
+	this.version = buffer.readUInt8 ();
+	this.pduType = buffer.readUInt8 ();
+	this.flags = buffer.readUInt8 ();
+	buffer.readUInt8 ();   // reserved byte 
+	this.sessionID = buffer.readUInt32BE ();
+	this.transactionID = buffer.readUInt32BE ();
+	this.packetID = buffer.readUInt32BE ();
+	this.payloadLength = buffer.readUInt32BE ();
+};
+
+AgentXPdu.createFromVariables = function (vars) {
+	var pdu = new AgentXPdu ();
+	pdu.flags = vars.flags ? vars.flags | 0x10 : 0x10;  // set NETWORK_BYTE_ORDER
+	pdu.pduType = vars.pduType || AgentXPduType.Open;
+	pdu.sessionID = vars.sessionID || 0;
+	pdu.transactionID = vars.transactionID || 0;
+	pdu.packetID = vars.packetID || 0;
+	pdu.timeout = vars.timeout || 0;
+	pdu.oid = vars.oid || null;
+	pdu.descr = vars.descr || null;
+	
+	return pdu;
+};
+
+AgentXPdu.createFromBuffer = function (socketBuffer) {
+	var pdu = new AgentXPdu ();
+
+	var buffer = smartbuffer.SmartBuffer.fromBuffer (socketBuffer);
+	pdu.readHeader (buffer);
+
+	switch ( pdu.pduType ) {
+		case AgentXPduType.Response:
+			pdu.sysUpTime = buffer.readUInt32BE ();
+			pdu.error = buffer.readUInt16BE ();
+			pdu.index = buffer.readUInt16BE ();
+			break;
+		default:
+	}
+	return pdu;
+};
+
+AgentXPdu.writeOid = function (buffer, oid, include = 0) {
+	if ( oid ) {
+		var address = oid.split ('.').map ( Number );
+		if ( address.length >= 5 && address.slice (0, 4).join('.') == '1.3.6.1' ) {
+			prefix = address[4];
+			address = address.slice(4);
+		} else {
+			prefix = 0;
+		}
+		buffer.writeUInt8 (address.length);
+		buffer.writeUInt8 (prefix);
+		buffer.writeUInt8 (include);
+		buffer.writeUInt8 (0);  // reserved
+		for ( let addressPart of address ) {
+			buffer.writeUInt32BE (addressPart);
+		}
+	} else {
+		buffer.writeUInt32BE (0);  // row of zeros for null OID
+	}
+};
+
+AgentXPdu.writeOctetString = function (buffer, octetString) {
+	buffer.writeUInt32BE (octetString.length);
+	buffer.writeString (octetString);
+	var paddingOctets = ( 4 - octetString.length % 4 ) % 4;
+	for ( let i = 0; i < paddingOctets ; i++ ) {
+		buffer.writeUInt8 (0);
+	}
+};
+
+AgentXPdu.readOid = function (buffer) {
+	var subidLength = buffer.readUInt8 ();
+	var prefix = buffer.readUInt8 ();
+	var include = buffer.readUInt8 ();
+	buffer.readUInt8 (0);  // reserved
+	var address = [];
+	if ( prefix == 0 ) {
+		address = [];
+	} else {
+		address = [1, 3, 6, 1, prefix];
+	}
+	for ( let i = 0; i < subidLength; i++ ) {
+		address.push (buffer.readUInt32BE ());
+	}
+	var oid = address.join (',');
+	return oid;
+};
+
+AgentXPdu.readOctetString = function (buffer) {
+	var octetStringLength = buffer.readUInt32BE ();
+	var paddingOctets = ( 4 - octetStringLength % 4 ) % 4;
+	var octetString = buffer.readString (octetStringLength);
+	buffer.readString (paddingOctets);
+	return octetString;
+};
+
+
+var Subagent = function (options, callback) {
+	DEBUG = options.debug;
+	//this.listener = new Listener (options, this);
+	this.mib = new Mib ();
+	this.callback = callback || function () {};
+	this.master = options.master || 'localhost';
+	this.masterPort = options.masterPort || 705;
+	this.timeout = options.timeout || 0;
+	this.id = options.id;
+	this.descr = options.descr || "Node net-snmp AgentX sub-agent";
+	this.sessionID = 0;
+	this.transactionID = 0;
+	this.packetID = _generateId();
+};
+
+Subagent.prototype.getMib = function () {
+	return this.mib;
+};
+
+Subagent.prototype.connectSocket = function () {
+	this.socket = new net.Socket();
+	this.socket.connect(this.masterPort, this.master, function () {
+		console.log ("Connected");
+	});
+
+	var me = this;
+	this.socket.on ("data", me.onMsg.bind (me));
+	this.socket.on ("error", function (error) {
+		console.error (error);
+	});
+};
+
+Subagent.prototype.open = function () {
+	var pdu = AgentXPdu.createFromVariables ({
+		timeout: this.timeout,
+		oid: this.oid,
+		descr: this.descr
+	});
+	this.sendPdu (pdu);
+};
+
+Subagent.prototype.sendPdu = function (pdu) {
+	var buffer = pdu.toBuffer ();
+	console.log(pdu);
+	this.socket.write(buffer);
+};
+
+Subagent.prototype.onMsg = function (buffer, rinfo) {
+	var pdu = AgentXPdu.createFromBuffer (buffer);
+
+	// var requestPdu = this.unregisterRequest (pdu.packetID ());
+
+	console.log(JSON.stringify(pdu, null, 2));
+
+};
+
+Subagent.create = function (options, callback) {
+	var subagent = new Subagent (options, callback);
+	subagent.connectSocket ();
+	return subagent;
+};
 
 
 /*****************************************************************************
@@ -4096,6 +4313,7 @@ exports.createV3Session = Session.createV3;
 exports.createReceiver = Receiver.create;
 exports.createAgent = Agent.create;
 exports.createModuleStore = ModuleStore.create;
+exports.createSubagent = Subagent.create;
 
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;

@@ -179,6 +179,18 @@
         {
             "type": "node",
             "request": "launch",
+            "name": "AgentX subagent",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/example/agentx-subagent.js",
+            "args": [
+                "-d"
+            ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
             "name": "SNMP agent",
             "skipFiles": [
                 "<node_internals>/**"
