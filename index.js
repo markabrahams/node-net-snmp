@@ -1530,6 +1530,8 @@ var Req = function (session, message, feedCb, responseCb, options) {
 	this.responseCb = responseCb;
 	this.retries = session.retries;
 	this.timeout = session.timeout;
+	// Add timeout backoff
+	this.backoff = session.backoff;
 	this.onResponse = session.onSimpleGetResponse;
 	this.feedCb = feedCb;
 	this.port = (options && options.port) ? options.port : session.port;
@@ -1574,6 +1576,10 @@ var Session = function (target, authenticator, options) {
 	this.timeout = (options && options.timeout)
 			? options.timeout
 			: 5000;
+
+	this.backoff = (options && options.backoff >= 1.0)
+			? options.backoff
+			: 1.0;
 
 	this.sourceAddress = (options && options.sourceAddress )
 			? options.sourceAddress
@@ -2014,6 +2020,9 @@ Session.prototype.registerRequest = function (req) {
 					"Request timed out"));
 		}
 	}, req.timeout);
+	// Apply timeout backoff
+	if (req.backoff && req.backoff >= 1)
+		req.timeout *= req.backoff;
 };
 
 Session.prototype.send = function (req, noWait) {
@@ -2517,17 +2526,25 @@ Session.prototype.onProxyResponse = function (req, message) {
 };
 
 Session.create = function (target, community, options) {
-	if ( options.version && ! ( options.version == Version1 || options.version == Version2c ) ) {
+	// Ensure that options may be optional
+	var version = (options && options.version) ? options.version : Version1;
+	if (version != Version1 && version != Version2c) {
 		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
 	} else {
+		if (!options)
+			options = {};
+		options.version = version;
 		return new Session (target, community, options);
 	}
 };
 
 Session.createV3 = function (target, user, options) {
-	if ( options.version && options.version != Version3 ) {
+	// Ensure that options may be optional
+	if ( options && options.version && options.version != Version3 ) {
 		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
 	} else {
+		if (!options)
+			options = {};
 		options.version = Version3;
 	}
 	return new Session (target, user, options);
