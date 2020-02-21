@@ -451,7 +451,8 @@ is an object, and can contain the following items:
    to an ephemeral port selected by the operation system
  * `timeout` - Number of milliseconds to wait for a response before re-trying
    or failing, defaults to `5000`
- * `backoff` - The factor by which to increase the `timeout` for every retry, defaults to `1` for   no increase
+ * `backoff` - The factor by which to increase the `timeout` for every retry, defaults to `1` for
+   no increase
  * `transport` - Specify the transport to use, can be either `udp4` or `udp6`,
    defaults to `udp4`
  * `trapPort` - UDP port to send traps and informs too, defaults to `162`
@@ -2158,6 +2159,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.5.2 - 29/01/2020
 
  * Update CONTRIBUTING.md and parser example
+
+## Version 2.5.3 - 22/02/2020
+
+ * Add backoff option
 
 # License
 
