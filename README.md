@@ -429,6 +429,7 @@ The `createSession()` function instantiates and returns an instance of the
         port: 161,
         retries: 1,
         timeout: 5000,
+        backoff: 1.0,
         transport: "udp4",
         trapPort: 162,
         version: snmp.Version1,
@@ -450,6 +451,7 @@ is an object, and can contain the following items:
    to an ephemeral port selected by the operation system
  * `timeout` - Number of milliseconds to wait for a response before re-trying
    or failing, defaults to `5000`
+ * `backoff` - The factor by which to increase the `timeout` for every retry, defaults to `1` for   no increase
  * `transport` - Specify the transport to use, can be either `udp4` or `udp6`,
    defaults to `udp4`
  * `trapPort` - UDP port to send traps and informs too, defaults to `162`
