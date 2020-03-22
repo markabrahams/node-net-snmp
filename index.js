@@ -3913,7 +3913,13 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 };
 
 Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
-	var startNode = this.mib.lookup (startOid);
+	var startNode;
+	try {
+		startNode = this.mib.lookup (startOid);
+	} catch ( error ) {
+		startOid = '1.3.6.1';
+		startNode = this.mib.lookup (startOid);
+	}
 	var getNextNode;
 
 	if ( ! startNode ) {

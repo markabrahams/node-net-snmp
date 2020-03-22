@@ -2164,6 +2164,10 @@ Example programs are included under the module's `example` directory.
 
  * Add backoff option
 
+## Version 2.5.4 - 22/03/2020
+
+ * Fix agent crash with unexpected GetNext start OID
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
