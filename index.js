@@ -1963,6 +1963,13 @@ Session.prototype.onMsg = function (buffer) {
 						return;
 					}
 					req.originalPdu.contextName = this.context;
+
+					if ( ! message.msgSecurityParameters.msgAuthoritativeEngineBoots && ! message.msgSecurityParameters.msgAuthoritativeEngineTime) {
+						// time has not been synchronized by the first report PDU, therefore we expect this
+						// request to also generate a report with the time synchronization
+						this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, true);
+						return;
+					}
 					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
 				}
 			} else if ( this.proxy ) {
@@ -2485,11 +2492,14 @@ Session.prototype.walk  = function () {
 	return this;
 };
 
-Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) {
+Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port, storeOriginalPdu) {
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
+	if (storeOriginalPdu) {
+		req.originalPdu = pdu;
+	}
 	this.send (req);
 };
 
