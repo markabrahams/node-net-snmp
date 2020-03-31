@@ -1968,9 +1968,9 @@ Session.prototype.onMsg = function (buffer) {
 						// time has not been synchronized by the first report PDU, therefore we expect this
 						// request to also generate a report with the time synchronization
 						this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, true);
-						return;
+					} else {
+						this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, false);
 					}
-					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
 				}
 			} else if ( this.proxy ) {
 				this.onProxyResponse (req, message);
@@ -2109,7 +2109,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 
 		if ( this.version == Version3 ) {
 			if ( this.msgSecurityParameters ) {
-				this.sendV3Req (pdu, feedCb, responseCb, options, this.port);
+				this.sendV3Req (pdu, feedCb, responseCb, options, this.port, false);
 			} else {
 				this.sendV3Discovery (pdu, feedCb, responseCb, options);
 			}

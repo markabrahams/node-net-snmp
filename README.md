@@ -2168,6 +2168,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix agent crash with unexpected GetNext start OID
 
+## Version 2.5.5 - 31/03/2020
+
+ * Fix double report PDU time synchronisation handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
