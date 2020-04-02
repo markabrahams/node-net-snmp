@@ -2172,6 +2172,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix double report PDU time synchronisation handling
 
+## Version 2.5.6 - 02/04/2020
+
+ * Fix agent handling of GetNext from off-tree OID
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

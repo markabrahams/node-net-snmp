@@ -3018,6 +3018,27 @@ MibNode.prototype.listChildren = function (lowest) {
 	return sorted;
 };
 
+MibNode.prototype.findChildImmediatelyBefore = function (index) {
+	var sortedChildrenKeys = Object.keys(this.children).sort(function (a, b) {
+		return (a - b);
+	});
+
+	if ( sortedChildrenKeys.length === 0 ) {
+		return null;
+	}
+
+	for ( i = 0; i < sortedChildrenKeys.length; i++ ) {
+		if ( index < sortedChildrenKeys[i] ) {
+			if ( i === 0 ) {
+				return null;
+			} else {
+				return this.children[sortedChildrenKeys[i - 1]];
+			}
+		}
+	}
+	return this.children[sortedChildrenKeys[sortedChildrenKeys.length]];
+};
+
 MibNode.prototype.isDescendant = function (address) {
 	return MibNode.oidIsDescended(this.address, address);
 };
@@ -3212,10 +3233,15 @@ Mib.prototype.addNodesForAddress = function (address) {
 
 Mib.prototype.lookup = function (oid) {
 	var address;
+
+	address = Mib.convertOidToAddress (oid);
+	return this.lookupAddress(address);
+};
+
+Mib.prototype.lookupAddress = function (address) {
 	var i;
 	var node;
 
-	address = Mib.convertOidToAddress (oid);
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
 		if ( ! node.children.hasOwnProperty (address[i])) {
@@ -3226,6 +3252,27 @@ Mib.prototype.lookup = function (oid) {
 
 	return node;
 };
+
+Mib.prototype.getTreeNode = function (oid) {
+	var address = Mib.convertOidToAddress (oid);
+	var node;
+
+	node = this.lookupAddress (address);
+	// OID already on tree
+	if ( node ) {
+		return node;
+	}
+
+	while ( address.length > 0 ) {
+		last = address.pop ();
+		parent = this.lookupAddress (address);
+		if ( parent ) {
+			return (parent.findChildImmediatelyBefore (last) || parent);
+		}
+	}
+	return this.root;
+
+}
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
@@ -3924,39 +3971,36 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	var startNode;
+	var getNextNode;
+
 	try {
 		startNode = this.mib.lookup (startOid);
 	} catch ( error ) {
 		startOid = '1.3.6.1';
 		startNode = this.mib.lookup (startOid);
 	}
-	var getNextNode;
 
 	if ( ! startNode ) {
 		// Off-tree start specified
+		startNode = this.mib.getTreeNode (startOid);
+	}
+	getNextNode = startNode.getNextInstanceNode();
+	if ( ! getNextNode ) {
+		// End of MIB
 		targetVarbinds.push ({
 			oid: startOid,
-			type: ObjectType.Null,
+			type: ObjectType.EndOfMibView,
 			value: null
 		});
 	} else {
-		getNextNode = startNode.getNextInstanceNode();
-		if ( ! getNextNode ) {
-			// End of MIB
-			targetVarbinds.push ({
-				oid: startOid,
-				type: ObjectType.EndOfMibView,
-				value: null
-			});
-		} else {
-			// Normal response
-			targetVarbinds.push ({
-				oid: getNextNode.oid,
-				type: getNextNode.valueType,
-				value: getNextNode.value
-			});
-		}
+		// Normal response
+		targetVarbinds.push ({
+			oid: getNextNode.oid,
+			type: getNextNode.valueType,
+			value: getNextNode.value
+		});
 	}
+
 	return getNextNode;
 };
 
