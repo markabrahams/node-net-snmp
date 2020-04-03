@@ -1958,19 +1958,12 @@ Session.prototype.onMsg = function (buffer) {
 					this.msgSecurityParameters.msgAuthenticationParameters = "";
 					this.msgSecurityParameters.msgPrivacyParameters = "";
 				} else {
-					if ( ! req.originalPdu ) {
+					if ( ! req.originalPdu || req.lastResponseWasReport ) {
 						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
 						return;
 					}
 					req.originalPdu.contextName = this.context;
-
-					if ( ! message.msgSecurityParameters.msgAuthoritativeEngineBoots && ! message.msgSecurityParameters.msgAuthoritativeEngineTime) {
-						// time has not been synchronized by the first report PDU, therefore we expect this
-						// request to also generate a report with the time synchronization
-						this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, true);
-					} else {
-						this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, false);
-					}
+					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, true);
 				}
 			} else if ( this.proxy ) {
 				this.onProxyResponse (req, message);
@@ -2492,14 +2485,13 @@ Session.prototype.walk  = function () {
 	return this;
 };
 
-Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port, storeOriginalPdu) {
+Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port, lastResponseWasReport) {
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
-	if (storeOriginalPdu) {
-		req.originalPdu = pdu;
-	}
+	req.originalPdu = pdu;
+	req.lastResponseWasReport = lastResponseWasReport;
 	this.send (req);
 };
 
