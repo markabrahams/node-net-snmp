@@ -1963,7 +1963,7 @@ Session.prototype.onMsg = function (buffer) {
 						return;
 					}
 					req.originalPdu.contextName = this.context;
-					let timeSyncNeeded = !message.msgSecurityParameters.msgAuthoritativeEngineBoots || !message.msgSecurityParameters.msgAuthoritativeEngineTime;
+					var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots || ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
 					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
 				}
 			} else if ( this.proxy ) {

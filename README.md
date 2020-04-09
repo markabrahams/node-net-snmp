@@ -2176,6 +2176,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix agent handling of GetNext from off-tree OID
 
+## Version 2.5.7 - 09/04/2020
+
+ * Handle periodic report PDUs on a long running session
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
