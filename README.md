@@ -2180,6 +2180,10 @@ Example programs are included under the module's `example` directory.
 
  * Handle periodic report PDUs on a long running session
 
+## Version 2.5.8 - 13/04/2020
+
+ * Fix OID and namespace calculations in MIB parser
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
