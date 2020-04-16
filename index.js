@@ -149,6 +149,19 @@ var PrivProtocols = {
 
 _expandConstantObject (PrivProtocols);
 
+var UsmStatsBase = "1.3.6.1.6.3.15.1.1";
+
+var UsmStats = {
+	"1": "Unsupported Security Level",
+	"2": "Not In Time Window",
+	"3": "Unknown User Name",
+	"4": "Unknown Engine ID",
+	"5": "Wrong Digest (incorrect password, community or key)",
+	"6": "Decryption Error"
+};
+
+_expandConstantObject (UsmStats);
+
 var MibProviderType = {
 	"1": "Scalar",
 	"2": "Table"
@@ -1959,6 +1972,10 @@ Session.prototype.onMsg = function (buffer) {
 					this.msgSecurityParameters.msgPrivacyParameters = "";
 				} else {
 					if ( ! req.originalPdu || ! req.allowReport ) {
+						if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
+							this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
+							return;
+						}
 						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
 						return;
 					}
@@ -2504,6 +2521,12 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 	discoveryReq.allowReport = true;
 	this.send (discoveryReq);
 }
+
+Session.prototype.userSecurityModelError = function (req, oid) {
+	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
+	var errorType = UsmStats[oidSuffix] || "Unexpected Report PDU";
+	req.responseCb (new ResponseInvalidError (errorType) );
+};
 
 Session.prototype.onProxyResponse = function (req, message) {
 	if ( message.version != Version3 ) {
