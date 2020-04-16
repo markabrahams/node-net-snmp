@@ -2184,6 +2184,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix OID and namespace calculations in MIB parser
 
+## Version 2.5.9 - 17/04/2020
+
+ * Fix Windows absolute path for reading MIB files
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
