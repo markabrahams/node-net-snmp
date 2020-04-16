@@ -2188,6 +2188,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix Windows absolute path for reading MIB files
 
+## Version 2.5.10 - 17/04/2020
+
+ * Improve SNMPv3 error messages
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
