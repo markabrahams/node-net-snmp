@@ -2677,6 +2677,12 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 	return message;
 };
 
+Listener.prototype.close = function () {
+	if ( this.dgram ) {
+		this.dgram.close ();
+	}
+};
+
 var Authorizer = function (disableAuthorization) {
 	this.communities = [];
 	this.users = [];

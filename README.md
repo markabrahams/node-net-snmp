@@ -2192,6 +2192,10 @@ Example programs are included under the module's `example` directory.
 
  * Improve SNMPv3 error messages
 
+## Version 2.5.11 - 21/04/2020
+
+ * Receiver close fix and receiver example fix
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
