@@ -1563,7 +1563,8 @@ Req.prototype.getId = function() {
 var Session = function (target, authenticator, options) {
 	this.target = target || "127.0.0.1";
 
-	this.version = (options && options.version)
+	options = options || {};
+	this.version = options.version
 			? options.version
 			: Version1;
 
@@ -1573,39 +1574,45 @@ var Session = function (target, authenticator, options) {
 		this.community = authenticator || "public";
 	}
 
-	this.transport = (options && options.transport)
+	this.transport = options.transport
 			? options.transport
 			: "udp4";
-	this.port = (options && options.port )
+	this.port = options.port
 			? options.port
 			: 161;
-	this.trapPort = (options && options.trapPort )
+	this.trapPort = options.trapPort
 			? options.trapPort
 			: 162;
 
-	this.retries = (options && (options.retries || options.retries == 0))
+	this.retries = (options.retries || options.retries == 0)
 			? options.retries
 			: 1;
-	this.timeout = (options && options.timeout)
+	this.timeout = options.timeout
 			? options.timeout
 			: 5000;
 
-	this.backoff = (options && options.backoff >= 1.0)
+	this.backoff = options.backoff >= 1.0
 			? options.backoff
 			: 1.0;
 
-	this.sourceAddress = (options && options.sourceAddress )
+	this.sourceAddress = options.sourceAddress
 			? options.sourceAddress
 			: undefined;
-	this.sourcePort = (options && options.sourcePort )
+	this.sourcePort = options.sourcePort
 			? parseInt(options.sourcePort)
 			: undefined;
 
-	this.idBitsSize = (options && options.idBitsSize)
+	this.idBitsSize = options.idBitsSize
 			? parseInt(options.idBitsSize)
 			: 32;
 
-	this.context = (options && options.context) ? options.context : "";
+	this.context = options.context
+			? options.context
+			: "";
+
+	this.backwardsGetNexts = options.backwardsGetNexts
+			? options.backwardsGetNexts
+			: true;
 
 	DEBUG = options.debug;
 
@@ -1754,7 +1761,7 @@ Session.prototype.getBulk = function () {
 						if (! varbinds[reqIndex])
 							varbinds[reqIndex] = [];
 						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					} else if (! oidFollowsOid (
+					} else if ( ! this.backwardsGetNexts && ! oidFollowsOid (
 							req.message.pdu.varbinds[reqIndex].oid,
 							pdu.varbinds[respIndex].oid)) {
 						req.responseCb (new ResponseInvalidError ("OID '"

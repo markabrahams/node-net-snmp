@@ -433,6 +433,7 @@ The `createSession()` function instantiates and returns an instance of the
         transport: "udp4",
         trapPort: 162,
         version: snmp.Version1,
+        backwardsGetNexts: true,
         idBitsSize: 32
     };
     
@@ -458,6 +459,8 @@ is an object, and can contain the following items:
  * `trapPort` - UDP port to send traps and informs too, defaults to `162`
  * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
    `snmp.Version1`
+ * `backwardsGetNexts` - boolean to allow GetNext operations to retrieve lexicographically
+   preceeding OIDs
  * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
     of the generated id for compatibility with some older devices.
 
@@ -2195,6 +2198,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.5.11 - 21/04/2020
 
  * Receiver close fix and receiver example fix
+
+## Version 2.5.12 - 24/04/2020
+
+ * Add backwardsGetNexts option for handling of errant GetNexts
 
 # License
 
