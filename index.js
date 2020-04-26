@@ -151,6 +151,19 @@ var PrivProtocols = {
 
 _expandConstantObject (PrivProtocols);
 
+var UsmStatsBase = "1.3.6.1.6.3.15.1.1";
+
+var UsmStats = {
+	"1": "Unsupported Security Level",
+	"2": "Not In Time Window",
+	"3": "Unknown User Name",
+	"4": "Unknown Engine ID",
+	"5": "Wrong Digest (incorrect password, community or key)",
+	"6": "Decryption Error"
+};
+
+_expandConstantObject (UsmStats);
+
 var MibProviderType = {
 	"1": "Scalar",
 	"2": "Table"
@@ -1602,6 +1615,8 @@ var Req = function (session, message, feedCb, responseCb, options) {
 	this.responseCb = responseCb;
 	this.retries = session.retries;
 	this.timeout = session.timeout;
+	// Add timeout backoff
+	this.backoff = session.backoff;
 	this.onResponse = session.onSimpleGetResponse;
 	this.feedCb = feedCb;
 	this.port = (options && options.port) ? options.port : session.port;
@@ -1620,7 +1635,8 @@ Req.prototype.getId = function() {
 var Session = function (target, authenticator, options) {
 	this.target = target || "127.0.0.1";
 
-	this.version = (options && options.version)
+	options = options || {};
+	this.version = options.version
 			? options.version
 			: Version1;
 
@@ -1630,35 +1646,45 @@ var Session = function (target, authenticator, options) {
 		this.community = authenticator || "public";
 	}
 
-	this.transport = (options && options.transport)
+	this.transport = options.transport
 			? options.transport
 			: "udp4";
-	this.port = (options && options.port )
+	this.port = options.port
 			? options.port
 			: 161;
-	this.trapPort = (options && options.trapPort )
+	this.trapPort = options.trapPort
 			? options.trapPort
 			: 162;
 
-	this.retries = (options && (options.retries || options.retries == 0))
+	this.retries = (options.retries || options.retries == 0)
 			? options.retries
 			: 1;
-	this.timeout = (options && options.timeout)
+	this.timeout = options.timeout
 			? options.timeout
 			: 5000;
 
-	this.sourceAddress = (options && options.sourceAddress )
+	this.backoff = options.backoff >= 1.0
+			? options.backoff
+			: 1.0;
+
+	this.sourceAddress = options.sourceAddress
 			? options.sourceAddress
 			: undefined;
-	this.sourcePort = (options && options.sourcePort )
+	this.sourcePort = options.sourcePort
 			? parseInt(options.sourcePort)
 			: undefined;
 
-	this.idBitsSize = (options && options.idBitsSize)
+	this.idBitsSize = options.idBitsSize
 			? parseInt(options.idBitsSize)
 			: 32;
 
-	this.context = (options && options.context) ? options.context : "";
+	this.context = options.context
+			? options.context
+			: "";
+
+	this.backwardsGetNexts = options.backwardsGetNexts
+			? options.backwardsGetNexts
+			: true;
 
 	DEBUG = options.debug;
 
@@ -1807,7 +1833,7 @@ Session.prototype.getBulk = function () {
 						if (! varbinds[reqIndex])
 							varbinds[reqIndex] = [];
 						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					} else if (! oidFollowsOid (
+					} else if ( ! this.backwardsGetNexts && ! oidFollowsOid (
 							req.message.pdu.varbinds[reqIndex].oid,
 							pdu.varbinds[respIndex].oid)) {
 						req.responseCb (new ResponseInvalidError ("OID '"
@@ -2024,12 +2050,17 @@ Session.prototype.onMsg = function (buffer) {
 					this.msgSecurityParameters.msgAuthenticationParameters = "";
 					this.msgSecurityParameters.msgPrivacyParameters = "";
 				} else {
-					if ( ! req.originalPdu ) {
+					if ( ! req.originalPdu || ! req.allowReport ) {
+						if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
+							this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
+							return;
+						}
 						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
 						return;
 					}
 					req.originalPdu.contextName = this.context;
-					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port);
+					var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots || ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
+					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
 				}
 			} else if ( this.proxy ) {
 				this.onProxyResponse (req, message);
@@ -2086,6 +2117,9 @@ Session.prototype.registerRequest = function (req) {
 					"Request timed out"));
 		}
 	}, req.timeout);
+	// Apply timeout backoff
+	if (req.backoff && req.backoff >= 1)
+		req.timeout *= req.backoff;
 };
 
 Session.prototype.send = function (req, noWait) {
@@ -2165,7 +2199,7 @@ Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 
 		if ( this.version == Version3 ) {
 			if ( this.msgSecurityParameters ) {
-				this.sendV3Req (pdu, feedCb, responseCb, options, this.port);
+				this.sendV3Req (pdu, feedCb, responseCb, options, this.port, true);
 			} else {
 				this.sendV3Discovery (pdu, feedCb, responseCb, options);
 			}
@@ -2548,11 +2582,13 @@ Session.prototype.walk  = function () {
 	return this;
 };
 
-Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port) {
+Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port, allowReport) {
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
 	req.port = port;
+	req.originalPdu = pdu;
+	req.allowReport = allowReport;
 	this.send (req);
 };
 
@@ -2561,8 +2597,15 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 	var discoveryMessage = Message.createDiscoveryV3 (discoveryPdu);
 	var discoveryReq = new Req (this, discoveryMessage, feedCb, responseCb, options);
 	discoveryReq.originalPdu = originalPdu;
+	discoveryReq.allowReport = true;
 	this.send (discoveryReq);
 }
+
+Session.prototype.userSecurityModelError = function (req, oid) {
+	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
+	var errorType = UsmStats[oidSuffix] || "Unexpected Report PDU";
+	req.responseCb (new ResponseInvalidError (errorType) );
+};
 
 Session.prototype.onProxyResponse = function (req, message) {
 	if ( message.version != Version3 ) {
@@ -2589,17 +2632,25 @@ Session.prototype.onProxyResponse = function (req, message) {
 };
 
 Session.create = function (target, community, options) {
-	if ( options.version && ! ( options.version == Version1 || options.version == Version2c ) ) {
+	// Ensure that options may be optional
+	var version = (options && options.version) ? options.version : Version1;
+	if (version != Version1 && version != Version2c) {
 		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
 	} else {
+		if (!options)
+			options = {};
+		options.version = version;
 		return new Session (target, community, options);
 	}
 };
 
 Session.createV3 = function (target, user, options) {
-	if ( options.version && options.version != Version3 ) {
+	// Ensure that options may be optional
+	if ( options && options.version && options.version != Version3 ) {
 		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
 	} else {
+		if (!options)
+			options = {};
 		options.version = Version3;
 	}
 	return new Session (target, user, options);
@@ -2703,6 +2754,12 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 	}
 
 	return message;
+};
+
+Listener.prototype.close = function () {
+	if ( this.dgram ) {
+		this.dgram.close ();
+	}
 };
 
 var Authorizer = function (disableAuthorization) {
@@ -3063,6 +3120,27 @@ MibNode.prototype.listChildren = function (lowest) {
 	return sorted;
 };
 
+MibNode.prototype.findChildImmediatelyBefore = function (index) {
+	var sortedChildrenKeys = Object.keys(this.children).sort(function (a, b) {
+		return (a - b);
+	});
+
+	if ( sortedChildrenKeys.length === 0 ) {
+		return null;
+	}
+
+	for ( i = 0; i < sortedChildrenKeys.length; i++ ) {
+		if ( index < sortedChildrenKeys[i] ) {
+			if ( i === 0 ) {
+				return null;
+			} else {
+				return this.children[sortedChildrenKeys[i - 1]];
+			}
+		}
+	}
+	return this.children[sortedChildrenKeys[sortedChildrenKeys.length]];
+};
+
 MibNode.prototype.isDescendant = function (address) {
 	return MibNode.oidIsDescended(this.address, address);
 };
@@ -3257,10 +3335,15 @@ Mib.prototype.addNodesForAddress = function (address) {
 
 Mib.prototype.lookup = function (oid) {
 	var address;
+
+	address = Mib.convertOidToAddress (oid);
+	return this.lookupAddress(address);
+};
+
+Mib.prototype.lookupAddress = function (address) {
 	var i;
 	var node;
 
-	address = Mib.convertOidToAddress (oid);
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
 		if ( ! node.children.hasOwnProperty (address[i])) {
@@ -3271,6 +3354,27 @@ Mib.prototype.lookup = function (oid) {
 
 	return node;
 };
+
+Mib.prototype.getTreeNode = function (oid) {
+	var address = Mib.convertOidToAddress (oid);
+	var node;
+
+	node = this.lookupAddress (address);
+	// OID already on tree
+	if ( node ) {
+		return node;
+	}
+
+	while ( address.length > 0 ) {
+		last = address.pop ();
+		parent = this.lookupAddress (address);
+		if ( parent ) {
+			return (parent.findChildImmediatelyBefore (last) || parent);
+		}
+	}
+	return this.root;
+
+}
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
@@ -3968,34 +4072,37 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 };
 
 Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
-	var startNode = this.mib.lookup (startOid);
+	var startNode;
 	var getNextNode;
+
+	try {
+		startNode = this.mib.lookup (startOid);
+	} catch ( error ) {
+		startOid = '1.3.6.1';
+		startNode = this.mib.lookup (startOid);
+	}
 
 	if ( ! startNode ) {
 		// Off-tree start specified
+		startNode = this.mib.getTreeNode (startOid);
+	}
+	getNextNode = startNode.getNextInstanceNode();
+	if ( ! getNextNode ) {
+		// End of MIB
 		targetVarbinds.push ({
 			oid: startOid,
-			type: ObjectType.Null,
+			type: ObjectType.EndOfMibView,
 			value: null
 		});
 	} else {
-		getNextNode = startNode.getNextInstanceNode();
-		if ( ! getNextNode ) {
-			// End of MIB
-			targetVarbinds.push ({
-				oid: startOid,
-				type: ObjectType.EndOfMibView,
-				value: null
-			});
-		} else {
-			// Normal response
-			targetVarbinds.push ({
-				oid: getNextNode.oid,
-				type: getNextNode.valueType,
-				value: getNextNode.value
-			});
-		}
+		// Normal response
+		targetVarbinds.push ({
+			oid: getNextNode.oid,
+			type: getNextNode.valueType,
+			value: getNextNode.value
+		});
 	}
+
 	return getNextNode;
 };
 
