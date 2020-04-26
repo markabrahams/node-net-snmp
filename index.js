@@ -408,7 +408,6 @@ function readVarbindValue (buffer, type) {
 				+ "' in response");
 	}
 	return value;
-
 }
 
 function readVarbinds (buffer, varbinds) {
@@ -425,53 +424,6 @@ function readVarbinds (buffer, varbinds) {
 			break;
 
 		var value = readVarbindValue (buffer, type);
-
-		// if (type == ObjectType.Boolean) {
-		// 	value = buffer.readBoolean ();
-		// } else if (type == ObjectType.Integer) {
-		// 	value = readInt (buffer);
-		// } else if (type == ObjectType.OctetString) {
-		// 	value = buffer.readString (null, true);
-		// } else if (type == ObjectType.Null) {
-		// 	buffer.readByte ();
-		// 	buffer.readByte ();
-		// 	value = null;
-		// } else if (type == ObjectType.OID) {
-		// 	value = buffer.readOID ();
-		// } else if (type == ObjectType.IpAddress) {
-
-		// 	var bytes = buffer.readString (ObjectType.IpAddress, true);
-		// 	if (bytes.length != 4)
-		// 		throw new ResponseInvalidError ("Length '" + bytes.length
-		// 				+ "' of IP address '" + bytes.toString ("hex")
-		// 				+ "' is not 4");
-		// 	value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
-		// } else if (type == ObjectType.Counter) {
-		// 	value = readUint (buffer);
-		// } else if (type == ObjectType.Gauge) {
-		// 	value = readUint (buffer);
-		// } else if (type == ObjectType.TimeTicks) {
-		// 	value = readUint (buffer);
-		// } else if (type == ObjectType.Opaque) {
-		// 	value = buffer.readString (ObjectType.Opaque, true);
-		// } else if (type == ObjectType.Counter64) {
-		// 	value = readUint64 (buffer);
-		// } else if (type == ObjectType.NoSuchObject) {
-		// 	buffer.readByte ();
-		// 	buffer.readByte ();
-		// 	value = null;
-		// } else if (type == ObjectType.NoSuchInstance) {
-		// 	buffer.readByte ();
-		// 	buffer.readByte ();
-		// 	value = null;
-		// } else if (type == ObjectType.EndOfMibView) {
-		// 	buffer.readByte ();
-		// 	buffer.readByte ();
-		// 	value = null;
-		// } else {
-		// 	throw new ResponseInvalidError ("Unknown type '" + type
-		// 			+ "' in response");
-		// }
 
 		varbinds.push ({
 			oid: oid,
@@ -4280,6 +4232,20 @@ AgentXPdu.prototype.toBuffer = function () {
 			buffer.writeUInt8 (0);
 			AgentXPdu.writeOid (buffer, this.oid);
 			break;
+		case AgentXPduType.Unregister:
+			buffer.writeUInt8 (0);  // reserved
+			buffer.writeUInt8 (this.priority);
+			buffer.writeUInt8 (this.rangeSubid);
+			buffer.writeUInt8 (0);  // reserved
+			AgentXPdu.writeOid (buffer, this.oid);
+			break;
+		case AgentXPduType.AddAgentCaps:
+			AgentXPdu.writeOid (buffer, this.oid);
+			AgentXPdu.writeOctetString (buffer, this.descr);
+			break;
+		case AgentXPduType.RemoveAgentCaps:
+			AgentXPdu.writeOid (buffer, this.oid);
+			break;
 		case AgentXPduType.Close:
 			buffer.writeUInt8 (5);  // reasonShutdown == 5
 			buffer.writeUInt8 (0);  // 3 x reserved bytes
@@ -4290,7 +4256,7 @@ AgentXPdu.prototype.toBuffer = function () {
 			buffer.writeUInt32BE (this.sysUpTime);
 			buffer.writeUInt16BE (this.error);
 			buffer.writeUInt16BE (this.index);
-			AgentXPdu.writeVarBinds (buffer, this.varbinds);
+			AgentXPdu.writeVarbinds (buffer, this.varbinds);
 			break;
 		default:
 	}
@@ -4342,11 +4308,23 @@ AgentXPdu.createFromVariables = function (vars) {
 			pdu.priority = vars.priority || 127;
 			pdu.rangeSubid = vars.rangeSubid || 0;
 			break;
+		case AgentXPduType.Unregister:
+			pdu.oid = vars.oid || null;
+			pdu.priority = vars.priority || 127;
+			pdu.rangeSubid = vars.rangeSubid || 0;
+			break;
+		case AgentXPduType.AddAgentCaps:
+			pdu.oid = vars.oid;
+			pdu.descr = vars.descr;
+			break;
+		case AgentXPduType.RemoveAgentCaps:
+			pdu.oid = vars.oid;
+			break;
 		case AgentXPduType.Response:
 			pdu.sysUpTime = vars.sysUpTime || 0;
 			pdu.error = vars.error || 0;
 			pdu.index = vars.index || 0;
-			pdu.varbinds = vars.varbinds || null;  // maybe []
+			pdu.varbinds = vars.varbinds || null;
 			break;
 		default:
 	}
@@ -4367,7 +4345,20 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 			pdu.index = buffer.readUInt16BE ();
 			break;
 		case AgentXPduType.Get:
+		case AgentXPduType.GetNext:
 			pdu.searchRangeList = AgentXPdu.readSearchRangeList (buffer, pdu.payloadLength);
+			break;
+		case AgentXPduType.GetBulk:
+			pdu.nonRepeaters = buffer.readUInt16BE ();
+			pdu.maxRepetitions = buffer.readUInt16BE ();
+			pdu.searchRangeList = AgentXPdu.readSearchRangeList (buffer, pdu.payloadLength - 4);
+			break;
+		case AgentXPduType.TestSet:
+			pdu.varbinds = AgentXPdu.readVarbinds (buffer, pdu.payloadLength);
+			break;
+		case AgentXPduType.CommitSet:
+		case AgentXPduType.UndoSet:
+		case AgentXPduType.CleanupSet:
 			break;
 		default:
 	}
@@ -4455,10 +4446,12 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 	}
 };
 
-AgentXPdu.writeVarBinds = function (buffer, varbinds) {
-	for ( var i = 0; i < varbinds.length ; i++ ) {
-		var varbind = varbinds[i];
-		AgentXPdu.writeVarBind(buffer, varbind);
+AgentXPdu.writeVarbinds = function (buffer, varbinds) {
+	if ( varbinds ) {
+		for ( var i = 0; i < varbinds.length ; i++ ) {
+			var varbind = varbinds[i];
+			AgentXPdu.writeVarBind(buffer, varbind);
+		}
 	}
 };
 
@@ -4510,6 +4503,68 @@ AgentXPdu.readOctetString = function (buffer) {
 	var octetString = buffer.readString (octetStringLength);
 	buffer.readString (paddingOctets);
 	return octetString;
+};
+
+AgentXPdu.readVarbind = function (buffer) {
+	var vtype = buffer.readUInt16BE ();
+	buffer.readUInt16BE ();  // reserved
+	var oid = AgentXPdu.readOid (buffer);
+	var value;
+
+	switch (vtype) {
+		case ObjectType.Integer:
+			value = buffer.readUInt32BE ();
+			break;
+		case ObjectType.OctetString:
+			value = AgentXPdu.readOctetString (buffer);
+			break;
+		case ObjectType.Null:
+			value = null;
+			break;
+		case ObjectType.OID:
+			value = AgentXPdu.readOid (buffer);
+			break;
+		case ObjectType.IpAddress:
+			value = AgentXPdu.readOctetString (buffer);
+			break;
+		case ObjectType.Counter:
+		case ObjectType.Gauge:
+		case ObjectType.TimeTicks:
+			value = buffer.readUInt32BE ();
+			break;
+		case ObjectType.Opaque:
+			value = AgentXPdu.readOctetString (buffer);
+			break;
+		case ObjectType.Counter64:
+			value = readUint64 (buffer);
+			break;
+		case ObjectType.NoSuchObject:
+		case ObjectType.NoSuchInstance:
+		case ObjectType.EndOfMibView:
+			value = null;
+			break;
+		default:
+			throw new RequestInvalidError ("Unknown type '" + type
+				+ "' in varbind");
+	}
+
+	return {
+		type: vtype,
+		oid: oid,
+		value: value
+	};
+};
+
+AgentXPdu.readVarbinds = function (buffer, payloadLength) {
+	var bytesLeft = payloadLength;
+	var bufferPosition = (buffer.readOffset + 1);
+	var varbindList = [];
+	while (bytesLeft > 0) {
+		varbindList.push (AgentXPdu.readVarbind (buffer));
+		bytesLeft -= (buffer.readOffset + 1) - bufferPosition;
+		bufferPosition = buffer.readOffset + 1;
+	}
+	return varbindList;
 };
 
 var Subagent = function (options, callback) {
@@ -4576,12 +4631,22 @@ Subagent.prototype.registerProvider = function (provider, callback) {
 	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.registerProviders = function (providers) {
-	this.mib.registerProviders (providers);
+Subagent.prototype.unregisterProvider = function (provider, callback) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Unregister,
+		sessionID: this.sessionID,
+		rangeSubid: 0,
+		priority: 127,
+		oid: provider.oid
+	});
+	this.mib.unregisterProvider (provider);
+	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.unregisterProvider = function (provider) {
-	this.mib.unregisterProvider (provider);
+Subagent.prototype.registerProviders = function (providers) {
+	for (var provider of providers) {
+		this.registerProvider (provider);
+	}
 };
 
 Subagent.prototype.getProvider = function (provider) {
@@ -4590,6 +4655,25 @@ Subagent.prototype.getProvider = function (provider) {
 
 Subagent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
+};
+
+Subagent.prototype.addAgentCaps = function (oid, descr) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.AddAgentCaps,
+		sessionID: this.sessionID,
+		oid: oid,
+		descr: descr
+	});
+	this.sendPdu (pdu);
+};
+
+Subagent.prototype.removeAgentCaps = function (oid) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.RemoveAgentCaps,
+		sessionID: this.sessionID,
+		oid: oid
+	});
+	this.sendPdu (pdu);
 };
 
 Subagent.prototype.sendPdu = function (pdu, callback) {
@@ -4622,51 +4706,72 @@ Subagent.prototype.onMsg = function (buffer, rinfo) {
 	debug ("Received AgentX " + AgentXPduType[pdu.pduType] + " PDU");
 	debug (pdu);
 
-	if ( pdu.pduType == AgentXPduType.Response ) {
-		var requestPdu = this.requestPdus[pdu.packetID];
-		if (requestPdu) {
-			delete this.requestPdus[pdu.packetID];
-			// clearTimeout (pdu.timer);
-			// delete pdu.timer;
-			switch ( requestPdu.pduType ) {
-				case AgentXPduType.Open:
-					this.sessionID = pdu.sessionID;
-					break;
-				case AgentXPduType.Close:
-					this.socket.end ();
-					break;
-				default:
-					// Response PDU for request type not handled
-			}
-			if (requestPdu.callback) {
-				requestPdu.callback(null, pdu);
-			}
-		} else {
-			// unexpected Response PDU
-		}
-	} else if ( pdu.pduType == AgentXPduType.Get ) {
-		this.request (pdu);
+	switch (pdu.pduType) {
+		case AgentXPduType.Response:
+			this.response (pdu);
+			break;
+		case AgentXPduType.Get:
+			this.getRequest (pdu);
+			break;
+		case AgentXPduType.GetNext:
+			this.getNextRequest (pdu);
+			break;
+		case AgentXPduType.GetBulk:
+			this.getBulkRequest (pdu);
+			break;
+		case AgentXPduType.TestSet:
+			this.testSet (pdu);
+			break;
+		case AgentXPduType.CommitSet:
+			this.commitSet (pdu);
+			break;
+		case AgentXPduType.UndoSet:
+			this.undoSet (pdu);
+			break;
+		case AgentXPduType.CleanupSet:
+			this.cleanupSet (pdu);
+			break;
+		default:
+			// unrecognized PDU type
 	}
 };
 
-Subagent.prototype.request = function (pdu) {
+Subagent.prototype.response = function (pdu) {
+	var requestPdu = this.requestPdus[pdu.packetID];
+	if (requestPdu) {
+		delete this.requestPdus[pdu.packetID];
+		// clearTimeout (pdu.timer);
+		// delete pdu.timer;
+		switch (requestPdu.pduType) {
+			case AgentXPduType.Open:
+				this.sessionID = pdu.sessionID;
+				break;
+			case AgentXPduType.Close:
+				this.socket.end();
+				break;
+			case AgentXPduType.Register:
+			case AgentXPduType.Unregister:
+			case AgentXPduType.AddAgentCaps:
+			case AgentXPduType.RemoveAgentCaps:
+				break;
+			default:
+				// Response PDU for request type not handled
+		}
+		if (requestPdu.callback) {
+			requestPdu.callback(null, pdu);
+		}
+	} else {
+		// unexpected Response PDU - has no matching request
+	}
+};
+
+Subagent.prototype.request = function (pdu, requestVarbinds) {
 	var me = this;
 	var varbindsCompleted = 0;
-	// var requestPdu = requestMessage.pdu;
-	var varbindsLength = pdu.searchRangeList.length;
-	// var responsePdu = requestPdu.getResponsePduForRequest ();
+	var varbindsLength = requestVarbinds.length;
 	var i;
-	var requestVarbinds = [];
-	var requestPduType = PduType.GetRequest;
+	var requestPduType = pdu.type;
 	var responseVarbinds = [];
-
-	for ( i = 0; i < pdu.searchRangeList.length; i++ ) {
-		requestVarbinds.push ({
-			oid: pdu.searchRangeList[i].start,
-			value: null,
-			type: null
-		});
-	}
 
 	for ( i = 0; i < requestVarbinds.length; i++ ) {
 		var requestVarbind = requestVarbinds[i];
@@ -4736,6 +4841,98 @@ Subagent.prototype.request = function (pdu) {
 	};
 };
 
+Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
+	var startNode;
+	var getNextNode;
+
+	try {
+		startNode = this.mib.lookup (startOid);
+	} catch ( error ) {
+		startOid = '1.3.6.1';
+		startNode = this.mib.lookup (startOid);
+	}
+
+	if ( ! startNode ) {
+		// Off-tree start specified
+		startNode = this.mib.getTreeNode (startOid);
+	}
+	getNextNode = startNode.getNextInstanceNode();
+	if ( ! getNextNode ) {
+		// End of MIB
+		targetVarbinds.push ({
+			oid: startOid,
+			type: ObjectType.EndOfMibView,
+			value: null
+		});
+	} else {
+		// Normal response
+		targetVarbinds.push ({
+			oid: getNextNode.oid,
+			type: getNextNode.valueType,
+			value: getNextNode.value
+		});
+	}
+
+	return getNextNode;
+};
+
+Subagent.prototype.getRequest = function (pdu) {
+	var requestVarbinds = [];
+
+	for ( var i = 0; i < pdu.searchRangeList.length; i++ ) {
+		requestVarbinds.push ({
+			oid: pdu.searchRangeList[i].start,
+			value: null,
+			type: null
+		});
+	}
+	this.request (pdu, requestVarbinds);
+};
+
+Subagent.prototype.getNextRequest = function (pdu) {
+	var getNextVarbinds = [];
+
+	for (var i = 0 ; i < pdu.searchRangeList.length ; i++ ) {
+		this.addGetNextVarbind (getNextVarbinds, pdu.searchRangeList[i].start);
+	}
+
+	// pdu.varbinds = getNextVarbinds;
+	this.request (pdu, getNextVarbinds);
+};
+
+Subagent.prototype.getBulkRequest = function (pdu) {
+	var getBulkVarbinds = [];
+	var startOid = [];
+	var getNextNode;
+	var endOfMib = false;
+
+	for (var n = 0 ; n < pdu.nonRepeaters ; n++ ) {
+		this.addGetNextVarbind (getBulkVarbinds, pdu.searchRangeList[n].start);
+	}
+
+	for (var v = pdu.nonRepeaters ; v < pdu.searchRangeList.length ; v++ ) {
+		startOid.push (pdu.searchRangeList[v].oid);
+	}
+
+	while ( getBulkVarbinds.length < pdu.maxRepetitions && ! endOfMib ) {
+		for (var v = pdu.nonRepeaters ; v < pdu.searchRangeList.length ; v++ ) {
+			if (getBulkVarbinds.length < pdu.maxRepetitions ) {
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - pdu.nonRepeaters]);
+				if ( getNextNode ) {
+					startOid[v - pdu.nonRepeaters] = getNextNode.oid;
+					if ( getNextNode.type == ObjectType.EndOfMibView ) {
+						endOfMib = true;
+					}
+				}
+			}
+		}
+	}
+
+	// requestMessage.pdu.varbinds = getBulkVarbinds;
+	this.request (pdu, getBulkVarbinds);
+};
+
+
 Subagent.prototype.sendGetResponse = function (requestPdu, varbinds) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Response,
@@ -4748,6 +4945,35 @@ Subagent.prototype.sendGetResponse = function (requestPdu, varbinds) {
 		varbinds: varbinds
 	});
 	this.sendPdu (pdu, null);
+};
+
+Subagent.prototype.sendSetResponse = function (setPdu) {
+	var responsePdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Response,
+		sessionID: setPdu.sessionID,
+		transactionID: setPdu.transactionID,
+		packetID: setPdu.packetID,
+		sysUpTime: 0,
+		error: 0,
+		index: 0,
+	});
+	this.sendPdu (responsePdu, null);
+};
+
+Subagent.prototype.testSet = function (setPdu) {
+	this.sendSetResponse (setPdu);
+};
+
+Subagent.prototype.commitSet = function (setPdu) {
+	this.sendSetResponse (setPdu);
+};
+
+Subagent.prototype.undoSet = function (setPdu) {
+	this.sendSetResponse (setPdu);
+};
+
+Subagent.prototype.cleanupSet = function (setPdu) {
+	// no response sent
 };
 
 Subagent.create = function (options, callback) {

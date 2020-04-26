@@ -18,33 +18,38 @@ var callback = function (error, data) {
 };
 
 var agent = snmp.createSubagent(snmpOptions, callback);
+
+var stringProvider = {
+    name: "scalarString",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.4.1.8072.9999.9999.1",
+    scalarType: snmp.ObjectType.OctetString
+};
+var intProvider = {
+    name: "scalarInt",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.4.1.8072.9999.9999.3",
+    scalarType: snmp.ObjectType.Integer
+};
+
 agent.open(function (error, data) {
     if ( error ) {
         console.error (error);
     } else {
-        var stringProvider = {
-            name: "scalarString",
-            type: snmp.MibProviderType.Scalar,
-            oid: "1.3.6.1.4.1.8072.9999.9999.1",
-            scalarType: snmp.ObjectType.OctetString
-        };
         agent.registerProvider (stringProvider, null);
         agent.getMib ().setScalarValue ("scalarString", "Rage inside the machine!");
-        var intProvider = {
-            name: "scalarInt",
-            type: snmp.MibProviderType.Scalar,
-            oid: "1.3.6.1.4.1.8072.9999.9999.3",
-            scalarType: snmp.ObjectType.Integer
-        };
         agent.registerProvider (intProvider, null);
         agent.getMib ().setScalarValue ("scalarInt", 2000);
     }
 });
 
-// setTimeout( function() {
-//     //agent.open();
-//     agent.close();
-// }, 2000);
+setTimeout( function() {
+    // agent.open();
+    // agent.close();
+    // agent.unregisterProvider (intProvider, null);
+    // agent.addAgentCaps ("1.3.6.1.4.1.8072.9999.9999", "Marks funk");
+    // agent.removeAgentCaps ("1.3.6.1.4.1.8072.9999.9999");
+}, 2000);
 
 var tableProvider = {
     name: "ifTable",
