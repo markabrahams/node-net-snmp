@@ -352,6 +352,52 @@ function readUint64 (buffer) {
 	return value;
 }
 
+function readVarbindValue (buffer, type) {
+	var value;
+	if (type == ObjectType.Boolean) {
+		value = buffer.readBoolean ();
+	} else if (type == ObjectType.Integer) {
+		value = readInt (buffer);
+	} else if (type == ObjectType.OctetString) {
+		value = buffer.readString (null, true);
+	} else if (type == ObjectType.Null) {
+		buffer.readByte ();
+		buffer.readByte ();
+		value = null;
+	} else if (type == ObjectType.OID) {
+		value = buffer.readOID ();
+	} else if (type == ObjectType.IpAddress) {
+		value = readIpAddress (buffer);
+	} else if (type == ObjectType.Counter) {
+		value = readUint (buffer);
+	} else if (type == ObjectType.Gauge) {
+		value = readUint (buffer);
+	} else if (type == ObjectType.TimeTicks) {
+		value = readUint (buffer);
+	} else if (type == ObjectType.Opaque) {
+		value = buffer.readString (ObjectType.Opaque, true);
+	} else if (type == ObjectType.Counter64) {
+		value = readUint64 (buffer);
+	} else if (type == ObjectType.NoSuchObject) {
+		buffer.readByte ();
+		buffer.readByte ();
+		value = null;
+	} else if (type == ObjectType.NoSuchInstance) {
+		buffer.readByte ();
+		buffer.readByte ();
+		value = null;
+	} else if (type == ObjectType.EndOfMibView) {
+		buffer.readByte ();
+		buffer.readByte ();
+		value = null;
+	} else {
+		throw new ResponseInvalidError ("Unknown type '" + type
+				+ "' in response");
+	}
+	return value;
+
+}
+
 function readVarbinds (buffer, varbinds) {
 	buffer.readSequence ();
 
@@ -365,53 +411,54 @@ function readVarbinds (buffer, varbinds) {
 		if (type == null)
 			break;
 
-		var value;
+		var value = readVarbindValue (buffer, type);
 
-		if (type == ObjectType.Boolean) {
-			value = buffer.readBoolean ();
-		} else if (type == ObjectType.Integer) {
-			value = readInt (buffer);
-		} else if (type == ObjectType.OctetString) {
-			value = buffer.readString (null, true);
-		} else if (type == ObjectType.Null) {
-			buffer.readByte ();
-			buffer.readByte ();
-			value = null;
-		} else if (type == ObjectType.OID) {
-			value = buffer.readOID ();
-		} else if (type == ObjectType.IpAddress) {
-			var bytes = buffer.readString (ObjectType.IpAddress, true);
-			if (bytes.length != 4)
-				throw new ResponseInvalidError ("Length '" + bytes.length
-						+ "' of IP address '" + bytes.toString ("hex")
-						+ "' is not 4");
-			value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
-		} else if (type == ObjectType.Counter) {
-			value = readUint (buffer);
-		} else if (type == ObjectType.Gauge) {
-			value = readUint (buffer);
-		} else if (type == ObjectType.TimeTicks) {
-			value = readUint (buffer);
-		} else if (type == ObjectType.Opaque) {
-			value = buffer.readString (ObjectType.Opaque, true);
-		} else if (type == ObjectType.Counter64) {
-			value = readUint64 (buffer);
-		} else if (type == ObjectType.NoSuchObject) {
-			buffer.readByte ();
-			buffer.readByte ();
-			value = null;
-		} else if (type == ObjectType.NoSuchInstance) {
-			buffer.readByte ();
-			buffer.readByte ();
-			value = null;
-		} else if (type == ObjectType.EndOfMibView) {
-			buffer.readByte ();
-			buffer.readByte ();
-			value = null;
-		} else {
-			throw new ResponseInvalidError ("Unknown type '" + type
-					+ "' in response");
-		}
+		// if (type == ObjectType.Boolean) {
+		// 	value = buffer.readBoolean ();
+		// } else if (type == ObjectType.Integer) {
+		// 	value = readInt (buffer);
+		// } else if (type == ObjectType.OctetString) {
+		// 	value = buffer.readString (null, true);
+		// } else if (type == ObjectType.Null) {
+		// 	buffer.readByte ();
+		// 	buffer.readByte ();
+		// 	value = null;
+		// } else if (type == ObjectType.OID) {
+		// 	value = buffer.readOID ();
+		// } else if (type == ObjectType.IpAddress) {
+
+		// 	var bytes = buffer.readString (ObjectType.IpAddress, true);
+		// 	if (bytes.length != 4)
+		// 		throw new ResponseInvalidError ("Length '" + bytes.length
+		// 				+ "' of IP address '" + bytes.toString ("hex")
+		// 				+ "' is not 4");
+		// 	value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
+		// } else if (type == ObjectType.Counter) {
+		// 	value = readUint (buffer);
+		// } else if (type == ObjectType.Gauge) {
+		// 	value = readUint (buffer);
+		// } else if (type == ObjectType.TimeTicks) {
+		// 	value = readUint (buffer);
+		// } else if (type == ObjectType.Opaque) {
+		// 	value = buffer.readString (ObjectType.Opaque, true);
+		// } else if (type == ObjectType.Counter64) {
+		// 	value = readUint64 (buffer);
+		// } else if (type == ObjectType.NoSuchObject) {
+		// 	buffer.readByte ();
+		// 	buffer.readByte ();
+		// 	value = null;
+		// } else if (type == ObjectType.NoSuchInstance) {
+		// 	buffer.readByte ();
+		// 	buffer.readByte ();
+		// 	value = null;
+		// } else if (type == ObjectType.EndOfMibView) {
+		// 	buffer.readByte ();
+		// 	buffer.readByte ();
+		// 	value = null;
+		// } else {
+		// 	throw new ResponseInvalidError ("Unknown type '" + type
+		// 			+ "' in response");
+		// }
 
 		varbinds.push ({
 			oid: oid,
@@ -4119,11 +4166,24 @@ AgentXPdu.prototype.toBuffer = function () {
 			AgentXPdu.writeOid (buffer, this.oid);
 			AgentXPdu.writeOctetString (buffer, this.descr);
 			break;
+		case AgentXPduType.Register:
+			buffer.writeUInt8 (this.timeout);
+			buffer.writeUInt8 (this.priority);
+			buffer.writeUInt8 (this.rangeSubid);
+			buffer.writeUInt8 (0);
+			AgentXPdu.writeOid (buffer, this.oid);
+			break;
 		case AgentXPduType.Close:
 			buffer.writeUInt8 (5);  // reasonShutdown == 5
 			buffer.writeUInt8 (0);  // 3 x reserved bytes
 			buffer.writeUInt8 (0);
 			buffer.writeUInt8 (0);
+			break;
+		case AgentXPduType.Response:
+			buffer.writeUInt32BE (this.sysUpTime);
+			buffer.writeUInt16BE (this.error);
+			buffer.writeUInt16BE (this.index);
+			AgentXPdu.writeVarBinds (buffer, this.varbinds);
 			break;
 		default:
 	}
@@ -4163,9 +4223,26 @@ AgentXPdu.createFromVariables = function (vars) {
 	pdu.sessionID = vars.sessionID || 0;
 	pdu.transactionID = vars.transactionID || 0;
 	pdu.packetID = vars.packetID || 0;
-	pdu.timeout = vars.timeout || 0;
-	pdu.oid = vars.oid || null;
-	pdu.descr = vars.descr || null;
+	switch ( pdu.pduType ) {
+		case AgentXPduType.Open:
+			pdu.timeout = vars.timeout || 0;
+			pdu.oid = vars.oid || null;
+			pdu.descr = vars.descr || null;
+			break;
+		case AgentXPduType.Register:
+			pdu.timeout = vars.timeout || 0;
+			pdu.oid = vars.oid || null;
+			pdu.priority = vars.priority || 127;
+			pdu.rangeSubid = vars.rangeSubid || 0;
+			break;
+		case AgentXPduType.Response:
+			pdu.sysUpTime = vars.sysUpTime || 0;
+			pdu.error = vars.error || 0;
+			pdu.index = vars.index || 0;
+			pdu.varbinds = vars.varbinds || null;  // maybe []
+			break;
+		default:
+	}
 	
 	return pdu;
 };
@@ -4182,6 +4259,9 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 			pdu.error = buffer.readUInt16BE ();
 			pdu.index = buffer.readUInt16BE ();
 			break;
+		case AgentXPduType.Get:
+			pdu.searchRangeList = AgentXPdu.readSearchRangeList (buffer, pdu.payloadLength);
+			break;
 		default:
 	}
 	return pdu;
@@ -4192,7 +4272,7 @@ AgentXPdu.writeOid = function (buffer, oid, include = 0) {
 		var address = oid.split ('.').map ( Number );
 		if ( address.length >= 5 && address.slice (0, 4).join('.') == '1.3.6.1' ) {
 			prefix = address[4];
-			address = address.slice(4);
+			address = address.slice(5);
 		} else {
 			prefix = 0;
 		}
@@ -4217,11 +4297,74 @@ AgentXPdu.writeOctetString = function (buffer, octetString) {
 	}
 };
 
+AgentXPdu.writeVarBind = function (buffer, varbind) {
+	buffer.writeUInt16BE (varbind.type);
+	buffer.writeUInt16BE (0); // reserved
+	AgentXPdu.writeOid (buffer, varbind.oid);
+
+	if (varbind.type && varbind.oid) {
+
+		switch (varbind.type) {
+			case ObjectType.Integer: // also Integer32
+				buffer.writeUInt32BE (varbind.value);
+				break;
+			case ObjectType.OctetString:
+				AgentXPdu.writeOctetString (buffer, varbind.value);
+				break;
+			case ObjectType.OID:
+				AgentXPdu.writeOid (buffer, varbind.value);
+				break;
+			case ObjectType.IpAddress:
+				var bytes = varbind.value.split (".");
+				if (bytes.length != 4)
+					throw new RequestInvalidError ("Invalid IP address '"
+							+ varbind.value + "'");
+				buffer.writeBuffer (Buffer.from (bytes), ObjectType.IpAddress);
+				break;
+			case ObjectType.Counter: // also Counter32
+				writeUint (buffer, ObjectType.Counter, varbind.value);
+				break;
+			case ObjectType.Gauge: // also Gauge32 & Unsigned32
+				writeUint (buffer, ObjectType.Gauge, varbind.value);
+				break;
+			case ObjectType.TimeTicks:
+				writeUint (buffer, ObjectType.TimeTicks, varbind.value);
+				break;
+			case ObjectType.Opaque:
+				buffer.writeBuffer (varbind.value, ObjectType.Opaque);
+				break;
+			case ObjectType.Counter64:
+				writeUint64 (buffer, varbind.value);
+				break;
+			case ObjectType.Null:
+			case ObjectType.EndOfMibView:
+			case ObjectType.NoSuchObject:
+			case ObjectType.NoSuchInstance:
+				break;
+			default:
+				throw new RequestInvalidError ("Unknown type '" + varbind.type
+						+ "' in request");
+		}
+	}
+};
+
+AgentXPdu.writeVarBinds = function (buffer, varbinds) {
+	for ( var i = 0; i < varbinds.length ; i++ ) {
+		var varbind = varbinds[i];
+		AgentXPdu.writeVarBind(buffer, varbind);
+	}
+};
+
 AgentXPdu.readOid = function (buffer) {
 	var subidLength = buffer.readUInt8 ();
 	var prefix = buffer.readUInt8 ();
 	var include = buffer.readUInt8 ();
-	buffer.readUInt8 (0);  // reserved
+	buffer.readUInt8 ();  // reserved
+
+	// Null OID check
+	if ( subidLength == 0 && prefix == 0 && include == 0) {
+		return null;
+	}
 	var address = [];
 	if ( prefix == 0 ) {
 		address = [];
@@ -4231,8 +4374,27 @@ AgentXPdu.readOid = function (buffer) {
 	for ( let i = 0; i < subidLength; i++ ) {
 		address.push (buffer.readUInt32BE ());
 	}
-	var oid = address.join (',');
+	var oid = address.join ('.');
 	return oid;
+};
+
+AgentXPdu.readSearchRange = function (buffer) {
+	return {
+		start: AgentXPdu.readOid (buffer),
+		end: AgentXPdu.readOid (buffer)
+	};
+};
+
+AgentXPdu.readSearchRangeList = function (buffer, payloadLength) {
+	var bytesLeft = payloadLength;
+	var bufferPosition = (buffer.readOffset + 1);
+	var searchRangeList = [];
+	while (bytesLeft > 0) {
+		searchRangeList.push (AgentXPdu.readSearchRange (buffer));
+		bytesLeft -= (buffer.readOffset + 1) - bufferPosition;
+		bufferPosition = buffer.readOffset + 1;
+	}
+	return searchRangeList;
 };
 
 AgentXPdu.readOctetString = function (buffer) {
@@ -4276,30 +4438,60 @@ Subagent.prototype.connectSocket = function () {
 	});
 };
 
-Subagent.prototype.open = function () {
+Subagent.prototype.open = function (callback) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Open,
 		timeout: this.timeout,
 		oid: this.oid,
 		descr: this.descr
 	});
-	this.sendPdu (pdu);
+	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.close = function () {
+Subagent.prototype.close = function (callback) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Close,
 		sessionID: this.sessionID
 	});
-	this.sendPdu (pdu);
+	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.sendPdu = function (pdu) {
+Subagent.prototype.registerProvider = function (provider, callback) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Register,
+		sessionID: this.sessionID,
+		rangeSubid: 0,
+		timeout: 5,
+		priority: 127,
+		oid: provider.oid
+	});
+	this.mib.registerProvider (provider);
+	this.sendPdu (pdu, callback);
+};
+
+Subagent.prototype.registerProviders = function (providers) {
+	this.mib.registerProviders (providers);
+};
+
+Subagent.prototype.unregisterProvider = function (provider) {
+	this.mib.unregisterProvider (provider);
+};
+
+Subagent.prototype.getProvider = function (provider) {
+	return this.mib.getProvider (provider);
+};
+
+Subagent.prototype.getProviders = function () {
+	return this.mib.getProviders ();
+};
+
+Subagent.prototype.sendPdu = function (pdu, callback) {
 	debug ("Sending AgentX " + AgentXPduType[pdu.pduType] + " PDU");
 	debug (pdu);
 	var buffer = pdu.toBuffer ();
 	this.socket.write (buffer);
 	if ( ! this.requestPdus[pdu.packetID] ) {
+		pdu.callback = callback;
 		this.requestPdus[pdu.packetID] = pdu;
 	}
 
@@ -4320,9 +4512,9 @@ Subagent.prototype.sendPdu = function (pdu) {
 Subagent.prototype.onMsg = function (buffer, rinfo) {
 	var pdu = AgentXPdu.createFromBuffer (buffer);
 
-	//console.log(JSON.stringify(pdu, null, 2));
 	debug ("Received AgentX " + AgentXPduType[pdu.pduType] + " PDU");
 	debug (pdu);
+
 	if ( pdu.pduType == AgentXPduType.Response ) {
 		var requestPdu = this.requestPdus[pdu.packetID];
 		if (requestPdu) {
@@ -4339,10 +4531,116 @@ Subagent.prototype.onMsg = function (buffer, rinfo) {
 				default:
 					// Response PDU for request type not handled
 			}
+			if (requestPdu.callback) {
+				requestPdu.callback(null, pdu);
+			}
 		} else {
 			// unexpected Response PDU
 		}
+	} else if ( pdu.pduType == AgentXPduType.Get ) {
+		this.request (pdu);
 	}
+};
+
+Subagent.prototype.request = function (pdu) {
+	var me = this;
+	var varbindsCompleted = 0;
+	// var requestPdu = requestMessage.pdu;
+	var varbindsLength = pdu.searchRangeList.length;
+	// var responsePdu = requestPdu.getResponsePduForRequest ();
+	var i;
+	var requestVarbinds = [];
+	var requestPduType = PduType.GetRequest;
+	var responseVarbinds = [];
+
+	for ( i = 0; i < pdu.searchRangeList.length; i++ ) {
+		requestVarbinds.push ({
+			oid: pdu.searchRangeList[i].start,
+			value: null,
+			type: null
+		});
+	}
+
+	for ( i = 0; i < requestVarbinds.length; i++ ) {
+		var requestVarbind = requestVarbinds[i];
+		var instanceNode = this.mib.lookup (requestVarbind.oid);
+		var providerNode;
+		var mibRequest;
+		var handler;
+		var responseVarbindType;
+
+		if ( ! instanceNode ) {
+			mibRequest = new MibRequest ({
+				operation: requestPduType,
+				oid: requestVarbind.oid
+			});
+			handler = function getNsoHandler (mibRequestForNso) {
+				mibRequestForNso.done ({
+					errorStatus: ErrorStatus.NoSuchName,
+					errorIndex: i
+				});
+			};
+		} else {
+			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
+			mibRequest = new MibRequest ({
+				operation: requestPduType,
+				providerNode: providerNode,
+				instanceNode: instanceNode,
+				oid: requestVarbind.oid
+			});
+			handler = providerNode.provider.handler;
+		}
+
+		mibRequest.done = function (error) {
+			if ( error ) {
+				responsePdu.errorStatus = error.errorStatus;
+				responsePdu.errorIndex = error.errorIndex;
+				responseVarbind = {
+					oid: mibRequest.oid,
+					type: ObjectType.Null,
+					value: null
+				};
+			} else {
+				if ( requestPduType == PduType.SetRequest ) {
+					mibRequest.instanceNode.value = requestVarbind.value;
+				}
+				if ( ( requestPduType == PduType.GetNextRequest || requestPduType == PduType.GetBulkRequest ) &&
+						requestVarbind.type == ObjectType.EndOfMibView ) {
+					responseVarbindType = ObjectType.EndOfMibView;
+				} else {
+					responseVarbindType = mibRequest.instanceNode.valueType;
+				}
+				responseVarbind = {
+					oid: mibRequest.oid,
+					type: responseVarbindType,
+					value: mibRequest.instanceNode.value
+				};
+			}
+			responseVarbinds[i] = responseVarbind;
+			if ( ++varbindsCompleted == varbindsLength) {
+				me.sendGetResponse.call (me, pdu, responseVarbinds);
+			}
+		};
+		if ( handler ) {
+			handler (mibRequest);
+		} else {
+			mibRequest.done ();
+		}
+	};
+};
+
+Subagent.prototype.sendGetResponse = function (requestPdu, varbinds) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Response,
+		sessionID: requestPdu.sessionID,
+		transactionID: requestPdu.transactionID,
+		packetID: requestPdu.packetID,
+		sysUpTime: 0,
+		error: 0,
+		index: 0,
+		varbinds: varbinds
+	});
+	this.sendPdu (pdu, null);
 };
 
 Subagent.create = function (options, callback) {
