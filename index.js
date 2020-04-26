@@ -538,7 +538,6 @@ SimplePdu.prototype.initializeFromBuffer = function (reader) {
 
 	this.varbinds = [];
 	readVarbinds (reader, this.varbinds);
-
 };
 
 SimplePdu.prototype.getResponsePduForRequest = function () {
@@ -4581,6 +4580,7 @@ var Subagent = function (options, callback) {
 	this.transactionID = 0;
 	this.packetID = _generateId();
 	this.requestPdus = {};
+	this.setTransactions = {};
 };
 
 Subagent.prototype.getMib = function () {
@@ -4783,7 +4783,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 
 		if ( ! instanceNode ) {
 			mibRequest = new MibRequest ({
-				operation: requestPduType,
+				operation: pdu.pduType,
 				oid: requestVarbind.oid
 			});
 			handler = function getNsoHandler (mibRequestForNso) {
@@ -4795,7 +4795,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
 			mibRequest = new MibRequest ({
-				operation: requestPduType,
+				operation: pdu.pduType,
 				providerNode: providerNode,
 				instanceNode: instanceNode,
 				oid: requestVarbind.oid
@@ -4813,10 +4813,15 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 					value: null
 				};
 			} else {
-				if ( requestPduType == PduType.SetRequest ) {
+				if ( pdu.pduType == AgentXPduType.TestSet ) {
+					// more tests?
+				} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
+					me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
 					mibRequest.instanceNode.value = requestVarbind.value;
+				} else if ( pdu.pduType == AgentXPduType.UndoSet ) {
+					mibRequest.instanceNode.value = me.setTransactions[pdu.transactionID].originalValue;
 				}
-				if ( ( requestPduType == PduType.GetNextRequest || requestPduType == PduType.GetBulkRequest ) &&
+				if ( ( pdu.pduType == AgentXPduType.GetNext || pdu.pduType == AgentXPduType.GetBulk ) &&
 						requestVarbind.type == ObjectType.EndOfMibView ) {
 					responseVarbindType = ObjectType.EndOfMibView;
 				} else {
@@ -4830,7 +4835,12 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 			}
 			responseVarbinds[i] = responseVarbind;
 			if ( ++varbindsCompleted == varbindsLength) {
-				me.sendGetResponse.call (me, pdu, responseVarbinds);
+				if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
+						|| pdu.pduType == AgentXPduType.UndoSet) {
+					me.sendSetResponse.call (me, pdu);
+				} else {
+					me.sendGetResponse.call (me, pdu, responseVarbinds);
+				}
 			}
 		};
 		if ( handler ) {
@@ -4928,10 +4938,8 @@ Subagent.prototype.getBulkRequest = function (pdu) {
 		}
 	}
 
-	// requestMessage.pdu.varbinds = getBulkVarbinds;
 	this.request (pdu, getBulkVarbinds);
 };
-
 
 Subagent.prototype.sendGetResponse = function (requestPdu, varbinds) {
 	var pdu = AgentXPdu.createFromVariables ({
@@ -4961,19 +4969,32 @@ Subagent.prototype.sendSetResponse = function (setPdu) {
 };
 
 Subagent.prototype.testSet = function (setPdu) {
-	this.sendSetResponse (setPdu);
+	this.setTransactions[setPdu.transactionID] = setPdu;
+	this.request (setPdu, setPdu.varbinds);
 };
 
 Subagent.prototype.commitSet = function (setPdu) {
-	this.sendSetResponse (setPdu);
+	if ( this.setTransactions[setPdu.transactionID] ) {
+		this.request (setPdu, this.setTransactions[setPdu.transactionID].varbinds);
+	} else {
+		// no transaction for this
+	}
 };
 
 Subagent.prototype.undoSet = function (setPdu) {
-	this.sendSetResponse (setPdu);
+	if ( this.setTransactions[setPdu.transactionID] ) {
+		this.request (setPdu, this.setTransactions[setPdu.transactionID].varbinds);
+	} else {
+		// no transaction for this
+	}
 };
 
 Subagent.prototype.cleanupSet = function (setPdu) {
-	// no response sent
+	if ( this.setTransactions[setPdu.transactionID] ) {
+		delete this.setTransactions[setPdu.transactionID];
+	} else {
+		// no transaction for this
+	}
 };
 
 Subagent.create = function (options, callback) {
