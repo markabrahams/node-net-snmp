@@ -9,15 +9,7 @@ var snmpOptions = {
     port: options.p
 };
 
-var callback = function (error, data) {
-    if ( error ) {
-        console.error (error);
-    } else {
-        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
-    }
-};
-
-var agent = snmp.createSubagent(snmpOptions, callback);
+var agent = snmp.createSubagent(snmpOptions);
 
 var stringProvider = {
     name: "scalarString",
@@ -31,35 +23,10 @@ var intProvider = {
     oid: "1.3.6.1.4.1.8072.9999.9999.3",
     scalarType: snmp.ObjectType.Integer
 };
-
-agent.open(function (error, data) {
-    if ( error ) {
-        console.error (error);
-    } else {
-        agent.registerProvider (stringProvider, null);
-        agent.getMib ().setScalarValue ("scalarString", "Rage inside the machine!");
-        agent.registerProvider (intProvider, null);
-        agent.getMib ().setScalarValue ("scalarInt", 2000);
-    }
-});
-
-setTimeout( function() {
-    // agent.open();
-    // agent.close();
-    // agent.unregisterProvider (intProvider, null);
-    // agent.addAgentCaps ("1.3.6.1.4.1.8072.9999.9999", "Marks funk");
-    // agent.removeAgentCaps ("1.3.6.1.4.1.8072.9999.9999");
-    // agent.ping (function(error, pdu) {
-    //     console.log("Received ping response:");
-    //     console.log(pdu);
-    // });
-    agent.notify(snmp.TrapType.ColdStart);
-}, 2000);
-
 var tableProvider = {
-    name: "ifTable",
+    name: "smallIfTable",
     type: snmp.MibProviderType.Table,
-    oid: "1.3.6.1.2.1.2.2.1",
+    oid: "1.3.6.1.4.1.8072.9999.9999.2",
     tableColumns: [
         {
             number: 1,
@@ -82,9 +49,35 @@ var tableProvider = {
             columnName: "ifIndex"
         }
     ],
-    handler: function ifTable (mibRequest) {
+    handler: function (mibRequest) {
         // e.g. can update the table before responding to the request here
         mibRequest.done ();
     }
 };
-// agent.registerProvider (tableProvider);
+
+agent.open(function (error, data) {
+    if ( error ) {
+        console.error (error);
+    } else {
+        agent.registerProvider (stringProvider, null);
+        agent.getMib ().setScalarValue ("scalarString", "Rage inside the machine!");
+        agent.registerProvider (intProvider, null);
+        agent.getMib ().setScalarValue ("scalarInt", 2000);
+        agent.registerProvider (tableProvider, null);
+        agent.getMib ().addTableRow ("smallIfTable", [1, "lo", 24]);
+        agent.getMib ().addTableRow ("smallIfTable", [2, "eth0", 6]);
+    }
+});
+
+// setTimeout( function() {
+//     agent.open();
+//     agent.close();
+//     agent.unregisterProvider (intProvider, null);
+//     agent.addAgentCaps ("1.3.6.1.4.1.8072.9999.9999", "Marks funk");
+//     agent.removeAgentCaps ("1.3.6.1.4.1.8072.9999.9999");
+//     agent.ping (function(error, pdu) {
+//         console.log("Received ping response:");
+//         console.log(pdu);
+//     });
+//     agent.notify(snmp.TrapType.ColdStart);
+// }, 5000);

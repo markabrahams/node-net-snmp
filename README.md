@@ -73,19 +73,16 @@ for each shown in this table:
  * SNMP agent with MIB management for both scalar and tabular data
  * Agent table index support for non-integer keys, foreign keys, composite keys and table augmentation
  * SNMP proxy forwarder for agent
+ * AgentX subagent
  * IPv4 and IPv6
-
-Not implemented, but on the roadmap:
- * AgentX ([RFC 2741][AgentX])
-
-[AgentX]: https://tools.ietf.org/html/rfc2741 "AgentX"
-
+ 
 # Standards Compliance
 
 This module aims to be fully compliant with the following RFCs:
 
  * [1155][1155] - Structure and Identification of Management Information
  * [1098][1098] - A Simple Network Management Protocol (version 1)
+ * [2571][2571] - Agent Extensibility (AgentX) Protocol Version 1
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
  * [3413][3413] - Simple Network Management Protocol (SNMP) Applications
  * [3414][3414] - User-based Security Model (USM) for version 3 of the
@@ -99,6 +96,7 @@ in the SNMP User-based Security Model
 
 [1155]: https://tools.ietf.org/rfc/rfc1155.txt "RFC 1155"
 [1098]: https://tools.ietf.org/rfc/rfc1098.txt "RFC 1098"
+[2571]: https://tools.ietf.org/rfc/rfc2578.txt "RFC 2571"
 [2578]: https://tools.ietf.org/rfc/rfc2578.txt "RFC 2578"
 [3413]: https://tools.ietf.org/rfc/rfc3413.txt "RFC 3413"
 [3414]: https://tools.ietf.org/rfc/rfc3414.txt "RFC 3414"
@@ -204,7 +202,6 @@ in RFC 3416.  The values, along with their numeric codes, are:
  * `167 - TrapV2`
  * `168 - Report`
 
-
 ## snmp.SecurityLevel
 
 This object contains constants to specify the security of an SNMPv3 message as per
@@ -233,6 +230,29 @@ SNMPv3 messages that require privacy:
 DES is the sole encryption algorithm specified in the original SNMPv3 User-Based
 Security Model RFC (RFC 3414); AES for SNMPv3 was added later in RFC 3826.  Other
 encryption algorithms are not supported.
+
+## snmp.AgentXPduType
+
+The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
+ * `1 - Open`
+ * `2 - Close`
+ * `3 - Register`
+ * `4 - Unregister`
+ * `5 - Get`
+ * `6 - GetNext`
+ * `7 - GetBulk`
+ * `8 - TestSet`
+ * `9 - CommitSet`
+ * `10 - UndoSet`
+ * `11 - CleanupSet`
+ * `12 - Notify`
+ * `13 - Ping`
+ * `14 - IndexAllocate`
+ * `15 - IndexDeallocate`
+ * `16 - AddAgentCaps`
+ * `17 - RemoveAgentCaps`
+ * `18 - Response`
+
 
 # OID Strings & Varbinds
 
@@ -1964,6 +1984,157 @@ Returns an object containing a list of all registered proxies, keyed by context 
 
 Prints a dump of all proxy definitions to the console.
 
+# Using This Module: AgentX Subagent
+
+The AgentX subagent implements the functionality specified in RFC 2741 to become a "subagent"
+of an AgentX "master agent".  The goal of AgentX is to extend the functionality of an existing
+"master" SNMP agent by a separate "subagent" registering parts of the MIB tree that it would
+like to manage for the master agent.
+
+The AgentX subagent supports the generation of all but two of the "administrative" PDU types, all of
+which are sent from the subagent to the master agent:
+* **Open PDU** - opens a new session with a master agent
+* **Close PDU** - closes an existing session with the master agent
+* **Register PDU** - registers a MIB region to control with the master agent
+* **Unregister PDU** - unregisters a previously registered MIB region with the master agent
+* **Notify PDU** - sends a notification to the master agent
+* **Ping PDU** - sends a "ping" to confirm the master agent is still available
+* **AddAgentCaps PDU** - adds an agent capability to the master agent's sysORTable
+* **RemoveAgentCaps PDU** - remove a previously added agent capability from the master agent's sysORTable
+
+The two unsupported "administrative" PDU types are:
+* **IndexAllocate PDU** - request allocation of an index from a table whose index is managed by a master agent
+* **IndexDeallocate PDU** - request deallocation of a previously allocated index from a master agent's table
+
+These are unsupported as they do not fit the current MIB provider registration model, which
+only supports registering scalars and entire tables.  These could be supported in the future
+by further generalizing the registration model to support table row registration.
+
+The subagent responds to all "request processing" PDU types relevant to a Command Responder
+application, which are received from the master agent:
+
+ * **Get PDU** - requests exactly matched OID instances
+ * **GetNext PDU** - requests lexicographically "next" OID instances in the MIB tree
+ * **GetBulk PDU** - requests a series of "next" OID instances in the MIB tree
+ * **TestSet PDU** - tests a list of "set" operations to be committed as a single transaction
+ * **CommitSet PDU** - commits a list of "set" operations as a single transaction
+ * **UndoSet PDU** - undoes a list of "set" operations as a single transaction
+ * **CleanupSet PDU** - ends a "set" transaction
+
+As per RFC 2741, all of these except the **CleanupSet** PDU return a **Response** PDU to the master agent.
+
+Like the SNMP agent, the AgentX subagent maintains is a `Mib` instance, the API of which is
+detailed in the [Mib Module](#mib-module) section above.  The subagent allows the MIB to be queried
+and manipulated through the API, as well as queried and manipulated through the AgentX interface with
+the above "request processing" PDUs (which are produced by the master agent when its SNMP interface
+is invoked).
+
+It is important that MIB providers are registered using the subagent's `subagent.registerProvider ()`
+call (outlined below), and not using `subagent.getMib ().registerProvider ()`, as the subagent needs
+to both register the provider on its internal `Mib` object, *and* send a Register PDU to the master
+agent for the provider's MIB region.  The latter step is skipped if registering the provider directly
+on the MIB object.
+
+## snmp.createSubagent (options)
+
+The `createSubagent ()` function instantiates and returns an instance of the `Subagent`
+class:
+
+    // Default options
+    var options = {
+        master: localhost
+        masterPort: 705,
+        timeout: 0,
+        description: "Node net-snmp AgentX sub-agent",
+    };
+
+    subagent = snmp.createSubagent (options);
+
+The `options` parameter is a mandatory object, possibly empty, and can contain the following fields:
+
+ * `master` - the host name or IP address of the master agent, which the subagent
+ connects to.
+ * `masterPort` - the TCP port for the subagent to connect to the master agent on -
+ defaults to 705.
+ * `timeout` - set the session-wide timeout on the master agent - defaults to 0, which
+ means no session-wide timeout is set.
+ * `description` - a textual description of the subagent.
+
+## subagent.getMib ()
+
+Returns the agent's singleton `Mib` instance, which is automatically created on creation
+of the subagent, and which holds all of the management data for the subagent.
+
+## subagent.open (callback)
+
+Sends an `Open` PDU to the master agent to open a new session, invoking the callback on
+response from the master.
+
+## subagent.close (callback)
+
+Sends a `Close` PDU to the master agent to close the subagent's session to the master,
+invoking the callback on response from the master.
+
+## subagent.registerProvider (provider, callback)
+
+See the `Mib` class `registerProvider()` call for the definition of a provider.  The format
+and meaning of the `provider` object is the same for this call.  This sends a `Register` PDU to
+the master to register a region of the MIB for which the master will send "request processing"
+PDUs to the subagent.  The supplied `callback` is used only once, on reception of the
+subsequent `Response` PDU from the master to the `Register` PDU.  This is not to be confused
+with the `handler` optional callback on the provider definition, which is invoked for any
+"request processing" PDU received by the subagent for MIB objects in the registered MIB region.
+
+## subagent.unregisterProvider (name, callback)
+
+Unregisters a previously registered MIB region by the supplied name of the provider.  Sends
+an `Unregister` PDU to the master agent to do this.  The supplied `callback` is used only
+once, on reception of the subsequent `Response` PDU from the master to the `Unregister` PDU.
+
+## subagent.registerProviders ( [definitions], callback )
+
+Convenience method to register an array of providers in one call.  Simply calls `registerProvider()`
+for each provider definition in the array.  The `callback` function is called once for each
+provider registered.
+
+## subagent.getProviders ()
+
+Returns an object of provider definitions registered with the MIB, indexed by provider name.
+
+## subagent.getProvider (name)
+
+Returns a single registered provider object for the given name.
+
+## subagent.addAgentCaps (oid, descr, callback)
+
+Adds an agent capability - consisting of `oid` and `descr` - to the master agent's sysORTable.
+Sends an `AddAgentCaps` PDU to the master to do this.  The supplied `callback` is called on
+reception of the subsequent `Response` PDU from the master to the `AddAgentCaps` PDU.
+
+## subagent.removeAgentCaps (oid, callback)
+
+Remove an previously added capability from the master agent's sysORTable.  Sends a `RemoveAgentCaps`
+PDU to the master to do this.  The supplied `callback` is called on reception of the subsequent
+`Response` PDU from the master to the `RemoveAgentCaps` PDU.
+
+## subagent.notify (typeOrOid, varbinds, callback)
+
+Sends a notification to the master agent using a `Notify` PDU.  The notification takes the same
+form as outlined in the `session.inform()` section above and also in RFC 2741 Section 6.2.10,
+which is creating two varbinds that are always included in the notification:
+- sysUptime.0 (1.3.6.1.2.1.1.3.0) - containing the subagent's uptime
+- snmpTrapOID.0 (1.3.6.1.6.3.1.1.4.1.0) - containing the supplied OID (or supplied `snmp.TrapType` value)
+
+The optional `varbinds` list is an additional list of varbind objects to append to the above
+two varbinds.  The supplied `callback` is called on reception of the subsequent
+`Response` PDU from the master to the `Notify` PDU.
+
+## subagent.ping (callback)
+
+Sends a "ping" to the master agent using a `Ping` PDU, to confirm that the master agent is still
+responsive.  The supplied `callback` is called on reception of the subsequent
+`Response` PDU from the master to the `Ping` PDU.
+
 
 # Example Programs
 
@@ -2202,6 +2373,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.5.12 - 24/04/2020
 
  * Add backwardsGetNexts option for handling of errant GetNexts
+
+## Version 2.6.0 - 27/04/2020
+
+ * Add AgentX subagent
 
 # License
 

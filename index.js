@@ -4224,6 +4224,12 @@ AgentXPdu.prototype.toBuffer = function () {
 			AgentXPdu.writeOid (buffer, this.oid);
 			AgentXPdu.writeOctetString (buffer, this.descr);
 			break;
+		case AgentXPduType.Close:
+			buffer.writeUInt8 (5);  // reasonShutdown == 5
+			buffer.writeUInt8 (0);  // 3 x reserved bytes
+			buffer.writeUInt8 (0);
+			buffer.writeUInt8 (0);
+			break;
 		case AgentXPduType.Register:
 			buffer.writeUInt8 (this.timeout);
 			buffer.writeUInt8 (this.priority);
@@ -4250,12 +4256,6 @@ AgentXPdu.prototype.toBuffer = function () {
 			break;
 		case AgentXPduType.Ping:
 			break;
-		case AgentXPduType.Close:
-			buffer.writeUInt8 (5);  // reasonShutdown == 5
-			buffer.writeUInt8 (0);  // 3 x reserved bytes
-			buffer.writeUInt8 (0);
-			buffer.writeUInt8 (0);
-			break;
 		case AgentXPduType.Response:
 			buffer.writeUInt32BE (this.sysUpTime);
 			buffer.writeUInt16BE (this.error);
@@ -4263,7 +4263,7 @@ AgentXPdu.prototype.toBuffer = function () {
 			AgentXPdu.writeVarbinds (buffer, this.varbinds);
 			break;
 		default:
-			// unknown PDU type
+			// unknown PDU type - should never happen as we control these
 	}
 	buffer.writeUInt32BE (buffer.length - 20, 16);
 	return buffer.toBuffer ();
@@ -4307,6 +4307,8 @@ AgentXPdu.createFromVariables = function (vars) {
 			pdu.oid = vars.oid || null;
 			pdu.descr = vars.descr || null;
 			break;
+		case AgentXPduType.Close:
+			break;
 		case AgentXPduType.Register:
 			pdu.timeout = vars.timeout || 0;
 			pdu.oid = vars.oid || null;
@@ -4337,7 +4339,10 @@ AgentXPdu.createFromVariables = function (vars) {
 			pdu.varbinds = vars.varbinds || null;
 			break;
 		default:
-			// unsupported PDU type
+			// unsupported PDU type - should never happen as we control these
+			throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
+					+ "' in created PDU");
+
 	}
 	
 	return pdu;
@@ -4372,7 +4377,10 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 		case AgentXPduType.CleanupSet:
 			break;
 		default:
-	}
+			// Unknown PDU type - shouldn't happen as master agents shouldn't send administrative PDUs
+			throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
+					+ "' in request");
+}
 	return pdu;
 };
 
@@ -4443,6 +4451,7 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 			case ObjectType.NoSuchInstance:
 				break;
 			default:
+				// Unknown data type - should never happen as the above covers all types in RFC 2741 Section 5.4
 				throw new RequestInvalidError ("Unknown type '" + varbind.type
 						+ "' in request");
 		}
@@ -4516,38 +4525,31 @@ AgentXPdu.readVarbind = function (buffer) {
 
 	switch (vtype) {
 		case ObjectType.Integer:
-			value = buffer.readUInt32BE ();
-			break;
-		case ObjectType.OctetString:
-			value = AgentXPdu.readOctetString (buffer);
-			break;
-		case ObjectType.Null:
-			value = null;
-			break;
-		case ObjectType.OID:
-			value = AgentXPdu.readOid (buffer);
-			break;
-		case ObjectType.IpAddress:
-			value = AgentXPdu.readOctetString (buffer);
-			break;
 		case ObjectType.Counter:
 		case ObjectType.Gauge:
 		case ObjectType.TimeTicks:
 			value = buffer.readUInt32BE ();
 			break;
+		case ObjectType.OctetString:
+		case ObjectType.IpAddress:
 		case ObjectType.Opaque:
 			value = AgentXPdu.readOctetString (buffer);
+			break;
+		case ObjectType.OID:
+			value = AgentXPdu.readOid (buffer);
 			break;
 		case ObjectType.Counter64:
 			value = readUint64 (buffer);
 			break;
+		case ObjectType.Null:
 		case ObjectType.NoSuchObject:
 		case ObjectType.NoSuchInstance:
 		case ObjectType.EndOfMibView:
 			value = null;
 			break;
 		default:
-			throw new RequestInvalidError ("Unknown type '" + type
+			// Unknown data type - should never happen as the above covers all types in RFC 2741 Section 5.4
+			throw new RequestInvalidError ("Unknown type '" + vtype
 				+ "' in varbind");
 	}
 
@@ -4572,16 +4574,13 @@ AgentXPdu.readVarbinds = function (buffer, payloadLength) {
 
 AgentXPdu.packetID = 1;
 
-var Subagent = function (options, callback) {
+var Subagent = function (options) {
 	DEBUG = options.debug;
-	//this.listener = new Listener (options, this);
 	this.mib = new Mib ();
-	this.callback = callback || function () {};
 	this.master = options.master || 'localhost';
 	this.masterPort = options.masterPort || 705;
 	this.timeout = options.timeout || 0;
-	this.id = options.id;
-	this.descr = options.descr || "Node net-snmp AgentX sub-agent";
+	this.descr = options.description || "Node net-snmp AgentX sub-agent";
 	this.sessionID = 0;
 	this.transactionID = 0;
 	this.packetID = _generateId();
@@ -4596,7 +4595,7 @@ Subagent.prototype.getMib = function () {
 Subagent.prototype.connectSocket = function () {
 	this.socket = new net.Socket ();
 	this.socket.connect (this.masterPort, this.master, function () {
-		// console.log ("Connected");
+		debug ("Connected to '" + this.master + "' on port " + this.masterPort);
 	});
 
 	var me = this;
@@ -4637,7 +4636,7 @@ Subagent.prototype.registerProvider = function (provider, callback) {
 	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.unregisterProvider = function (provider, callback) {
+Subagent.prototype.unregisterProvider = function (name, callback) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Unregister,
 		sessionID: this.sessionID,
@@ -4645,13 +4644,13 @@ Subagent.prototype.unregisterProvider = function (provider, callback) {
 		priority: 127,
 		oid: provider.oid
 	});
-	this.mib.unregisterProvider (provider);
+	this.mib.unregisterProvider (name);
 	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.registerProviders = function (providers) {
+Subagent.prototype.registerProviders = function (providers, callback) {
 	for (var provider of providers) {
-		this.registerProvider (provider);
+		this.registerProvider (provider, callback);
 	}
 };
 
@@ -4682,14 +4681,6 @@ Subagent.prototype.removeAgentCaps = function (oid, callback) {
 	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.ping = function (callback) {
-	var pdu = AgentXPdu.createFromVariables ({
-		pduType: AgentXPduType.Ping,
-		sessionID: this.sessionID
-	});
-	this.sendPdu (pdu, callback);
-};
-
 Subagent.prototype.notify = function (typeOrOid, varbinds, callback) {
 	varbinds = varbinds || [];
 
@@ -4716,6 +4707,14 @@ Subagent.prototype.notify = function (typeOrOid, varbinds, callback) {
 		pduType: AgentXPduType.Notify,
 		sessionID: this.sessionID,
 		varbinds: pduVarbinds
+	});
+	this.sendPdu (pdu, callback);
+};
+
+Subagent.prototype.ping = function (callback) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Ping,
+		sessionID: this.sessionID
 	});
 	this.sendPdu (pdu, callback);
 };
@@ -4776,7 +4775,9 @@ Subagent.prototype.onMsg = function (buffer, rinfo) {
 			this.cleanupSet (pdu);
 			break;
 		default:
-			// unrecognized PDU type
+			// Unknown PDU type - shouldn't happen as master agents shouldn't send administrative PDUs
+			throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
+					+ "' in request");
 	}
 };
 
@@ -4802,12 +4803,14 @@ Subagent.prototype.response = function (pdu) {
 				break;
 			default:
 				// Response PDU for request type not handled
+				throw new ResponseInvalidError ("Response PDU for type '" + requestPdu.pduType + "' not handled");
 		}
 		if (requestPdu.callback) {
 			requestPdu.callback(null, pdu);
 		}
 	} else {
 		// unexpected Response PDU - has no matching request
+		throw new ResponseInvalidError ("Unexpected Response PDU with packetID " + pdu.packetID);
 	}
 };
 
@@ -5020,7 +5023,7 @@ Subagent.prototype.commitSet = function (setPdu) {
 	if ( this.setTransactions[setPdu.transactionID] ) {
 		this.request (setPdu, this.setTransactions[setPdu.transactionID].varbinds);
 	} else {
-		// no transaction for this
+		throw new RequestInvalidError ("Unexpected CommitSet PDU with transactionID " + setPdu.transactionID);
 	}
 };
 
@@ -5028,7 +5031,7 @@ Subagent.prototype.undoSet = function (setPdu) {
 	if ( this.setTransactions[setPdu.transactionID] ) {
 		this.request (setPdu, this.setTransactions[setPdu.transactionID].varbinds);
 	} else {
-		// no transaction for this
+		throw new RequestInvalidError ("Unexpected UndoSet PDU with transactionID " + setPdu.transactionID);
 	}
 };
 
@@ -5036,12 +5039,12 @@ Subagent.prototype.cleanupSet = function (setPdu) {
 	if ( this.setTransactions[setPdu.transactionID] ) {
 		delete this.setTransactions[setPdu.transactionID];
 	} else {
-		// no transaction for this
+		throw new RequestInvalidError ("Unexpected CleanupSet PDU with transactionID " + setPdu.transactionID);
 	}
 };
 
-Subagent.create = function (options, callback) {
-	var subagent = new Subagent (options, callback);
+Subagent.create = function (options) {
+	var subagent = new Subagent (options);
 	subagent.connectSocket ();
 	return subagent;
 };
@@ -5073,6 +5076,7 @@ exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
 exports.PduType = PduType;
+exports.AgentXPduType = AgentXPduType;
 exports.MibProviderType = MibProviderType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
