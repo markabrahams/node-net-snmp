@@ -49,6 +49,11 @@ setTimeout( function() {
     // agent.unregisterProvider (intProvider, null);
     // agent.addAgentCaps ("1.3.6.1.4.1.8072.9999.9999", "Marks funk");
     // agent.removeAgentCaps ("1.3.6.1.4.1.8072.9999.9999");
+    // agent.ping (function(error, pdu) {
+    //     console.log("Received ping response:");
+    //     console.log(pdu);
+    // });
+    agent.notify(snmp.TrapType.ColdStart);
 }, 2000);
 
 var tableProvider = {

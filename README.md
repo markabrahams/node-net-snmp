@@ -736,7 +736,7 @@ defined in the `snmp.TrapType` object (excluding the
 `snmp.TrapType.EnterpriseSpecific` constant), or an OID string.
 
 The first varbind to be placed in the request message will be for the
-`sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
+`sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`).  The value for this varbind will
 be the value returned by the `process.uptime ()` function multiplied by 100
 (this can be overridden by providing `upTime` in the optional `options`
 parameter, as documented below).
@@ -753,7 +753,7 @@ inform request, and defaults to the empty array `[]`.
 The optional `options` parameter is an object, and can contain the following
 items:
 
- * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`) in the
+ * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`) in the
    inform, defaults to the value returned by the `process.uptime ()` function
    multiplied by 100
 

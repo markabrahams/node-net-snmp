@@ -4245,6 +4245,11 @@ AgentXPdu.prototype.toBuffer = function () {
 		case AgentXPduType.RemoveAgentCaps:
 			AgentXPdu.writeOid (buffer, this.oid);
 			break;
+		case AgentXPduType.Notify:
+			AgentXPdu.writeVarbinds (buffer, this.varbinds);
+			break;
+		case AgentXPduType.Ping:
+			break;
 		case AgentXPduType.Close:
 			buffer.writeUInt8 (5);  // reasonShutdown == 5
 			buffer.writeUInt8 (0);  // 3 x reserved bytes
@@ -4258,6 +4263,7 @@ AgentXPdu.prototype.toBuffer = function () {
 			AgentXPdu.writeVarbinds (buffer, this.varbinds);
 			break;
 		default:
+			// unknown PDU type
 	}
 	buffer.writeUInt32BE (buffer.length - 20, 16);
 	return buffer.toBuffer ();
@@ -4294,7 +4300,7 @@ AgentXPdu.createFromVariables = function (vars) {
 	pdu.pduType = vars.pduType || AgentXPduType.Open;
 	pdu.sessionID = vars.sessionID || 0;
 	pdu.transactionID = vars.transactionID || 0;
-	pdu.packetID = vars.packetID || 0;
+	pdu.packetID = vars.packetID || ++AgentXPdu.packetID;
 	switch ( pdu.pduType ) {
 		case AgentXPduType.Open:
 			pdu.timeout = vars.timeout || 0;
@@ -4319,6 +4325,11 @@ AgentXPdu.createFromVariables = function (vars) {
 		case AgentXPduType.RemoveAgentCaps:
 			pdu.oid = vars.oid;
 			break;
+		case AgentXPduType.Notify:
+			pdu.varbinds = vars.varbinds;
+			break;
+		case AgentXPduType.Ping:
+			break;
 		case AgentXPduType.Response:
 			pdu.sysUpTime = vars.sysUpTime || 0;
 			pdu.error = vars.error || 0;
@@ -4326,6 +4337,7 @@ AgentXPdu.createFromVariables = function (vars) {
 			pdu.varbinds = vars.varbinds || null;
 			break;
 		default:
+			// unsupported PDU type
 	}
 	
 	return pdu;
@@ -4403,9 +4415,13 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 
 		switch (varbind.type) {
 			case ObjectType.Integer: // also Integer32
+			case ObjectType.Counter: // also Counter32
+			case ObjectType.Gauge: // also Gauge32 & Unsigned32
+			case ObjectType.TimeTicks:
 				buffer.writeUInt32BE (varbind.value);
 				break;
 			case ObjectType.OctetString:
+			case ObjectType.Opaque:
 				AgentXPdu.writeOctetString (buffer, varbind.value);
 				break;
 			case ObjectType.OID:
@@ -4416,22 +4432,10 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 				if (bytes.length != 4)
 					throw new RequestInvalidError ("Invalid IP address '"
 							+ varbind.value + "'");
-				buffer.writeBuffer (Buffer.from (bytes), ObjectType.IpAddress);
-				break;
-			case ObjectType.Counter: // also Counter32
-				writeUint (buffer, ObjectType.Counter, varbind.value);
-				break;
-			case ObjectType.Gauge: // also Gauge32 & Unsigned32
-				writeUint (buffer, ObjectType.Gauge, varbind.value);
-				break;
-			case ObjectType.TimeTicks:
-				writeUint (buffer, ObjectType.TimeTicks, varbind.value);
-				break;
-			case ObjectType.Opaque:
-				buffer.writeBuffer (varbind.value, ObjectType.Opaque);
+				buffer.writeOctetString (buffer, Buffer.from (bytes));
 				break;
 			case ObjectType.Counter64:
-				writeUint64 (buffer, varbind.value);
+				buffer.writeUint64 (varbind.value);
 				break;
 			case ObjectType.Null:
 			case ObjectType.EndOfMibView:
@@ -4566,6 +4570,8 @@ AgentXPdu.readVarbinds = function (buffer, payloadLength) {
 	return varbindList;
 };
 
+AgentXPdu.packetID = 1;
+
 var Subagent = function (options, callback) {
 	DEBUG = options.debug;
 	//this.listener = new Listener (options, this);
@@ -4657,23 +4663,61 @@ Subagent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
 };
 
-Subagent.prototype.addAgentCaps = function (oid, descr) {
+Subagent.prototype.addAgentCaps = function (oid, descr, callback) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.AddAgentCaps,
 		sessionID: this.sessionID,
 		oid: oid,
 		descr: descr
 	});
-	this.sendPdu (pdu);
+	this.sendPdu (pdu, callback);
 };
 
-Subagent.prototype.removeAgentCaps = function (oid) {
+Subagent.prototype.removeAgentCaps = function (oid, callback) {
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.RemoveAgentCaps,
 		sessionID: this.sessionID,
 		oid: oid
 	});
-	this.sendPdu (pdu);
+	this.sendPdu (pdu, callback);
+};
+
+Subagent.prototype.ping = function (callback) {
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Ping,
+		sessionID: this.sessionID
+	});
+	this.sendPdu (pdu, callback);
+};
+
+Subagent.prototype.notify = function (typeOrOid, varbinds, callback) {
+	varbinds = varbinds || [];
+
+	if (typeof typeOrOid != "string") {
+		typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+	}
+
+	var pduVarbinds = [
+		{
+			oid: "1.3.6.1.2.1.1.3.0",
+			type: ObjectType.TimeTicks,
+			value: Math.floor (process.uptime () * 100)
+		},
+		{
+			oid: "1.3.6.1.6.3.1.1.4.1.0",
+			type: ObjectType.OID,
+			value: typeOrOid
+		}
+	];
+
+	pduVarbinds = pduVarbinds.concat (varbinds);
+
+	var pdu = AgentXPdu.createFromVariables ({
+		pduType: AgentXPduType.Notify,
+		sessionID: this.sessionID,
+		varbinds: pduVarbinds
+	});
+	this.sendPdu (pdu, callback);
 };
 
 Subagent.prototype.sendPdu = function (pdu, callback) {
@@ -4681,7 +4725,7 @@ Subagent.prototype.sendPdu = function (pdu, callback) {
 	debug (pdu);
 	var buffer = pdu.toBuffer ();
 	this.socket.write (buffer);
-	if ( ! this.requestPdus[pdu.packetID] ) {
+	if ( pdu.pduType != AgentXPduType.Response && ! this.requestPdus[pdu.packetID] ) {
 		pdu.callback = callback;
 		this.requestPdus[pdu.packetID] = pdu;
 	}
@@ -4753,6 +4797,8 @@ Subagent.prototype.response = function (pdu) {
 			case AgentXPduType.Unregister:
 			case AgentXPduType.AddAgentCaps:
 			case AgentXPduType.RemoveAgentCaps:
+			case AgentXPduType.Notify:
+			case AgentXPduType.Ping:
 				break;
 			default:
 				// Response PDU for request type not handled
@@ -4769,11 +4815,9 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 	var me = this;
 	var varbindsCompleted = 0;
 	var varbindsLength = requestVarbinds.length;
-	var i;
-	var requestPduType = pdu.type;
 	var responseVarbinds = [];
 
-	for ( i = 0; i < requestVarbinds.length; i++ ) {
+	for ( var i = 0; i < requestVarbinds.length; i++ ) {
 		var requestVarbind = requestVarbinds[i];
 		var instanceNode = this.mib.lookup (requestVarbind.oid);
 		var providerNode;
@@ -4906,7 +4950,6 @@ Subagent.prototype.getNextRequest = function (pdu) {
 		this.addGetNextVarbind (getNextVarbinds, pdu.searchRangeList[i].start);
 	}
 
-	// pdu.varbinds = getNextVarbinds;
 	this.request (pdu, getNextVarbinds);
 };
 
