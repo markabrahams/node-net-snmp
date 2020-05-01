@@ -1774,8 +1774,14 @@ and the second with the column data.
 ## mib.getTableRowCells (tableProviderName, rowIndex)
 
 Returns a single row of table data for the given row index.  The row index is an array
-of integers built from the node immediately under the column down to the node at the end
-of the row instance, which will be a leaf node in the MIB tree.
+of index values built from the node immediately under the column down to the node at the end
+of the row instance, which will be a leaf node in the MIB tree.  Ultimately, non-integer values
+need to be converted to a sequence of integers that form the instance part of the OID.  Here
+are the details of the conversions from index values to row instance OID sequences:
+- **ObjectType.Integer** - single integer
+- **ObjectType.OctetString** - a sequence of integer ASCII values
+- **ObjectType.OID** - the exact sequence of integers in the OID
+- **ObjectType.IPAddress** - a sequence of the four integers in the IP address
 
 ## mib.getTableSingleCell (tableProviderName, columnIndex, rowIndex)
 
@@ -2377,6 +2383,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.0 - 27/04/2020
 
  * Add AgentX subagent
+
+## Version 2.6.1 - 02/05/2020
+
+ * Fix backwardsGetNexts session option and fix null MIB entry reading
 
 # License
 

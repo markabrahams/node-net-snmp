@@ -1633,7 +1633,7 @@ var Session = function (target, authenticator, options) {
 			? options.context
 			: "";
 
-	this.backwardsGetNexts = options.backwardsGetNexts
+	this.backwardsGetNexts = (typeof options.backwardsGetNexts !== 'undefined')
 			? options.backwardsGetNexts
 			: true;
 
@@ -1838,7 +1838,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
 					varbinds.push (pdu.varbinds[i]);
-				} else if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
+				} else if ( ! this.backwardsGetNexts && ! oidFollowsOid (req.message.pdu.varbinds[i].oid,
 						pdu.varbinds[i].oid)) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
@@ -2945,6 +2945,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				while ( currentTableProvider || i >= entryArray.length ) {
 					i++;
 					mibEntry = entryArray[i];
+					if ( ! mibEntry ) {
+						break;
+					}
 					syntax = mibEntry.SYNTAX
 
 					if ( typeof syntax == "object" ) {
@@ -4593,12 +4596,12 @@ Subagent.prototype.getMib = function () {
 };
 
 Subagent.prototype.connectSocket = function () {
+	var me = this;
 	this.socket = new net.Socket ();
 	this.socket.connect (this.masterPort, this.master, function () {
-		debug ("Connected to '" + this.master + "' on port " + this.masterPort);
+		debug ("Connected to '" + me.master + "' on port " + me.masterPort);
 	});
 
-	var me = this;
 	this.socket.on ("data", me.onMsg.bind (me));
 	this.socket.on ("error", function (error) {
 		console.error (error);
