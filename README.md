@@ -1781,7 +1781,7 @@ are the details of the conversions from index values to row instance OID sequenc
 - **ObjectType.Integer** - single integer
 - **ObjectType.OctetString** - a sequence of integer ASCII values
 - **ObjectType.OID** - the exact sequence of integers in the OID
-- **ObjectType.IPAddress** - a sequence of the four integers in the IP address
+- **ObjectType.IpAddress** - a sequence of the four integers in the IP address
 
 ## mib.getTableSingleCell (tableProviderName, columnIndex, rowIndex)
 
@@ -1845,7 +1845,7 @@ that you can start manipulating all the values defined in your MIB file right aw
 
     // Fetch MIB providers, create an agent, and register the providers with your agent
     var providers = store.getProvidersForModule ("SNMPv2-MIB");
-    // Not recommended - but authorization and callback turned of for example brevity
+    // Not recommended - but authorization and callback turned off for example brevity
     var agent = snmp.createAgent ({disableAuthorization: true}, function (error, data) {});
     var mib = agent.getMib ();
     mib.registerProviders (providers);
@@ -2387,6 +2387,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.1 - 02/05/2020
 
  * Fix backwardsGetNexts session option and fix null MIB entry reading
+
+## Version 2.6.2 - 05/05/2020
+
+ * Add missing agent.close() API call
 
 # License
 

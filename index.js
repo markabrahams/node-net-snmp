@@ -4160,6 +4160,10 @@ Agent.prototype.getForwarder = function () {
 	return this.forwarder;
 };
 
+Agent.prototype.close  = function() {
+	this.listener.close ();
+};
+
 Agent.create = function (options, callback) {
 	var agent = new Agent (options, callback);
 	agent.listener.startListening ();
