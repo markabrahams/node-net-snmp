@@ -1707,7 +1707,8 @@ A provider definition has these fields:
  The callback function takes a `MibRequest` instance, which has a `done()` function.  This
  must be called when finished processing the request.  The `MibRequest` also has an `oid` field
  with the instance OID being operated on, and an `operation` field with the request type from
- `snmp.PduType`.
+ `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
+ `setType` contain the value and type received in the `SetRequest` varbind.
 
 After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
 
