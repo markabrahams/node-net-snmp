@@ -59,7 +59,13 @@ of devices with different MIB / behaviour variations.  We don't have your device
 we need a thorough piece of fault isolation from you, and reduction to a minimal
 reproduction of the problem.
 
-5. **Include packet captures** &mdash; Include a packet capture of the failed interaction,
+5. **Post code** &mdash; Having isolated the problem and reduced to a minimal
+reproduction, please post the code for this in the bug report.  Even though it may
+seem obvious from a description, always include code for the library call in question.
+This serves to remove ambiguity that can otherwise inadvertently creep in from a
+description alone.
+
+6. **Include packet captures** &mdash; Include a packet capture of the failed interaction,
 using a tool such as Wireshark or tcpdump.  Also, please include a second packet capture
 of another tool doing the equivalent operation against your device but succeeding.  The
 NetSNMP (not affiliated with node-net-snmp) command line tools are a good toolset for

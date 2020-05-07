@@ -1720,6 +1720,7 @@ Session.prototype.get = function (oids, responseCb) {
 
 Session.prototype.getBulk = function () {
 	var oids, nonRepeaters, maxRepetitions, responseCb;
+	var backwardsGetNexts = this.backwardsGetNexts;
 
 	if (arguments.length >= 4) {
 		oids = arguments[0];
@@ -1784,7 +1785,7 @@ Session.prototype.getBulk = function () {
 						if (! varbinds[reqIndex])
 							varbinds[reqIndex] = [];
 						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					} else if ( ! this.backwardsGetNexts && ! oidFollowsOid (
+					} else if ( ! backwardsGetNexts && ! oidFollowsOid (
 							req.message.pdu.varbinds[reqIndex].oid,
 							pdu.varbinds[respIndex].oid)) {
 						req.responseCb (new ResponseInvalidError ("OID '"
@@ -1827,6 +1828,8 @@ Session.prototype.getBulk = function () {
 };
 
 Session.prototype.getNext = function (oids, responseCb) {
+	var backwardsGetNexts = this.backwardsGetNexts;
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
@@ -1838,7 +1841,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
 					varbinds.push (pdu.varbinds[i]);
-				} else if ( ! this.backwardsGetNexts && ! oidFollowsOid (req.message.pdu.varbinds[i].oid,
+				} else if ( ! backwardsGetNexts && ! oidFollowsOid (req.message.pdu.varbinds[i].oid,
 						pdu.varbinds[i].oid)) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
@@ -3917,7 +3920,6 @@ Agent.prototype.getProviders = function () {
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
 	var reportMessage;
-	var responseMessage;
 
 	if ( ! message ) {
 		return;
@@ -3936,13 +3938,13 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
 		this.onProxyRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
-		responseMessage = this.request (message, rinfo);
+		this.getRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.SetRequest ) {
-		responseMessage = this.request (message, rinfo);
+		this.setRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetNextRequest ) {
-		responseMessage = this.getNextRequest (message, rinfo);
+		this.getNextRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetBulkRequest ) {
-		responseMessage = this.getBulkRequest (message, rinfo);
+		this.getBulkRequest (message, rinfo);
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " +
 			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
@@ -3984,6 +3986,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				instanceNode: instanceNode,
 				oid: requestVarbind.oid
 			});
+			if ( requestPdu.type == PduType.SetRequest ) {
+				mibRequest.setType = requestVarbind.type;
+				mibRequest.setValue = requestVarbind.value;
+			}
 			handler = providerNode.provider.handler;
 		}
 
@@ -4023,6 +4029,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			mibRequest.done ();
 		}
 	};
+};
+
+Agent.prototype.getRequest = function (requestMessage, rinfo) {
+	this.request (requestMessage, rinfo);
+};
+
+Agent.prototype.setRequest = function (requestMessage, rinfo) {
+	this.request (requestMessage, rinfo);
 };
 
 Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {

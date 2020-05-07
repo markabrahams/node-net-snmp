@@ -1474,7 +1474,7 @@ proxies that specify context-based forwarding to remote hosts.
 
 ## agent.close ()
 
-Closes the receiver's listening socket, ending the operation of the receiver.
+Closes the agent's listening socket, ending the operation of the agent.
 
 # Authorizer Module
 
@@ -2391,6 +2391,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.2 - 05/05/2020
 
  * Add missing agent.close() API call
+
+## Version 2.6.3 - 07/05/2020
+
+ * Add set value to MibRequest and fix backwardsGetNexts
 
 # License
 
