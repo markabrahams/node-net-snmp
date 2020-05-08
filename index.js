@@ -1544,7 +1544,7 @@ Message.createFromBuffer = function (buffer, user) {
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
 		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
-		scopedPdu = true;
+		message.pdu = readPdu(reader, true);
 
 		if ( message.hasPrivacy() ) {
 			message.encryptedPdu = reader.readString (ber.OctetString, true);
