@@ -1,3 +1,4 @@
 node_modules
 package-lock.json
 notes.txt
+index_dist.js

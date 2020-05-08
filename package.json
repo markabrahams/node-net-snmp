@@ -2,15 +2,23 @@
   "name": "net-snmp",
   "version": "2.6.3",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
-  "main": "index.js",
+  "main": "index_dist.js",
+  "scripts": {
+    "build": "./node_modules/.bin/babel index.js --out-file index_dist.js",
+    "prepublish": "npm run build"
+  },
   "directories": {
     "example": "example"
   },
   "dependencies": {
     "asn1-ber": "*",
+    "core-js": "^3.6.5",
     "smart-buffer": "^4.1.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.8.4",
+    "@babel/core": "^7.9.6",
+    "@babel/preset-env": "^7.9.6",
     "getopts": "*"
   },
   "contributors": [

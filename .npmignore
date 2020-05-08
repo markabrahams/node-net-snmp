@@ -2,3 +2,4 @@ TODO
 .hgignore
 .hgtags
 node_modules
+index.js
