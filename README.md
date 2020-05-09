@@ -2397,6 +2397,10 @@ Example programs are included under the module's `example` directory.
 
  * Add set value to MibRequest and fix backwardsGetNexts
 
+## Version 2.6.4 - 09/05/2020
+
+ * Improve socket error handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

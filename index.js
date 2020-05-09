@@ -1544,7 +1544,6 @@ Message.createFromBuffer = function (buffer, user) {
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
 		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
-		scopedPdu = true;
 
 		if ( message.hasPrivacy() ) {
 			message.encryptedPdu = reader.readString (ber.OctetString, true);
@@ -2636,9 +2635,10 @@ var Listener = function (options, receiver) {
 	this.disableAuthorization = options.disableAuthorization || false;
 };
 
-Listener.prototype.startListening = function (receiver) {
+Listener.prototype.startListening = function () {
 	var me = this;
 	this.dgram = dgram.createSocket (this.family);
+	this.dgram.on ("error", me.receiver.callback);
 	this.dgram.bind (this.port);
 	this.dgram.on ("message", me.callback.bind (me.receiver));
 };
