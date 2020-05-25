@@ -63,7 +63,11 @@ reproduction of the problem.
 reproduction, please post the code for this in the bug report.  Even though it may
 seem obvious from a description, always include code for the library call in question.
 This serves to remove ambiguity that can otherwise inadvertently creep in from a
-description alone.
+description alone.  Include these four things:
+  - any set up or context information
+  - the problematic API call
+  - the results you get from the API
+  - how the results you get from the API differ from the results you expect
 
 6. **Include packet captures** &mdash; Include a packet capture of the failed interaction,
 using a tool such as Wireshark or tcpdump.  Also, please include a second packet capture
@@ -73,6 +77,11 @@ comparison.  Even if the captures show identical interactions (which they might 
 failure is in the library's response handling), still include both.  If an issue is logged
 without these two packet captures, it is highly likely that your problem will be ignored,
 simply because we do not have the device in question to progress an investigation.
+
+7. **Write in English** &mdash; The diversity of humanity is a wonderful thing, and we
+here embrace people of all countries and ethnicities.  But English is necessary for 
+communication here, as it is allows for technical interchange among the wider audience in
+this particular context.
 
 A good bug report shouldn't leave others needing to chase you up for more information.
 Please try to be as detailed as possible in your report.  They say that "less is more",
