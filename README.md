@@ -2398,6 +2398,14 @@ Example programs are included under the module's `example` directory.
 
  * Improve socket error handling
 
+## Version 2.6.5 - 26/05/2020
+
+ * Add agent support for handling short OIDs and noSuchInstance
+
+## Version 2.6.6 - 29/05/2020
+
+ * Fix async mibRequest handler
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

@@ -4031,38 +4031,40 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			}
 		}
 
-		mibRequest.done = function (error) {
-			if ( error ) {
-				if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
-					responsePdu.errorStatus = error.errorStatus;
-					responsePdu.errorIndex = error.errorIndex;
-				}
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: error.type,
-					value: error.value || null
-				};
-			} else {
-				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequest.instanceNode.value = requestVarbind.value;
-				}
-				if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
-						requestVarbind.type == ObjectType.EndOfMibView ) {
-					responseVarbindType = ObjectType.EndOfMibView;
+		(function (savedIndex) {
+			mibRequest.done = function (error) {
+				if ( error ) {
+					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
+						responsePdu.errorStatus = error.errorStatus;
+						responsePdu.errorIndex = error.errorIndex;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: error.type,
+						value: error.value || null
+					};
 				} else {
-					responseVarbindType = mibRequest.instanceNode.valueType;
+					if ( requestPdu.type == PduType.SetRequest ) {
+						mibRequest.instanceNode.value = requestVarbind.value;
+					}
+					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
+							requestVarbind.type == ObjectType.EndOfMibView ) {
+						responseVarbindType = ObjectType.EndOfMibView;
+					} else {
+						responseVarbindType = mibRequest.instanceNode.valueType;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: responseVarbindType,
+						value: mibRequest.instanceNode.value
+					};
 				}
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: responseVarbindType,
-					value: mibRequest.instanceNode.value
-				};
-			}
-			me.setSingleVarbind (responsePdu, i, responseVarbind);
-			if ( ++varbindsCompleted == varbindsLength) {
-				me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
-			}
-		};
+				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
+				if ( ++varbindsCompleted == varbindsLength) {
+					me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
+				}
+			};
+		})(i);
 		if ( handler ) {
 			handler (mibRequest);
 		} else {
@@ -4915,46 +4917,48 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 			handler = providerNode.provider.handler;
 		}
 
-		mibRequest.done = function (error) {
-			if ( error ) {
-				responsePdu.errorStatus = error.errorStatus;
-				responsePdu.errorIndex = error.errorIndex;
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: ObjectType.Null,
-					value: null
-				};
-			} else {
-				if ( pdu.pduType == AgentXPduType.TestSet ) {
-					// more tests?
-				} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
-					me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
-					mibRequest.instanceNode.value = requestVarbind.value;
-				} else if ( pdu.pduType == AgentXPduType.UndoSet ) {
-					mibRequest.instanceNode.value = me.setTransactions[pdu.transactionID].originalValue;
-				}
-				if ( ( pdu.pduType == AgentXPduType.GetNext || pdu.pduType == AgentXPduType.GetBulk ) &&
-						requestVarbind.type == ObjectType.EndOfMibView ) {
-					responseVarbindType = ObjectType.EndOfMibView;
+		(function (savedIndex) {
+			mibRequest.done = function (error) {
+				if ( error ) {
+					responsePdu.errorStatus = error.errorStatus;
+					responsePdu.errorIndex = error.errorIndex;
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: ObjectType.Null,
+						value: null
+					};
 				} else {
-					responseVarbindType = mibRequest.instanceNode.valueType;
+					if ( pdu.pduType == AgentXPduType.TestSet ) {
+						// more tests?
+					} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
+						me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
+						mibRequest.instanceNode.value = requestVarbind.value;
+					} else if ( pdu.pduType == AgentXPduType.UndoSet ) {
+						mibRequest.instanceNode.value = me.setTransactions[pdu.transactionID].originalValue;
+					}
+					if ( ( pdu.pduType == AgentXPduType.GetNext || pdu.pduType == AgentXPduType.GetBulk ) &&
+							requestVarbind.type == ObjectType.EndOfMibView ) {
+						responseVarbindType = ObjectType.EndOfMibView;
+					} else {
+						responseVarbindType = mibRequest.instanceNode.valueType;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: responseVarbindType,
+						value: mibRequest.instanceNode.value
+					};
 				}
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: responseVarbindType,
-					value: mibRequest.instanceNode.value
-				};
-			}
-			responseVarbinds[i] = responseVarbind;
-			if ( ++varbindsCompleted == varbindsLength) {
-				if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
-						|| pdu.pduType == AgentXPduType.UndoSet) {
-					me.sendSetResponse.call (me, pdu);
-				} else {
-					me.sendGetResponse.call (me, pdu, responseVarbinds);
+				responseVarbinds[savedIndex] = responseVarbind;
+				if ( ++varbindsCompleted == varbindsLength) {
+					if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
+							|| pdu.pduType == AgentXPduType.UndoSet) {
+						me.sendSetResponse.call (me, pdu);
+					} else {
+						me.sendGetResponse.call (me, pdu, responseVarbinds);
+					}
 				}
-			}
-		};
+			};
+		})(i);
 		if ( handler ) {
 			handler (mibRequest);
 		} else {
