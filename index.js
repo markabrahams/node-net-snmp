@@ -3160,7 +3160,7 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 			return this.getInstanceNodeForTableRow();
 		} else {
 			var nextChildIndexPart = index[0];
-			if ( ! nextChildIndexPart ) {
+			if ( nextChildIndexPart == null ) {
 				return null;
 			}
 			remainingIndex = index.slice(1);
