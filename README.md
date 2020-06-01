@@ -2406,6 +2406,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix async mibRequest handler
 
+## Version 2.6.7 - 01/06/2020
+
+ * Add support for zero-index rows in agent tables
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
