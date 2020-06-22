@@ -80,8 +80,8 @@ for each shown in this table:
 
 This module aims to be fully compliant with the following RFCs:
 
- * [1155][1155] - Structure and Identification of Management Information
  * [1098][1098] - A Simple Network Management Protocol (version 1)
+ * [1155][1155] - Structure and Identification of Management Information
  * [2571][2571] - Agent Extensibility (AgentX) Protocol Version 1
  * [2578][2578] - Structure of Management Information Version 2 (SMIv2)
  * [3413][3413] - Simple Network Management Protocol (SNMP) Applications
@@ -1338,9 +1338,6 @@ class:
 
     receiver = snmp.createReceiver (options, callback);
 
-Note that binding to the default port (162) on some systems requires the receiver process
-to be run with administrative privilege.  If this is not possible
-
 The `options` and `callback` parameters are mandatory.  The `options` parameter is
 an object, possibly empty, and can contain the following fields:
 
@@ -1447,7 +1444,7 @@ The `options` and `callback` parameters are mandatory.  The `options` parameter 
 an object, possibly empty, and can contain the following fields:
 
  * `port` - the port for the agent to listen on - defaults to 161.  Note that
- binding to port 161 on some systems requires the receiver processto be run with
+ binding to port 161 on some systems requires the receiver process to be run with
  administrative privilege.  If this is not possible, then choose a port greater
  than 1024.
  * `disableAuthorization` - disables local authorization for all community-based
@@ -1741,7 +1738,7 @@ Retrieves the value from a scalar provider.
 
 Sets the value for a scalar provider.  If this is the first time the scalar is set
 since the provider has registered with the MIB, it will also add the instance (".0")
-node and all requires ancestors to the MIB tree.
+node and all required ancestors to the MIB tree.
 
 ## mib.addTableRow (tableProviderName, row)
 
@@ -2400,6 +2397,18 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.4 - 09/05/2020
 
  * Improve socket error handling
+
+## Version 2.6.5 - 26/05/2020
+
+ * Add agent support for handling short OIDs and noSuchInstance
+
+## Version 2.6.6 - 29/05/2020
+
+ * Fix async mibRequest handler
+
+## Version 2.6.7 - 01/06/2020
+
+ * Add support for zero-index rows in agent tables
 
 # License
 

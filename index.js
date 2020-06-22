@@ -453,40 +453,55 @@ function writeVarbinds (buffer, varbinds) {
 			var type = varbinds[i].type;
 			var value = varbinds[i].value;
 
-			if (type == ObjectType.Boolean) {
-				buffer.writeBoolean (value ? true : false);
-			} else if (type == ObjectType.Integer) { // also Integer32
-				buffer.writeInt (value);
-			} else if (type == ObjectType.OctetString) {
-				if (typeof value == "string")
-					buffer.writeString (value);
-				else
-					buffer.writeBuffer (value, ObjectType.OctetString);
-			} else if (type == ObjectType.Null) {
-				buffer.writeNull ();
-			} else if (type == ObjectType.OID) {
-				buffer.writeOID (value);
-			} else if (type == ObjectType.IpAddress) {
-				var bytes = value.split (".");
-				if (bytes.length != 4)
-					throw new RequestInvalidError ("Invalid IP address '"
-							+ value + "'");
-				buffer.writeBuffer (Buffer.from (bytes), 64);
-			} else if (type == ObjectType.Counter) { // also Counter32
-				writeUint (buffer, ObjectType.Counter, value);
-			} else if (type == ObjectType.Gauge) { // also Gauge32 & Unsigned32
-				writeUint (buffer, ObjectType.Gauge, value);
-			} else if (type == ObjectType.TimeTicks) {
-				writeUint (buffer, ObjectType.TimeTicks, value);
-			} else if (type == ObjectType.Opaque) {
-				buffer.writeBuffer (value, ObjectType.Opaque);
-			} else if (type == ObjectType.Counter64) {
-				writeUint64 (buffer, value);
-			} else if (type == ObjectType.EndOfMibView ) {
-				buffer.writeByte (130);
-				buffer.writeByte (0);
-			} else {
-				throw new RequestInvalidError ("Unknown type '" + type
+			switch ( type ) {
+				case ObjectType.Boolean:
+					buffer.writeBoolean (value ? true : false);
+					break;
+				case ObjectType.Integer: // also Integer32
+					buffer.writeInt (value);
+					break;
+				case ObjectType.OctetString:
+					if (typeof value == "string")
+						buffer.writeString (value);
+					else
+						buffer.writeBuffer (value, ObjectType.OctetString);
+					break;
+				case ObjectType.Null:
+					buffer.writeNull ();
+					break;
+				case ObjectType.OID:
+					buffer.writeOID (value);
+					break;
+				case ObjectType.IpAddress:
+					var bytes = value.split (".");
+					if (bytes.length != 4)
+						throw new RequestInvalidError ("Invalid IP address '"
+								+ value + "'");
+					buffer.writeBuffer (Buffer.from (bytes), 64);
+					break;
+				case ObjectType.Counter: // also Counter32
+					writeUint (buffer, ObjectType.Counter, value);
+					break;
+				case ObjectType.Gauge: // also Gauge32 & Unsigned32
+					writeUint (buffer, ObjectType.Gauge, value);
+					break;
+				case ObjectType.TimeTicks:
+					writeUint (buffer, ObjectType.TimeTicks, value);
+					break;
+				case ObjectType.Opaque:
+					buffer.writeBuffer (value, ObjectType.Opaque);
+					break;
+				case ObjectType.Counter64:
+					writeUint64 (buffer, value);
+					break;
+				case ObjectType.NoSuchObject:
+				case ObjectType.NoSuchInstance:
+				case ObjectType.EndOfMibView:
+					buffer.writeByte (type);
+					buffer.writeByte (0);
+					break;
+				default:
+					throw new RequestInvalidError ("Unknown type '" + type
 						+ "' in request");
 			}
 		} else {
@@ -3145,7 +3160,7 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 			return this.getInstanceNodeForTableRow();
 		} else {
 			var nextChildIndexPart = index[0];
-			if ( ! nextChildIndexPart ) {
+			if ( nextChildIndexPart == null ) {
 				return null;
 			}
 			remainingIndex = index.slice(1);
@@ -3335,7 +3350,8 @@ Mib.prototype.getTreeNode = function (oid) {
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
-		throw new ReferenceError ("Instance node has provider which should never happen");
+		// throw new ReferenceError ("Instance node has provider which should never happen");
+		return null;
 	}
 	return instanceNode.getAncestorProvider ();
 };
@@ -3808,7 +3824,7 @@ Mib.convertOidToAddress = function (oid) {
 		throw new TypeError('oid (string or array) is required');
 	}
 
-	if (address.length < 3)
+	if (address.length < 1)
 		throw new RangeError('object identifier is too short');
 
 	oidArray = [];
@@ -3967,6 +3983,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var handler;
 		var responseVarbindType;
 
+		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
+		if ( requestVarbind.oid.split('.').length < 4 ) {
+			requestVarbind.oid = "1.3.6.1";
+		}
+
 		if ( ! instanceNode ) {
 			mibRequest = new MibRequest ({
 				operation: requestPdu.type,
@@ -3974,55 +3995,76 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			});
 			handler = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
-					errorStatus: ErrorStatus.NoSuchName,
-					errorIndex: i
+					errorStatus: ErrorStatus.NoError,
+					errorIndex: 0,
+					type: ObjectType.NoSuchObject,
+					value: null
 				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			mibRequest = new MibRequest ({
-				operation: requestPdu.type,
-				providerNode: providerNode,
-				instanceNode: instanceNode,
-				oid: requestVarbind.oid
-			});
-			if ( requestPdu.type == PduType.SetRequest ) {
-				mibRequest.setType = requestVarbind.type;
-				mibRequest.setValue = requestVarbind.value;
-			}
-			handler = providerNode.provider.handler;
-		}
-
-		mibRequest.done = function (error) {
-			if ( error ) {
-				responsePdu.errorStatus = error.errorStatus;
-				responsePdu.errorIndex = error.errorIndex;
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: ObjectType.Null,
-					value: null
+			if ( ! providerNode ) {
+				mibRequest = new MibRequest ({
+					operation: requestPdu.type,
+					oid: requestVarbind.oid
+				});
+				handler = function getNsiHandler (mibRequestForNsi) {
+					mibRequestForNsi.done ({
+						errorStatus: ErrorStatus.NoError,
+						errorIndex: 0,
+						type: ObjectType.NoSuchInstance,
+						value: null
+					});
 				};
 			} else {
+				mibRequest = new MibRequest ({
+					operation: requestPdu.type,
+					providerNode: providerNode,
+					instanceNode: instanceNode,
+					oid: requestVarbind.oid
+				});
 				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequest.instanceNode.value = requestVarbind.value;
+					mibRequest.setType = requestVarbind.type;
+					mibRequest.setValue = requestVarbind.value;
 				}
-				if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
-						requestVarbind.type == ObjectType.EndOfMibView ) {
-					responseVarbindType = ObjectType.EndOfMibView;
+				handler = providerNode.provider.handler;
+			}
+		}
+
+		(function (savedIndex) {
+			mibRequest.done = function (error) {
+				if ( error ) {
+					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
+						responsePdu.errorStatus = error.errorStatus;
+						responsePdu.errorIndex = error.errorIndex;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: error.type,
+						value: error.value || null
+					};
 				} else {
-					responseVarbindType = mibRequest.instanceNode.valueType;
+					if ( requestPdu.type == PduType.SetRequest ) {
+						mibRequest.instanceNode.value = requestVarbind.value;
+					}
+					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
+							requestVarbind.type == ObjectType.EndOfMibView ) {
+						responseVarbindType = ObjectType.EndOfMibView;
+					} else {
+						responseVarbindType = mibRequest.instanceNode.valueType;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: responseVarbindType,
+						value: mibRequest.instanceNode.value
+					};
 				}
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: responseVarbindType,
-					value: mibRequest.instanceNode.value
-				};
-			}
-			me.setSingleVarbind (responsePdu, i, responseVarbind);
-			if ( ++varbindsCompleted == varbindsLength) {
-				me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
-			}
-		};
+				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
+				if ( ++varbindsCompleted == varbindsLength) {
+					me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
+				}
+			};
+		})(i);
 		if ( handler ) {
 			handler (mibRequest);
 		} else {
@@ -4401,7 +4443,7 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 			// Unknown PDU type - shouldn't happen as master agents shouldn't send administrative PDUs
 			throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
 					+ "' in request");
-}
+	}
 	return pdu;
 };
 
@@ -4868,49 +4910,55 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 				instanceNode: instanceNode,
 				oid: requestVarbind.oid
 			});
+			if ( pdu.pduType == AgentXPduType.TestSet ) {
+				mibRequest.setType = requestVarbind.type;
+				mibRequest.setValue = requestVarbind.value;
+			}
 			handler = providerNode.provider.handler;
 		}
 
-		mibRequest.done = function (error) {
-			if ( error ) {
-				responsePdu.errorStatus = error.errorStatus;
-				responsePdu.errorIndex = error.errorIndex;
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: ObjectType.Null,
-					value: null
-				};
-			} else {
-				if ( pdu.pduType == AgentXPduType.TestSet ) {
-					// more tests?
-				} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
-					me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
-					mibRequest.instanceNode.value = requestVarbind.value;
-				} else if ( pdu.pduType == AgentXPduType.UndoSet ) {
-					mibRequest.instanceNode.value = me.setTransactions[pdu.transactionID].originalValue;
-				}
-				if ( ( pdu.pduType == AgentXPduType.GetNext || pdu.pduType == AgentXPduType.GetBulk ) &&
-						requestVarbind.type == ObjectType.EndOfMibView ) {
-					responseVarbindType = ObjectType.EndOfMibView;
+		(function (savedIndex) {
+			mibRequest.done = function (error) {
+				if ( error ) {
+					responsePdu.errorStatus = error.errorStatus;
+					responsePdu.errorIndex = error.errorIndex;
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: ObjectType.Null,
+						value: null
+					};
 				} else {
-					responseVarbindType = mibRequest.instanceNode.valueType;
+					if ( pdu.pduType == AgentXPduType.TestSet ) {
+						// more tests?
+					} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
+						me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
+						mibRequest.instanceNode.value = requestVarbind.value;
+					} else if ( pdu.pduType == AgentXPduType.UndoSet ) {
+						mibRequest.instanceNode.value = me.setTransactions[pdu.transactionID].originalValue;
+					}
+					if ( ( pdu.pduType == AgentXPduType.GetNext || pdu.pduType == AgentXPduType.GetBulk ) &&
+							requestVarbind.type == ObjectType.EndOfMibView ) {
+						responseVarbindType = ObjectType.EndOfMibView;
+					} else {
+						responseVarbindType = mibRequest.instanceNode.valueType;
+					}
+					responseVarbind = {
+						oid: mibRequest.oid,
+						type: responseVarbindType,
+						value: mibRequest.instanceNode.value
+					};
 				}
-				responseVarbind = {
-					oid: mibRequest.oid,
-					type: responseVarbindType,
-					value: mibRequest.instanceNode.value
-				};
-			}
-			responseVarbinds[i] = responseVarbind;
-			if ( ++varbindsCompleted == varbindsLength) {
-				if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
-						|| pdu.pduType == AgentXPduType.UndoSet) {
-					me.sendSetResponse.call (me, pdu);
-				} else {
-					me.sendGetResponse.call (me, pdu, responseVarbinds);
+				responseVarbinds[savedIndex] = responseVarbind;
+				if ( ++varbindsCompleted == varbindsLength) {
+					if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
+							|| pdu.pduType == AgentXPduType.UndoSet) {
+						me.sendSetResponse.call (me, pdu);
+					} else {
+						me.sendGetResponse.call (me, pdu, responseVarbinds);
+					}
 				}
-			}
-		};
+			};
+		})(i);
 		if ( handler ) {
 			handler (mibRequest);
 		} else {
