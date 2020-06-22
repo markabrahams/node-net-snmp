@@ -1,5 +1,5 @@
 {
-  "name": "net-snmp",
+    "name": "net-snmp-domotz",
   "version": "2.6.4",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
@@ -7,11 +7,11 @@
     "example": "example"
   },
   "dependencies": {
-    "asn1-ber": "*",
-    "smart-buffer": "^4.1.0"
+      "asn1-ber": "1.1.0",
+      "smart-buffer": "4.1.0"
   },
   "devDependencies": {
-    "getopts": "*"
+      "getopts": "2.2.5"
   },
   "contributors": [
     {
