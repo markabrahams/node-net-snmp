@@ -1376,9 +1376,9 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 Message.prototype.setMsgFlags = function (bitPosition, flag) {
 	if ( this.msgGlobalData && this.msgGlobalData !== undefined && this.msgGlobalData !== null ) {
 		if ( flag ) {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | ( 2 ** bitPosition );
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | ( Math.pow(bitPosition, 2) );
 		} else {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 2 ** bitPosition );
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - Math.pow(bitPosition, 2) );
 		}
 	}
 }
