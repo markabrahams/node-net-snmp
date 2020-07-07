@@ -3974,26 +3974,25 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
 	var responsePdu = requestPdu.getResponsePduForRequest ();
+	var mibRequests = [];
+	var handlers = [];
 
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
-		var requestVarbind = requestPdu.varbinds[i];
-		var instanceNode = this.mib.lookup (requestVarbind.oid);
+		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		var providerNode;
-		var mibRequest;
-		var handler;
 		var responseVarbindType;
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
-		if ( requestVarbind.oid.split('.').length < 4 ) {
-			requestVarbind.oid = "1.3.6.1";
+		if ( requestPdu.varbinds[i].oid.split('.').length < 4 ) {
+			requestPdu.varbinds[i].oid = "1.3.6.1";
 		}
 
 		if ( ! instanceNode ) {
-			mibRequest = new MibRequest ({
+			mibRequests[i] = new MibRequest ({
 				operation: requestPdu.type,
-				oid: requestVarbind.oid
+				oid: requestPdu.varbinds[i].oid
 			});
-			handler = function getNsoHandler (mibRequestForNso) {
+			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
 					errorIndex: 0,
@@ -4004,11 +4003,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
 			if ( ! providerNode ) {
-				mibRequest = new MibRequest ({
+				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
-					oid: requestVarbind.oid
+					oid: requestPdu.varbinds[i].oid
 				});
-				handler = function getNsiHandler (mibRequestForNsi) {
+				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
 						errorIndex: 0,
@@ -4017,22 +4016,22 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 			} else {
-				mibRequest = new MibRequest ({
+				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
 					providerNode: providerNode,
 					instanceNode: instanceNode,
-					oid: requestVarbind.oid
+					oid: requestPdu.varbinds[i].oid
 				});
 				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequest.setType = requestVarbind.type;
-					mibRequest.setValue = requestVarbind.value;
+					mibRequests[i].setType = requestPdu.varbinds[i].type;
+					mibRequests[i].setValue = requestPdu.varbinds[i].value;
 				}
-				handler = providerNode.provider.handler;
+				handlers[i] = providerNode.provider.handler;
 			}
 		}
 
 		(function (savedIndex) {
-			mibRequest.done = function (error) {
+			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
 					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
@@ -4045,18 +4044,18 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					};
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
-						mibRequest.instanceNode.value = requestVarbind.value;
+						mibRequests[savedIndex].instanceNode.value = requestPdu.varbinds[savedIndex].value;
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
-							requestVarbind.type == ObjectType.EndOfMibView ) {
+							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbindType = ObjectType.EndOfMibView;
 					} else {
-						responseVarbindType = mibRequest.instanceNode.valueType;
+						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
 					}
 					responseVarbind = {
-						oid: mibRequest.oid,
+						oid: mibRequests[savedIndex].oid,
 						type: responseVarbindType,
-						value: mibRequest.instanceNode.value
+						value: mibRequests[savedIndex].instanceNode.value
 					};
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
@@ -4065,10 +4064,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				}
 			};
 		})(i);
-		if ( handler ) {
-			handler (mibRequest);
+		if ( handlers[i] ) {
+			handlers[i] (mibRequests[i]);
 		} else {
-			mibRequest.done ();
+			mibRequests[i].done ();
 		}
 	};
 };

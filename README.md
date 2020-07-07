@@ -2410,6 +2410,10 @@ Example programs are included under the module's `example` directory.
 
  * Add support for zero-index rows in agent tables
 
+## Version 2.6.8 - 08/07/2020
+
+ * Fix GetBulk async mibRequest handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
