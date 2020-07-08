@@ -3876,6 +3876,10 @@ Mib.getSubOidFromBaseOid = function (oid, base) {
 	return oid.substring (base.length + 1);
 }
 
+Mib.create = function () {
+	return new Mib (); 
+};
+
 var MibRequest = function (requestDefinition) {
 	this.operation = requestDefinition.operation;
 	this.address = Mib.convertOidToAddress (requestDefinition.oid);
@@ -3894,19 +3898,23 @@ MibRequest.prototype.isTabular = function () {
 		this.providerNode.provider.type == MibProviderType.Table;
 };
 
-var Agent = function (options, callback) {
+var Agent = function (options, callback, mib) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
 	this.authorizer = new Authorizer (options.disableAuthorization);
-	this.mib = new Mib ();
 	this.callback = callback || function () {};
+	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
 };
 
 Agent.prototype.getMib = function () {
 	return this.mib;
+};
+
+Agent.prototype.setMib = function (mib) {
+	this.mib = mib;
 };
 
 Agent.prototype.getAuthorizer = function () {
@@ -4038,7 +4046,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						responsePdu.errorIndex = error.errorIndex;
 					}
 					responseVarbind = {
-						oid: mibRequest.oid,
+						oid: mibRequests[savedIndex].oid,
 						type: error.type,
 						value: error.value || null
 					};
@@ -4219,8 +4227,8 @@ Agent.prototype.close  = function() {
 	this.listener.close ();
 };
 
-Agent.create = function (options, callback) {
-	var agent = new Agent (options, callback);
+Agent.create = function (options, callback, mib) {
+	var agent = new Agent (options, callback, mib);
 	agent.listener.startListening ();
 	return agent;
 };
@@ -5131,6 +5139,7 @@ exports.createReceiver = Receiver.create;
 exports.createAgent = Agent.create;
 exports.createModuleStore = ModuleStore.create;
 exports.createSubagent = Subagent.create;
+exports.createMib = Mib.create;
 
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;

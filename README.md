@@ -1417,7 +1417,7 @@ the above four request-class PDUs.
 The agent also supports SNMP proxy forwarder applications with its singleton `Forwarder` instance,
 which is documented in the [Forwarder Module](#forwarder-module) section below.
 
-## snmp.createAgent (options, callback)
+## snmp.createAgent (options, callback, mib)
 
 The `createAgent()` function instantiates and returns an instance of the `Agent`
 class:
@@ -1454,6 +1454,11 @@ an object, possibly empty, and can contain the following fields:
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
 
+The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
+If not supplied, the agent creates itself a new empty `Mib` singleton.  If supplied,
+the `Mib` instance needs to be created and populated as per the [Mib Module](#mib-module)
+section below.
+
 ## agent.getAuthorizer ()
 
 Returns the agent's singleton `Authorizer` instance, used to control access
@@ -1463,6 +1468,11 @@ to the agent.  See the `Authorizer` section for further details.
 
 Returns the agent's singleton `Mib` instance, which holds all of the management data
 for the agent.
+
+## agent.setMib (mib)
+
+Sets the agent's singleton `Mib` instance to the supplied one.  The agent discards
+its existing `Mib` instance.
 
 ## agent.getForwarder ()
 
@@ -1501,7 +1511,7 @@ to be managed with adds, queries and deletes.
 The authorizer instance can be obtained by using the `getAuthorizer()`
 call, for both the receiver and the agent.  For example:
 
-    receiver.getAuthorizer() .getCommunities();
+    receiver.getAuthorizer ().getCommunities ();
 
 ## authorizer.addCommunity (community)
 
@@ -1557,10 +1567,9 @@ with the supplied name is not in the list.
 
 # Mib Module
 
-An `Agent` instance, when created, in turn creates an instance of the `Mib` class.  There
-is no direct API call to create a `Mib` instance; this creation is the responsibility of
-the agent.  An agent always has one and only one `Mib` instance.  The agent's `Mib`
-instance is accessed through the `agent.getMib ()` call.
+An `Agent` instance, when created, in turn creates an instance of the `Mib` class.
+An agent always has one and only one `Mib` instance.  The agent's `Mib` instance is
+accessed through the `agent.getMib ()` call.
 
 The MIB is a tree structure that holds management information.  Information is "addressed"
 in the tree by a series of integers, which form an Object ID (OID) from the root of the
@@ -1670,6 +1679,20 @@ The `oid` must be that of the "table entry" node, not its parent "table" node e.
 Note that there is no `handler` callback function in this particular example, so any interaction
 is directly between SNMP requests and MIB values with no other intervention.
 
+
+## snmp.createMib ()
+
+The `createMib()` function instantiates and returns an instance of the `Mib` class.  The new
+Mib does not have any nodes (except for a single root node) and does not have any registered
+providers.
+
+Note that this is only usable for an agent, not an AgentX subagent.  Since an agent instanciates
+a `Mib` instance on creation, this call is not needed in many scenarios.  Two scenarios where it
+might be useful are:
+
+ * where you want to pre-populate a `Mib` instance with providers and scalar/tabular data
+ before creating the `Agent` instance itself.
+ * where you want to swap out an agent's existing `Mib` instance for an entirely new one.
 
 ## mib.registerProvider (definition)
 
@@ -2413,6 +2436,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.8 - 08/07/2020
 
  * Fix GetBulk async mibRequest handling
+
+## Version 2.7.0 - 09/07/2020
+
+ * Add MIB create, add MIB setting for agent, and fix MIB error response crash
 
 # License
 
