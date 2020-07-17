@@ -2441,6 +2441,10 @@ Example programs are included under the module's `example` directory.
 
  * Add MIB create, add MIB setting for agent, and fix MIB error response crash
 
+## Version 2.7.1 - 17/07/2020
+
+ * Fix AgentX subagent noSuchInstance crash
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

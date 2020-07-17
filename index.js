@@ -4905,34 +4905,49 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 			});
 			handler = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
-					errorStatus: ErrorStatus.NoSuchName,
-					errorIndex: i
+					errorStatus: ErrorStatus.NoError,
+					errorIndex: 0,
+					type: ObjectType.NoSuchObject,
+					value: null
 				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			mibRequest = new MibRequest ({
-				operation: pdu.pduType,
-				providerNode: providerNode,
-				instanceNode: instanceNode,
-				oid: requestVarbind.oid
-			});
-			if ( pdu.pduType == AgentXPduType.TestSet ) {
-				mibRequest.setType = requestVarbind.type;
-				mibRequest.setValue = requestVarbind.value;
+			if ( ! providerNode ) {
+				mibRequest = new MibRequest ({
+					operation: pdu.pduType,
+					oid: requestVarbind.oid
+				});
+				handler = function getNsiHandler (mibRequestForNsi) {
+					mibRequestForNsi.done ({
+						errorStatus: ErrorStatus.NoError,
+						errorIndex: 0,
+						type: ObjectType.NoSuchInstance,
+						value: null
+					});
+				};
+			} else {
+				mibRequest = new MibRequest ({
+					operation: pdu.pduType,
+					providerNode: providerNode,
+					instanceNode: instanceNode,
+					oid: requestVarbind.oid
+				});
+				if ( pdu.pduType == AgentXPduType.TestSet ) {
+					mibRequest.setType = requestVarbind.type;
+					mibRequest.setValue = requestVarbind.value;
+				}
+				handler = providerNode.provider.handler;
 			}
-			handler = providerNode.provider.handler;
 		}
 
 		(function (savedIndex) {
 			mibRequest.done = function (error) {
 				if ( error ) {
-					responsePdu.errorStatus = error.errorStatus;
-					responsePdu.errorIndex = error.errorIndex;
 					responseVarbind = {
 						oid: mibRequest.oid,
-						type: ObjectType.Null,
-						value: null
+						type: error.type || ObjectType.Null,
+						value: error.value || null
 					};
 				} else {
 					if ( pdu.pduType == AgentXPduType.TestSet ) {
