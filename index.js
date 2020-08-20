@@ -1011,6 +1011,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	var paddedScopedPduLength;
 	var paddedScopedPdu;
 	var encryptedPdu;
+	var cipher;
 
 	encryptionKey = Encryption.generateLocalizedKey (des, authProtocol, privPassword, engine.engineID);
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
@@ -1056,6 +1057,7 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 	var iv;
 	var i;
 	var decryptedPdu;
+	var decipher;
 
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
 	decryptionKey = Buffer.alloc (des.KEY_LENGTH);
@@ -1094,6 +1096,8 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 
 Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	var iv;
+	var engineBootsBuffer;
+	var engineTimeBuffer;
 
 	// iv = engineBoots(4) | engineTime(4) | salt(8)
 	iv = Buffer.alloc (aes.BLOCK_LENGTH);
@@ -1148,6 +1152,8 @@ Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword,
 };
 
 Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
+	var privacyParametersOffset;
+
 	privacyParametersOffset = messageBuffer.indexOf (Encryption.PRIV_PARAMETERS_PLACEHOLDER);
 	msgPrivacyParameters.copy (messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
 };
@@ -2247,7 +2253,7 @@ function tableColumnsResponseCb (req, error) {
 function tableColumnsFeedCb (req, varbinds) {
 	for (var i = 0; i < varbinds.length; i++) {
 		if (isVarbindError (varbinds[i])) {
-			req.error = new RequestFailedError (varbindError (varbind[i]));
+			req.error = new RequestFailedError (varbindError (varbinds[i]));
 			return true;
 		}
 
@@ -2309,7 +2315,7 @@ function tableResponseCb (req, error) {
 function tableFeedCb (req, varbinds) {
 	for (var i = 0; i < varbinds.length; i++) {
 		if (isVarbindError (varbinds[i])) {
-			req.error = new RequestFailedError (varbindError (varbind[i]));
+			req.error = new RequestFailedError (varbindError (varbinds[i]));
 			return true;
 		}
 
@@ -2936,6 +2942,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	var tables = [];
 	var mibEntry;
 	var syntaxTypes;
+	var entryArray;
+	var currentTableProvider;
+	var parentOid;
 
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
@@ -3048,7 +3057,7 @@ ModuleStore.prototype.loadBaseModules = function () {
 };
 
 ModuleStore.create = function () {
-	store = new ModuleStore ();
+	var store = new ModuleStore ();
 	store.loadBaseModules ();
 	return store;
 };
@@ -3148,6 +3157,8 @@ MibNode.prototype.getInstanceNodeForTableRow = function () {
 
 MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 	var childCount = Object.keys (this.children).length;
+	var remainingIndex;
+
 	if ( childCount == 0 ) {
 		if ( this.value != null ) {
 			return this;
@@ -3184,8 +3195,9 @@ MibNode.prototype.getInstanceNodesForColumn = function () {
 };
 
 MibNode.prototype.getNextInstanceNode = function () {
+	var siblingIndex;
 
-	node = this;
+	var node = this;
 	if ( this.value != null ) {
 		// Need upwards traversal first
 		node = this;
