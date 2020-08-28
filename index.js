@@ -3373,7 +3373,7 @@ Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
 	var column = null;
 	if ( indexEntry.columnName ) {
 		column = provider.tableColumns.filter (column => column.name == indexEntry.columnName )[0];
-	} else if ( indexEntry.columnName ) {
+	} else if ( indexEntry.columnNumber !== undefined && indexEntry.columnNumber !== null  ) {
 		column = provider.tableColumns.filter (column => column.number == indexEntry.columnNumber )[0];
 	}
 	return column;
@@ -5184,7 +5184,10 @@ exports.RequestTimedOutError = RequestTimedOutError;
  **/
 exports.ObjectParser = {
 	readInt: readInt,
-	readUint: readUint
+	readUint: readUint,
+	readVarbindValue: readVarbindValue,
 };
 exports.Authentication = Authentication;
 exports.Encryption = Encryption;
+
+
