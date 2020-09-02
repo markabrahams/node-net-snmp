@@ -2449,6 +2449,10 @@ Example programs are included under the module's `example` directory.
 
  * Declare variables to fix transpile errors
 
+## Version 2.7.3 - 02/09/2020
+
+ * MIB getobject callback convention update
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
