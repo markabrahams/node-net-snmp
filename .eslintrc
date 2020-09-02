@@ -1,0 +1,33 @@
+{
+  "extends": "airbnb",
+  "rules": {
+    "func-names": ["error", "never"],
+    /*"linebreak-style": ["error", "windows"] */
+    "linebreak-style": 0,
+    "no-param-reassign": 0,
+    "no-console": 0,
+    "no-unused-expressions": ["error", { "allowShortCircuit": true, "allowTernary": true }],
+    "import/no-extraneous-dependencies": ["error", {"devDependencies": true}],
+    /* "arrow-parens": ["error", "as-needed"], */
+    "arrow-parens": 0,
+    "arrow-body-style": 0,
+    "prefer-destructuring": ["warn", {
+      "array": false,
+      "object": true
+    }],
+    no-plusplus: ["error", { "allowForLoopAfterthoughts": true }],
+    "comma-dangle": 0,
+    "curly": ["error", "all"],
+    /*no-underscore-dangle: ["error", { "allowAfterThis": true }],*/
+    no-underscore-dangle: 0,
+    no-buffer-constructor: 0,
+    spaced-comment: ["error", "always", { "exceptions": ["/"] }],
+    prefer-object-spread: 0,
+    operator-linebreak: ["error", "after"]
+  },
+  "env": {
+    /* "mocha": true */
+    /* "node": true */
+  }
+}
+
