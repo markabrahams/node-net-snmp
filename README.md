@@ -2445,6 +2445,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix AgentX subagent noSuchInstance crash
 
+## Version 2.7.2 - 02/09/2020
+
+ * Declare variables to fix transpile errors
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
