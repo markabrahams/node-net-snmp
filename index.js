@@ -5192,14 +5192,12 @@ exports.RequestFailedError = RequestFailedError;
 exports.RequestTimedOutError = RequestTimedOutError;
 
 /**
- ** We've added this for testing.
+ ** Added for testing
  **/
 exports.ObjectParser = {
 	readInt: readInt,
 	readUint: readUint,
-	readVarbindValue: readVarbindValue,
+	readVarbindValue: readVarbindValue
 };
 exports.Authentication = Authentication;
 exports.Encryption = Encryption;
-
-

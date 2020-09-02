@@ -2453,6 +2453,10 @@ Example programs are included under the module's `example` directory.
 
  * MIB getobject callback convention update
 
+## Version 2.7.4 - 02/09/2020
+
+ * Fix columnNumber check in getColumnProvider
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
