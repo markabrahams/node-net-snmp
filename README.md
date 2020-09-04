@@ -1906,7 +1906,7 @@ MIB module name, not the source file name.  The MIB module name is the name prec
 `DEFINITIONS ::= BEGIN` in the MIB file, and is often the very first thing present in
 a MIB file.
 
-Note that if your MIB dependends on ("imports") definitions from other MIB files, these must be
+Note that if your MIB depends on ("imports") definitions from other MIB files, these must be
 loaded first e.g. the popular **IF-MIB** uses definitions from the **IANAifType-MIB**, which
 therefore must be loaded first.  These dependencies are listed in the **IMPORTS** section of
 a MIB module, usually near the top of a MIB file.  The pre-loaded "base" MIB modules contain
@@ -2460,6 +2460,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.7.5 - 05/09/2020
 
  * Fix parsing of iso.org
+
+## Version 2.7.6 - 05/09/2020
+
+ * Add revisions/descriptions MIB parsing
 
 # License
 
