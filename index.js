@@ -2889,7 +2889,6 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 	Object.assign (syntaxTypes, ObjectType);
 	var entryArray;
 
-	// var mibModule = this.parser.Modules[moduleName];
 	for ( var mibModule of Object.values (this.parser.Modules) ) {
 		entryArray = Object.values (mibModule);
 		for ( mibEntry of entryArray ) {

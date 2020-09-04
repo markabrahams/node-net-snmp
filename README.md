@@ -2457,6 +2457,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix columnNumber check in getColumnProvider
 
+## Version 2.7.5 - 05/09/2020
+
+ * Fix parsing of iso.org
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
