@@ -1996,59 +1996,56 @@ Session.prototype.onError = function (error) {
 Session.prototype.onMsg = function (buffer) {
 	try {
 		var message = Message.createFromBuffer (buffer);
-
-		var req = this.unregisterRequest (message.getReqId ());
-		if ( ! req )
-			return;
-
-		if ( ! message.processIncomingSecurity (this.user, req.responseCb) )
-			return;
-
-		try {
-			if (message.version != req.message.version) {
-				req.responseCb (new ResponseInvalidError ("Version in request '"
-						+ req.message.version + "' does not match version in "
-						+ "response '" + message.version + "'"));
-			} else if (message.community != req.message.community) {
-				req.responseCb (new ResponseInvalidError ("Community '"
-						+ req.message.community + "' in request does not match "
-						+ "community '" + message.community + "' in response"));
-			} else if (message.pdu.type == PduType.Report) {
-				this.msgSecurityParameters = {
-					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
-					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
-					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
-				};
-				if ( this.proxy ) {
-					this.msgSecurityParameters.msgUserName = this.proxy.user.name;
-					this.msgSecurityParameters.msgAuthenticationParameters = "";
-					this.msgSecurityParameters.msgPrivacyParameters = "";
-				} else {
-					if ( ! req.originalPdu || ! req.allowReport ) {
-						if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
-							this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
-							return;
-						}
-						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
-						return;
-					}
-					req.originalPdu.contextName = this.context;
-					var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots || ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
-					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
-				}
-			} else if ( this.proxy ) {
-				this.onProxyResponse (req, message);
-			} else if (message.pdu.type == PduType.GetResponse) {
-				req.onResponse (req, message);
-			} else {
-				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
-						+ message.pdu.type + "' in response"));
-			}
-		} catch (error) {
-			req.responseCb (error);
-		}
 	} catch (error) {
 		this.emit("error", error);
+		return;
+	}
+
+	var req = this.unregisterRequest (message.getReqId ());
+	if ( ! req )
+		return;
+
+	if ( ! message.processIncomingSecurity (this.user, req.responseCb) )
+		return;
+
+	if (message.version != req.message.version) {
+		req.responseCb (new ResponseInvalidError ("Version in request '"
+				+ req.message.version + "' does not match version in "
+				+ "response '" + message.version + "'"));
+	} else if (message.community != req.message.community) {
+		req.responseCb (new ResponseInvalidError ("Community '"
+				+ req.message.community + "' in request does not match "
+				+ "community '" + message.community + "' in response"));
+	} else if (message.pdu.type == PduType.Report) {
+		this.msgSecurityParameters = {
+			msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
+			msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
+			msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
+		};
+		if ( this.proxy ) {
+			this.msgSecurityParameters.msgUserName = this.proxy.user.name;
+			this.msgSecurityParameters.msgAuthenticationParameters = "";
+			this.msgSecurityParameters.msgPrivacyParameters = "";
+		} else {
+			if ( ! req.originalPdu || ! req.allowReport ) {
+				if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
+					this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
+					return;
+				}
+				req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
+				return;
+			}
+			req.originalPdu.contextName = this.context;
+			var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots || ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
+			this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
+		}
+	} else if ( this.proxy ) {
+		this.onProxyResponse (req, message);
+	} else if (message.pdu.type == PduType.GetResponse) {
+		req.onResponse (req, message);
+	} else {
+		req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
+				+ message.pdu.type + "' in response"));
 	}
 };
 
@@ -2165,28 +2162,23 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
-	try {
-		var id = _generateId (this.idBitsSize);
-		var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
-		var message;
-		var req;
+	var id = _generateId (this.idBitsSize);
+	var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
+	var message;
+	var req;
 
-		if ( this.version == Version3 ) {
-			if ( this.msgSecurityParameters ) {
-				this.sendV3Req (pdu, feedCb, responseCb, options, this.port, true);
-			} else {
-				this.sendV3Discovery (pdu, feedCb, responseCb, options);
-			}
+	if ( this.version == Version3 ) {
+		if ( this.msgSecurityParameters ) {
+			this.sendV3Req (pdu, feedCb, responseCb, options, this.port, true);
 		} else {
-			message = Message.createCommunity (this.version, this.community, pdu);
-			req = new Req (this, message, feedCb, responseCb, options);
-			this.send (req);
+			this.sendV3Discovery (pdu, feedCb, responseCb, options);
 		}
-	} catch (error) {
-		if (responseCb)
-			responseCb (error);
+	} else {
+		message = Message.createCommunity (this.version, this.community, pdu);
+		req = new Req (this, message, feedCb, responseCb, options);
+		this.send (req);
 	}
-}
+};
 
 function subtreeCb (req, varbinds) {
 	var done = 0;
@@ -2362,104 +2354,99 @@ Session.prototype.table = function () {
 Session.prototype.trap = function () {
 	var req = {};
 
-	try {
-		var typeOrOid = arguments[0];
-		var varbinds, options = {}, responseCb;
-		var message;
+	var typeOrOid = arguments[0];
+	var varbinds, options = {}, responseCb;
+	var message;
 
-		/**
-		 ** Support the following signatures:
-		 ** 
-		 **    typeOrOid, varbinds, options, callback
-		 **    typeOrOid, varbinds, agentAddr, callback
-		 **    typeOrOid, varbinds, callback
-		 **    typeOrOid, agentAddr, callback
-		 **    typeOrOid, options, callback
-		 **    typeOrOid, callback
-		 **/
-		if (arguments.length >= 4) {
-			varbinds = arguments[1];
-			if (typeof arguments[2] == "string") {
-				options.agentAddr = arguments[2];
-			} else if (arguments[2].constructor != Array) {
-				options = arguments[2];
-			}
-			responseCb = arguments[3];
-		} else if (arguments.length >= 3) {
-			if (typeof arguments[1] == "string") {
-				varbinds = [];
-				options.agentAddr = arguments[1];
-			} else if (arguments[1].constructor != Array) {
-				varbinds = [];
-				options = arguments[1];
-			} else {
-				varbinds = arguments[1];
-				agentAddr = null;
-			}
-			responseCb = arguments[2];
-		} else {
+	/**
+	 ** Support the following signatures:
+		** 
+		**    typeOrOid, varbinds, options, callback
+		**    typeOrOid, varbinds, agentAddr, callback
+		**    typeOrOid, varbinds, callback
+		**    typeOrOid, agentAddr, callback
+		**    typeOrOid, options, callback
+		**    typeOrOid, callback
+		**/
+	if (arguments.length >= 4) {
+		varbinds = arguments[1];
+		if (typeof arguments[2] == "string") {
+			options.agentAddr = arguments[2];
+		} else if (arguments[2].constructor != Array) {
+			options = arguments[2];
+		}
+		responseCb = arguments[3];
+	} else if (arguments.length >= 3) {
+		if (typeof arguments[1] == "string") {
 			varbinds = [];
-			responseCb = arguments[1];
-		}
-
-		var pdu, pduVarbinds = [];
-
-		for (var i = 0; i < varbinds.length; i++) {
-			var varbind = {
-				oid: varbinds[i].oid,
-				type: varbinds[i].type,
-				value: varbinds[i].value
-			};
-			pduVarbinds.push (varbind);
-		}
-		
-		var id = _generateId (this.idBitsSize);
-
-		if (this.version == Version2c || this.version == Version3 ) {
-			if (typeof typeOrOid != "string")
-				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
-
-			pduVarbinds.unshift (
-				{
-					oid: "1.3.6.1.2.1.1.3.0",
-					type: ObjectType.TimeTicks,
-					value: options.upTime || Math.floor (process.uptime () * 100)
-				},
-				{
-					oid: "1.3.6.1.6.3.1.1.4.1.0",
-					type: ObjectType.OID,
-					value: typeOrOid
-				}
-			);
-
-			pdu = TrapV2Pdu.createFromVariables (id, pduVarbinds, options);
+			options.agentAddr = arguments[1];
+		} else if (arguments[1].constructor != Array) {
+			varbinds = [];
+			options = arguments[1];
 		} else {
-			pdu = TrapPdu.createFromVariables (typeOrOid, pduVarbinds, options);
+			varbinds = arguments[1];
+			agentAddr = null;
 		}
-
-		if ( this.version == Version3 ) {
-			var msgSecurityParameters = {
-				msgAuthoritativeEngineID: this.user.engineID,
-				msgAuthoritativeEngineBoots: 0,
-				msgAuthoritativeEngineTime: 0
-			};
-			message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
-		} else {
-			message = Message.createCommunity (this.version, this.community, pdu);
-		}
-
-		req = {
-			id: id,
-			message: message,
-			responseCb: responseCb,
-			port: this.trapPort
-		};
-
-		this.send (req, true);
-	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
+		responseCb = arguments[2];
+	} else {
+		varbinds = [];
+		responseCb = arguments[1];
 	}
+
+	var pdu, pduVarbinds = [];
+
+	for (var i = 0; i < varbinds.length; i++) {
+		var varbind = {
+			oid: varbinds[i].oid,
+			type: varbinds[i].type,
+			value: varbinds[i].value
+		};
+		pduVarbinds.push (varbind);
+	}
+	
+	var id = _generateId (this.idBitsSize);
+
+	if (this.version == Version2c || this.version == Version3 ) {
+		if (typeof typeOrOid != "string")
+			typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+		pduVarbinds.unshift (
+			{
+				oid: "1.3.6.1.2.1.1.3.0",
+				type: ObjectType.TimeTicks,
+				value: options.upTime || Math.floor (process.uptime () * 100)
+			},
+			{
+				oid: "1.3.6.1.6.3.1.1.4.1.0",
+				type: ObjectType.OID,
+				value: typeOrOid
+			}
+		);
+
+		pdu = TrapV2Pdu.createFromVariables (id, pduVarbinds, options);
+	} else {
+		pdu = TrapPdu.createFromVariables (typeOrOid, pduVarbinds, options);
+	}
+
+	if ( this.version == Version3 ) {
+		var msgSecurityParameters = {
+			msgAuthoritativeEngineID: this.user.engineID,
+			msgAuthoritativeEngineBoots: 0,
+			msgAuthoritativeEngineTime: 0
+		};
+		message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
+	} else {
+		message = Message.createCommunity (this.version, this.community, pdu);
+	}
+
+	req = {
+		id: id,
+		message: message,
+		responseCb: responseCb,
+		port: this.trapPort
+	};
+
+	this.send (req, true);
 
 	return this;
 };

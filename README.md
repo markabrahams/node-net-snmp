@@ -2465,6 +2465,10 @@ Example programs are included under the module's `example` directory.
 
  * Add revisions/descriptions MIB parsing
 
+## Version 2.7.7 - 07/09/2020
+
+ * Fix double-callback invocation on callback error
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
