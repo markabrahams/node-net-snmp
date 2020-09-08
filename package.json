@@ -45,5 +45,8 @@
     "monitoring"
   ],
   "author": "Mark Abrahams <mark@abrahams.co.nz>",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "lint": "./node_modules/.bin/eslint . ./**/*.js"
+  }
 }
