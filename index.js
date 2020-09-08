@@ -2878,7 +2878,7 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 
 	for ( var mibModule of Object.values (this.parser.Modules) ) {
 		entryArray = Object.values (mibModule);
-		for ( mibEntry of entryArray ) {
+		for ( var mibEntry of entryArray ) {
 			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
 				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
 					if ( typeof mibEntry.SYNTAX == "object" ) {
@@ -3096,7 +3096,7 @@ MibNode.prototype.findChildImmediatelyBefore = function (index) {
 		return null;
 	}
 
-	for ( i = 0; i < sortedChildrenKeys.length; i++ ) {
+	for ( var i = 0; i < sortedChildrenKeys.length; i++ ) {
 		if ( index < sortedChildrenKeys[i] ) {
 			if ( i === 0 ) {
 				return null;
@@ -3182,6 +3182,7 @@ MibNode.prototype.getInstanceNodesForColumn = function () {
 
 MibNode.prototype.getNextInstanceNode = function () {
 	var siblingIndex;
+	var childrenAddresses;
 
 	var node = this;
 	if ( this.value != null ) {
@@ -3195,7 +3196,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 				return null;
 			} else {
 				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
-				siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
+				var siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
 				if ( siblingPosition + 1 < childrenAddresses.length ) {
 					node = node.children[childrenAddresses[siblingPosition + 1]];
 					break;
@@ -3221,7 +3222,7 @@ MibNode.prototype.delete = function () {
 	if ( Object.keys (this.children) > 0 ) {
 		throw new Error ("Cannot delete non-leaf MIB node");
 	}
-	addressLastPart = this.address.slice(-1)[0];
+	var addressLastPart = this.address.slice(-1)[0];
 	delete this.parent.children[addressLastPart];
 	this.parent = null;
 };
@@ -3252,7 +3253,7 @@ MibNode.prototype.dump = function (options) {
 		}
 		console.log (this.oid + valueString);
 	}
-	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
+	for ( var node of Object.keys (this.children).sort ((a, b) => a - b)) {
 		this.children[node].dump (options);
 	}
 };
@@ -3336,8 +3337,8 @@ Mib.prototype.getTreeNode = function (oid) {
 	}
 
 	while ( address.length > 0 ) {
-		last = address.pop ();
-		parent = this.lookupAddress (address);
+		var last = address.pop ();
+		var parent = this.lookupAddress (address);
 		if ( parent ) {
 			return (parent.findChildImmediatelyBefore (last) || parent);
 		}
@@ -3430,7 +3431,7 @@ Mib.prototype.registerProvider = function (provider) {
 			if ( provider.tableAugments == provider.name ) {
 				throw new Error ("Table " + provider.name + " cannot augment itself");
 			}
-			augmentProvider = this.providers[provider.tableAugments];
+			var augmentProvider = this.providers[provider.tableAugments];
 			if ( ! augmentProvider ) {
 				throw new Error ("Cannot find base table " + provider.tableAugments + " to augment");
 			}
@@ -3467,7 +3468,7 @@ Mib.prototype.registerProviders = function (providers) {
 Mib.prototype.unregisterProvider = function (name) {
 	var providerNode = this.providerNodes[name];
 	if ( providerNode ) {
-		providerNodeParent = providerNode.parent;
+		var providerNodeParent = providerNode.parent;
 		providerNode.delete();
 		providerNodeParent.pruneUpwards();
 		delete this.providerNodes[name];
@@ -3600,7 +3601,8 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
-	for ( indexPart of index ) {
+	var value;
+	for ( var indexPart of index ) {
 		switch ( indexPart.type ) {
 			case ObjectType.OID:
 				if ( indexPart.implied ) {
@@ -3634,7 +3636,9 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 };
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
-	rowIndexOid = [];
+	var rowIndexOid = [];
+	var indexPart;
+	var keyPart;
 	for ( var i = 0; i < provider.tableIndex.length ; i++ ) {
 		indexPart = provider.tableIndex[i];
 		keyPart = rowIndex[i];
@@ -3649,6 +3653,7 @@ Mib.prototype.addTableRow = function (table, row) {
 	var instance = [];
 	var instanceAddress;
 	var instanceNode;
+	var rowValueOffset;
 
 	if ( this.providers[table] && ! this.providerNodes[table] ) {
 		this.addProviderToNode (this.providers[table]);
@@ -3763,6 +3768,7 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	var providerNode;
 	var columnNode;
 	var instanceNode;
+	var instanceAddress;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -3778,6 +3784,7 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 	var instanceAddress;
 	var columnNode;
 	var instanceNode;
+	var instanceParentNode;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -4037,6 +4044,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		}
 
 		(function (savedIndex) {
+			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
 					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
@@ -4453,6 +4461,7 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 };
 
 AgentXPdu.writeOid = function (buffer, oid, include = 0) {
+	var prefix;
 	if ( oid ) {
 		var address = oid.split ('.').map ( Number );
 		if ( address.length >= 5 && address.slice (0, 4).join('.') == '1.3.6.1' ) {
@@ -4940,6 +4949,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		}
 
 		(function (savedIndex) {
+			var responseVarbind;
 			mibRequest.done = function (error) {
 				if ( error ) {
 					responseVarbind = {

@@ -22,13 +22,13 @@ function responseCb (error, table) {
 		console.error (error.toString ());
 	} else {
 		var indexes = [];
-		for (index in table)
+		for (var index in table)
 			indexes.push (index);
 		indexes.sort ();
 
 		for (var i = 0; i < indexes.length; i++) {
 			var columns = [];
-			for (column in table[indexes[i]])
+			for (var column in table[indexes[i]])
 				columns.push (parseInt (column));
 			columns.sort (sortInt);
 

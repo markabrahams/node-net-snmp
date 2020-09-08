@@ -111,9 +111,9 @@ mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreame
 
 // mib.dump ();
 
-modules = store.getModules (true);
-one = store.getModule ("SNMPv2-MIB");
-names = store.getModuleNames (true);
+var modules = store.getModules (true);
+var one = store.getModule ("SNMPv2-MIB");
+var names = store.getModuleNames (true);
 
 // console.log("All modules: ", JSON.stringify(modules, '', 2));
 console.log("Modules: ", names);
