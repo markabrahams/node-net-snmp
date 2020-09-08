@@ -52,7 +52,7 @@ function pollDeviceDevices (session, device, pollCb) {
 				if (error) {
 					pollCb (error, null);
 				} else {
-					for (index in table) {
+					for (var index in table) {
 						var mac = new Buffer (index.split (".")).toString ("hex");
 						var row = table[index];
 						delete table[index];
@@ -108,7 +108,7 @@ function pollDeviceVlans (session, device, pollCb) {
 			device.vlandIds = [];
 			device.devices = {};
 
-			for (index in table) {
+			for (var index in table) {
 				var match = index.match (/(\d+)$/);
 				if (match) {
 					var vlanId = match[1];

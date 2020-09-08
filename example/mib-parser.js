@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars */
+
 var snmp = require ("../");
 var getopts = require ("getopts");
 
@@ -42,7 +44,7 @@ mib.registerProviders (providers);
 // ifNumber
 // Scalar type - setScalarValue() and getScalarValue() are the entire API for these
 mib.setScalarValue ("ifNumber", 5);
-var ifNumberValue = mib.getScalarValue ("ifNumber", 5)
+var ifNumberValue = mib.getScalarValue ("ifNumber", 5);
 // console.log (ifNumberValue);
 
 // ifEntry
@@ -81,7 +83,7 @@ var ifStackEntryCell1 = mib.getTableSingleCell ("ifStackEntry", 1, [1, 2]);
 
 // ifRcvAddressEntry
 // Composite index - one foreign integer column, one local string column
-mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 6])
+mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 6]);
 var ifRcvAddressEntryRow1 = mib.getTableRowCells ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryCell1 = mib.getTableSingleCell ("ifRcvAddressEntry", 3, [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryData1 = mib.getTableCells ("ifRcvAddressEntry", false, false);
@@ -111,9 +113,9 @@ mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreame
 
 // mib.dump ();
 
-modules = store.getModules (true);
-one = store.getModule ("SNMPv2-MIB");
-names = store.getModuleNames (true);
+var modules = store.getModules (true);
+var one = store.getModule ("SNMPv2-MIB");
+var names = store.getModuleNames (true);
 
 // console.log("All modules: ", JSON.stringify(modules, '', 2));
 console.log("Modules: ", names);

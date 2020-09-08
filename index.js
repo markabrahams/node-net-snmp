@@ -336,7 +336,7 @@ function readUint (buffer, isSigned) {
 	var signedBitSet = false;
 
 	if (length > 5) {
-		 throw new RangeError ("Integer too long '" + length + "'");
+		throw new RangeError ("Integer too long '" + length + "'");
 	} else if (length == 5) {
 		if (buffer.readByte () !== 0)
 			throw new RangeError ("Integer too long '" + length + "'");
@@ -541,7 +541,7 @@ SimplePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
 	this.varbinds = varbinds;
 	this.options = options || {};
 	this.contextName = (options && options.context) ? options.context : "";
-}
+};
 
 SimplePdu.prototype.initializeFromBuffer = function (reader) {
 	this.type = reader.peek ();
@@ -672,7 +672,7 @@ TrapPdu.createFromBuffer = function (reader) {
 	pdu.agentAddr = readIpAddress (reader);
 	pdu.generic = reader.readInt ();
 	pdu.specific = reader.readInt ();
-	pdu.upTime = readUint (reader)
+	pdu.upTime = readUint (reader);
 
 	pdu.varbinds = [];
 	readVarbinds (reader, pdu.varbinds);
@@ -1110,7 +1110,7 @@ Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	salt.copy (iv, 8, 0, 8);
 
 	return iv;
-}
+};
 
 Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
 	var aes = Encryption.algorithms[PrivProtocols.aes];
@@ -1181,7 +1181,7 @@ Encryption.algorithms[PrivProtocols.aes] = {
  **/
 
 var Message = function () {
-}
+};
 
 Message.prototype.getReqId = function () {
 	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
@@ -1193,7 +1193,7 @@ Message.prototype.toBuffer = function () {
 	} else {
 		return this.toBufferCommunity();
 	}
-}
+};
 
 Message.prototype.toBufferCommunity = function () {
 	if (this.buffer)
@@ -1266,7 +1266,7 @@ Message.prototype.toBufferV3 = function () {
 	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
-		 msgSecurityParametersWriter.writeString ("");
+		msgSecurityParametersWriter.writeString ("");
 	}
 	msgSecurityParametersWriter.endSequence ();
 
@@ -1371,7 +1371,7 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 		responseCb (new ResponseInvalidError ("Authentication digest "
 				+ this.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
 				+ " received in message does not match digest "
-				+ Authentication.calculateDigest (buffer, user.authProtocol, user.authKey,
+				+ Authentication.calculateDigest (this.buffer, user.authProtocol, user.authKey,
 					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
 				+ " calculated for message") );
 		return false;
@@ -1387,7 +1387,7 @@ Message.prototype.setMsgFlags = function (bitPosition, flag) {
 			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 2 ** bitPosition );
 		}
 	}
-}
+};
 
 Message.prototype.hasAuthentication = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
@@ -1533,7 +1533,7 @@ Message.createDiscoveryV3 = function (pdu) {
 		level: SecurityLevel.noAuthNoPriv
 	};
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
-}
+};
 
 Message.createFromBuffer = function (buffer, user) {
 	var reader = new ber.Reader (buffer);
@@ -2385,7 +2385,7 @@ Session.prototype.trap = function () {
 			options = arguments[1];
 		} else {
 			varbinds = arguments[1];
-			agentAddr = null;
+			options.agentAddr = null;
 		}
 		responseCb = arguments[2];
 	} else {
@@ -2516,7 +2516,7 @@ function walkCb (req, error, varbinds) {
 Session.prototype.walk  = function () {
 	var me = this;
 	var oid = arguments[0];
-	var maxRepetitions, feedCb, doneCb, baseOid;
+	var maxRepetitions, feedCb, doneCb;
 
 	if (arguments.length < 4) {
 		maxRepetitions = 20;
@@ -2560,7 +2560,7 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 	discoveryReq.originalPdu = originalPdu;
 	discoveryReq.allowReport = true;
 	this.send (discoveryReq);
-}
+};
 
 Session.prototype.userSecurityModelError = function (req, oid) {
 	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
@@ -2633,7 +2633,7 @@ Engine.prototype.generateEngineID = function() {
 	this.engineID = Buffer.alloc (17);
 	this.engineID.fill ('8000B98380', 'hex', 0, 5);
 	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
-}
+};
 
 var Listener = function (options, receiver) {
 	this.receiver = receiver;
@@ -2652,7 +2652,7 @@ Listener.prototype.startListening = function () {
 };
 
 Listener.prototype.send = function (message, rinfo) {
-	var me = this;
+	// var me = this;
 	
 	var buffer = message.toBuffer ();
 
@@ -2728,7 +2728,7 @@ var Authorizer = function (disableAuthorization) {
 	this.communities = [];
 	this.users = [];
 	this.disableAuthorization = disableAuthorization;
-}
+};
 
 Authorizer.prototype.addCommunity = function (community) {
 	if ( this.getCommunity (community) ) {
@@ -2824,10 +2824,10 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		var reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
-	};
+	}
 
 	// Inform/trap processing
 	debug (JSON.stringify (message.pdu, null, 2));
@@ -2843,7 +2843,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
-}
+};
 
 Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
 	if ( pdu.contextEngineID ) {
@@ -2878,7 +2878,7 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 
 	for ( var mibModule of Object.values (this.parser.Modules) ) {
 		entryArray = Object.values (mibModule);
-		for ( mibEntry of entryArray ) {
+		for ( var mibEntry of entryArray ) {
 			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
 				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
 					if ( typeof mibEntry.SYNTAX == "object" ) {
@@ -2938,7 +2938,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	syntaxTypes = this.getSyntaxTypes ();
 	entryArray = Object.values (mibModule);
 	for ( var i = 0; i < entryArray.length ; i++ ) {
-		var mibEntry = entryArray[i];
+		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
 
 		if ( syntax ) {
@@ -2961,7 +2961,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					if ( ! mibEntry ) {
 						break;
 					}
-					syntax = mibEntry.SYNTAX
+					syntax = mibEntry.SYNTAX;
 
 					if ( typeof syntax == "object" ) {
 						syntax = "INTEGER";
@@ -3061,7 +3061,7 @@ ModuleStore.BASE_MODULES = [
 
 var MibNode = function(address, parent) {
 	this.address = address;
-	this.oid = this.address.join('.');;
+	this.oid = this.address.join('.');
 	this.parent = parent;
 	this.children = {};
 };
@@ -3096,7 +3096,7 @@ MibNode.prototype.findChildImmediatelyBefore = function (index) {
 		return null;
 	}
 
-	for ( i = 0; i < sortedChildrenKeys.length; i++ ) {
+	for ( var i = 0; i < sortedChildrenKeys.length; i++ ) {
 		if ( index < sortedChildrenKeys[i] ) {
 			if ( i === 0 ) {
 				return null;
@@ -3182,6 +3182,7 @@ MibNode.prototype.getInstanceNodesForColumn = function () {
 
 MibNode.prototype.getNextInstanceNode = function () {
 	var siblingIndex;
+	var childrenAddresses;
 
 	var node = this;
 	if ( this.value != null ) {
@@ -3195,7 +3196,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 				return null;
 			} else {
 				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
-				siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
+				var siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
 				if ( siblingPosition + 1 < childrenAddresses.length ) {
 					node = node.children[childrenAddresses[siblingPosition + 1]];
 					break;
@@ -3221,14 +3222,14 @@ MibNode.prototype.delete = function () {
 	if ( Object.keys (this.children) > 0 ) {
 		throw new Error ("Cannot delete non-leaf MIB node");
 	}
-	addressLastPart = this.address.slice(-1)[0];
+	var addressLastPart = this.address.slice(-1)[0];
 	delete this.parent.children[addressLastPart];
 	this.parent = null;
 };
 
 MibNode.prototype.pruneUpwards = function () {
 	if ( ! this.parent ) {
-		return
+		return;
 	}
 	if ( Object.keys (this.children).length == 0 ) {
 		var lastAddressPart = this.address.splice(-1)[0].toString();
@@ -3236,7 +3237,7 @@ MibNode.prototype.pruneUpwards = function () {
 		this.parent.pruneUpwards();
 		this.parent = null;
 	}
-}
+};
 
 MibNode.prototype.dump = function (options) {
 	var valueString;
@@ -3252,7 +3253,7 @@ MibNode.prototype.dump = function (options) {
 		}
 		console.log (this.oid + valueString);
 	}
-	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
+	for ( var node of Object.keys (this.children).sort ((a, b) => a - b)) {
 		this.children[node].dump (options);
 	}
 };
@@ -3287,7 +3288,6 @@ Mib.prototype.addNodesForOid = function (oidString) {
 };
 
 Mib.prototype.addNodesForAddress = function (address) {
-	var address;
 	var node;
 	var i;
 
@@ -3317,7 +3317,7 @@ Mib.prototype.lookupAddress = function (address) {
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
 		if ( ! node.children.hasOwnProperty (address[i])) {
-			return null
+			return null;
 		}
 		node = node.children[address[i]];
 	}
@@ -3336,15 +3336,15 @@ Mib.prototype.getTreeNode = function (oid) {
 	}
 
 	while ( address.length > 0 ) {
-		last = address.pop ();
-		parent = this.lookupAddress (address);
+		var last = address.pop ();
+		var parent = this.lookupAddress (address);
 		if ( parent ) {
 			return (parent.findChildImmediatelyBefore (last) || parent);
 		}
 	}
 	return this.root;
 
-}
+};
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
@@ -3377,7 +3377,7 @@ Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
 	return column;
 };
 
-Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry) {
+Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry, i) {
 	var column = null;
 	var tableProviders;
 	if ( ! indexEntry.columnName && ! indexEntry.columnNumber ) {
@@ -3406,11 +3406,11 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 		throw new Error ("Could not find column for index entry with column " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnName && indexEntry.columnName != column.name ) {
-		throw new Error ("Index entry " + i + ": Calculated column name " + calculatedColumnName +
+		throw new Error ("Index entry " + i + ": Calculated column name " + column.name +
 				"does not match supplied column name " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnNumber && indexEntry.columnNumber != column.number ) {
-		throw new Error ("Index entry " + i + ": Calculated column number " + calculatedColumnNumber +
+		throw new Error ("Index entry " + i + ": Calculated column number " + column.number +
 				" does not match supplied column number " + indexEntry.columnNumber);
 	}
 	if ( ! indexEntry.columnName ) {
@@ -3430,7 +3430,7 @@ Mib.prototype.registerProvider = function (provider) {
 			if ( provider.tableAugments == provider.name ) {
 				throw new Error ("Table " + provider.name + " cannot augment itself");
 			}
-			augmentProvider = this.providers[provider.tableAugments];
+			var augmentProvider = this.providers[provider.tableAugments];
 			if ( ! augmentProvider ) {
 				throw new Error ("Cannot find base table " + provider.tableAugments + " to augment");
 			}
@@ -3452,7 +3452,7 @@ Mib.prototype.registerProvider = function (provider) {
 					};
 				}
 				indexEntry = provider.tableIndex[i];
-				this.populateIndexEntryFromColumn (provider, indexEntry);
+				this.populateIndexEntryFromColumn (provider, indexEntry, i);
 			}
 		}
 	}
@@ -3467,7 +3467,7 @@ Mib.prototype.registerProviders = function (providers) {
 Mib.prototype.unregisterProvider = function (name) {
 	var providerNode = this.providerNodes[name];
 	if ( providerNode ) {
-		providerNodeParent = providerNode.parent;
+		var providerNodeParent = providerNode.parent;
 		providerNode.delete();
 		providerNodeParent.pruneUpwards();
 		delete this.providerNodes[name];
@@ -3600,7 +3600,8 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
-	for ( indexPart of index ) {
+	var value;
+	for ( var indexPart of index ) {
 		switch ( indexPart.type ) {
 			case ObjectType.OID:
 				if ( indexPart.implied ) {
@@ -3634,7 +3635,9 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 };
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
-	rowIndexOid = [];
+	var rowIndexOid = [];
+	var indexPart;
+	var keyPart;
 	for ( var i = 0; i < provider.tableIndex.length ; i++ ) {
 		indexPart = provider.tableIndex[i];
 		keyPart = rowIndex[i];
@@ -3649,6 +3652,7 @@ Mib.prototype.addTableRow = function (table, row) {
 	var instance = [];
 	var instanceAddress;
 	var instanceNode;
+	var rowValueOffset;
 
 	if ( this.providers[table] && ! this.providerNodes[table] ) {
 		this.addProviderToNode (this.providers[table]);
@@ -3763,6 +3767,7 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	var providerNode;
 	var columnNode;
 	var instanceNode;
+	var instanceAddress;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -3778,6 +3783,7 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 	var instanceAddress;
 	var columnNode;
 	var instanceNode;
+	var instanceParentNode;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -3834,34 +3840,34 @@ Mib.convertOidToAddress = function (oid) {
 
 		if (address[i] === true || address[i] === false) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 
 		n = Number(address[i]);
 
 		if (isNaN(n)) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 		if (n % 1 !== 0) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is not an integer');
+				address[i] + ' is not an integer');
 		}
 		if (i === 0 && n > 2) {
 			throw new RangeError('object identifier does not ' +
-			    'begin with 0, 1, or 2');
+				'begin with 0, 1, or 2');
 		}
 		if (i === 1 && n > 39) {
 			throw new RangeError('object identifier second ' +
-			    'component ' + n + ' exceeds encoding limit of 39');
+				'component ' + n + ' exceeds encoding limit of 39');
 		}
 		if (n < 0) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is negative');
+				address[i] + ' is negative');
 		}
 		if (n > MAX_INT32) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is too large');
+				address[i] + ' is too large');
 		}
 		oidArray.push(n);
 	}
@@ -3872,7 +3878,7 @@ Mib.convertOidToAddress = function (oid) {
 
 Mib.getSubOidFromBaseOid = function (oid, base) {
 	return oid.substring (base.length + 1);
-}
+};
 
 Mib.create = function () {
 	return new Mib (); 
@@ -4037,6 +4043,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		}
 
 		(function (savedIndex) {
+			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
 					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
@@ -4075,7 +4082,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		} else {
 			mibRequests[i].done ();
 		}
-	};
+	}
 };
 
 Agent.prototype.getRequest = function (requestMessage, rinfo) {
@@ -4151,11 +4158,11 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	}
 
 	while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
-		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
+		for (var w = requestPdu.nonRepeaters ; w < requestVarbinds.length ; w++ ) {
 			if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - requestPdu.nonRepeaters]);
 				if ( getNextNode ) {
-					startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
+					startOid[w - requestPdu.nonRepeaters] = getNextNode.oid;
 					if ( getNextNode.type == ObjectType.EndOfMibView ) {
 						endOfMib = true;
 					}
@@ -4275,7 +4282,7 @@ Forwarder.prototype.dumpProxies = function () {
 			target: proxy.target,
 			user: proxy.user,
 			port: proxy.port
-		}
+		};
 	}
 	console.log (JSON.stringify (dump, null, 2));
 };
@@ -4453,6 +4460,7 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 };
 
 AgentXPdu.writeOid = function (buffer, oid, include = 0) {
+	var prefix;
 	if ( oid ) {
 		var address = oid.split ('.').map ( Number );
 		if ( address.length >= 5 && address.slice (0, 4).join('.') == '1.3.6.1' ) {
@@ -4940,6 +4948,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		}
 
 		(function (savedIndex) {
+			var responseVarbind;
 			mibRequest.done = function (error) {
 				if ( error ) {
 					responseVarbind = {
@@ -4984,7 +4993,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		} else {
 			mibRequest.done ();
 		}
-	};
+	}
 };
 
 Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
@@ -5060,11 +5069,11 @@ Subagent.prototype.getBulkRequest = function (pdu) {
 	}
 
 	while ( getBulkVarbinds.length < pdu.maxRepetitions && ! endOfMib ) {
-		for (var v = pdu.nonRepeaters ; v < pdu.searchRangeList.length ; v++ ) {
+		for (var w = pdu.nonRepeaters ; w < pdu.searchRangeList.length ; w++ ) {
 			if (getBulkVarbinds.length < pdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - pdu.nonRepeaters]);
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - pdu.nonRepeaters]);
 				if ( getNextNode ) {
-					startOid[v - pdu.nonRepeaters] = getNextNode.oid;
+					startOid[w - pdu.nonRepeaters] = getNextNode.oid;
 					if ( getNextNode.type == ObjectType.EndOfMibView ) {
 						endOfMib = true;
 					}
