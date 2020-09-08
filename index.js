@@ -2824,7 +2824,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		var reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
 	}
@@ -2938,7 +2938,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	syntaxTypes = this.getSyntaxTypes ();
 	entryArray = Object.values (mibModule);
 	for ( var i = 0; i < entryArray.length ; i++ ) {
-		var mibEntry = entryArray[i];
+		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
 
 		if ( syntax ) {
@@ -3288,7 +3288,6 @@ Mib.prototype.addNodesForOid = function (oidString) {
 };
 
 Mib.prototype.addNodesForAddress = function (address) {
-	var address;
 	var node;
 	var i;
 
@@ -4159,11 +4158,11 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	}
 
 	while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
-		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
+		for (var w = requestPdu.nonRepeaters ; w < requestVarbinds.length ; w++ ) {
 			if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - requestPdu.nonRepeaters]);
 				if ( getNextNode ) {
-					startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
+					startOid[w - requestPdu.nonRepeaters] = getNextNode.oid;
 					if ( getNextNode.type == ObjectType.EndOfMibView ) {
 						endOfMib = true;
 					}

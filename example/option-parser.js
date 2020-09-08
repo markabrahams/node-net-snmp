@@ -67,8 +67,8 @@ if ( command.includes('snmp-set') ) {
     }
 } else {
     oids = [];
-    for (var i = 1; i < options._.length; i++) {
-        oids.push (options._[i]);
+    for (var j = 1; j < options._.length; j++) {
+        oids.push (options._[j]);
     }
 }
 if ( command.includes('snmp-trap') || command.includes('snmp-inform') || command.includes('snmp-receiver') ) {
