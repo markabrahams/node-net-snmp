@@ -27,7 +27,7 @@ var cb = function(error, trap) {
             }
         }
     }
-}
+};
 
 var receiver = snmp.createReceiver(snmpOptions, cb);
 var authorizer = receiver.getAuthorizer ();

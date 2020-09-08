@@ -42,7 +42,7 @@ mib.registerProviders (providers);
 // ifNumber
 // Scalar type - setScalarValue() and getScalarValue() are the entire API for these
 mib.setScalarValue ("ifNumber", 5);
-var ifNumberValue = mib.getScalarValue ("ifNumber", 5)
+var ifNumberValue = mib.getScalarValue ("ifNumber", 5);
 // console.log (ifNumberValue);
 
 // ifEntry
@@ -81,7 +81,7 @@ var ifStackEntryCell1 = mib.getTableSingleCell ("ifStackEntry", 1, [1, 2]);
 
 // ifRcvAddressEntry
 // Composite index - one foreign integer column, one local string column
-mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 6])
+mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 6]);
 var ifRcvAddressEntryRow1 = mib.getTableRowCells ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryCell1 = mib.getTableSingleCell ("ifRcvAddressEntry", 3, [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryData1 = mib.getTableCells ("ifRcvAddressEntry", false, false);

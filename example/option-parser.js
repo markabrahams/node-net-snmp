@@ -18,7 +18,7 @@ if ( ! options.v ) {
 
 snmpOptions.version = snmp.Version[options.v];
 snmpOptions.debug = options.d;
-snmpOptions.transport = options.t
+snmpOptions.transport = options.t;
 if ( snmpOptions.version == snmp.Version3 ) {
     var engineID;
     if ( options.e ) {
@@ -72,9 +72,9 @@ if ( command.includes('snmp-set') ) {
     }
 }
 if ( command.includes('snmp-trap') || command.includes('snmp-inform') || command.includes('snmp-receiver') ) {
-    snmpOptions.trapPort = options.p
+    snmpOptions.trapPort = options.p;
 } else {
-    snmpOptions.port = options.p
+    snmpOptions.port = options.p;
 }
 
 if ( snmpOptions.version == snmp.Version3 ) {

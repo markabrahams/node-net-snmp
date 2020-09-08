@@ -541,7 +541,7 @@ SimplePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
 	this.varbinds = varbinds;
 	this.options = options || {};
 	this.contextName = (options && options.context) ? options.context : "";
-}
+};
 
 SimplePdu.prototype.initializeFromBuffer = function (reader) {
 	this.type = reader.peek ();
@@ -672,7 +672,7 @@ TrapPdu.createFromBuffer = function (reader) {
 	pdu.agentAddr = readIpAddress (reader);
 	pdu.generic = reader.readInt ();
 	pdu.specific = reader.readInt ();
-	pdu.upTime = readUint (reader)
+	pdu.upTime = readUint (reader);
 
 	pdu.varbinds = [];
 	readVarbinds (reader, pdu.varbinds);
@@ -1110,7 +1110,7 @@ Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	salt.copy (iv, 8, 0, 8);
 
 	return iv;
-}
+};
 
 Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
 	var aes = Encryption.algorithms[PrivProtocols.aes];
@@ -1181,7 +1181,7 @@ Encryption.algorithms[PrivProtocols.aes] = {
  **/
 
 var Message = function () {
-}
+};
 
 Message.prototype.getReqId = function () {
 	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
@@ -1193,7 +1193,7 @@ Message.prototype.toBuffer = function () {
 	} else {
 		return this.toBufferCommunity();
 	}
-}
+};
 
 Message.prototype.toBufferCommunity = function () {
 	if (this.buffer)
@@ -1387,7 +1387,7 @@ Message.prototype.setMsgFlags = function (bitPosition, flag) {
 			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 2 ** bitPosition );
 		}
 	}
-}
+};
 
 Message.prototype.hasAuthentication = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
@@ -1533,7 +1533,7 @@ Message.createDiscoveryV3 = function (pdu) {
 		level: SecurityLevel.noAuthNoPriv
 	};
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
-}
+};
 
 Message.createFromBuffer = function (buffer, user) {
 	var reader = new ber.Reader (buffer);
@@ -2560,7 +2560,7 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 	discoveryReq.originalPdu = originalPdu;
 	discoveryReq.allowReport = true;
 	this.send (discoveryReq);
-}
+};
 
 Session.prototype.userSecurityModelError = function (req, oid) {
 	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
@@ -2633,7 +2633,7 @@ Engine.prototype.generateEngineID = function() {
 	this.engineID = Buffer.alloc (17);
 	this.engineID.fill ('8000B98380', 'hex', 0, 5);
 	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
-}
+};
 
 var Listener = function (options, receiver) {
 	this.receiver = receiver;
@@ -2728,7 +2728,7 @@ var Authorizer = function (disableAuthorization) {
 	this.communities = [];
 	this.users = [];
 	this.disableAuthorization = disableAuthorization;
-}
+};
 
 Authorizer.prototype.addCommunity = function (community) {
 	if ( this.getCommunity (community) ) {
@@ -2827,7 +2827,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 		var reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
-	};
+	}
 
 	// Inform/trap processing
 	debug (JSON.stringify (message.pdu, null, 2));
@@ -2843,7 +2843,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
-}
+};
 
 Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
 	if ( pdu.contextEngineID ) {
@@ -2961,7 +2961,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					if ( ! mibEntry ) {
 						break;
 					}
-					syntax = mibEntry.SYNTAX
+					syntax = mibEntry.SYNTAX;
 
 					if ( typeof syntax == "object" ) {
 						syntax = "INTEGER";
@@ -3061,7 +3061,7 @@ ModuleStore.BASE_MODULES = [
 
 var MibNode = function(address, parent) {
 	this.address = address;
-	this.oid = this.address.join('.');;
+	this.oid = this.address.join('.');
 	this.parent = parent;
 	this.children = {};
 };
@@ -3228,7 +3228,7 @@ MibNode.prototype.delete = function () {
 
 MibNode.prototype.pruneUpwards = function () {
 	if ( ! this.parent ) {
-		return
+		return;
 	}
 	if ( Object.keys (this.children).length == 0 ) {
 		var lastAddressPart = this.address.splice(-1)[0].toString();
@@ -3236,7 +3236,7 @@ MibNode.prototype.pruneUpwards = function () {
 		this.parent.pruneUpwards();
 		this.parent = null;
 	}
-}
+};
 
 MibNode.prototype.dump = function (options) {
 	var valueString;
@@ -3317,7 +3317,7 @@ Mib.prototype.lookupAddress = function (address) {
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
 		if ( ! node.children.hasOwnProperty (address[i])) {
-			return null
+			return null;
 		}
 		node = node.children[address[i]];
 	}
@@ -3344,7 +3344,7 @@ Mib.prototype.getTreeNode = function (oid) {
 	}
 	return this.root;
 
-}
+};
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
@@ -3872,7 +3872,7 @@ Mib.convertOidToAddress = function (oid) {
 
 Mib.getSubOidFromBaseOid = function (oid, base) {
 	return oid.substring (base.length + 1);
-}
+};
 
 Mib.create = function () {
 	return new Mib (); 
@@ -4075,7 +4075,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		} else {
 			mibRequests[i].done ();
 		}
-	};
+	}
 };
 
 Agent.prototype.getRequest = function (requestMessage, rinfo) {
@@ -4275,7 +4275,7 @@ Forwarder.prototype.dumpProxies = function () {
 			target: proxy.target,
 			user: proxy.user,
 			port: proxy.port
-		}
+		};
 	}
 	console.log (JSON.stringify (dump, null, 2));
 };
@@ -4984,7 +4984,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		} else {
 			mibRequest.done ();
 		}
-	};
+	}
 };
 
 Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {

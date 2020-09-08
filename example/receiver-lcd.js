@@ -5,7 +5,7 @@ var snmp = require ("../");
 
 var cb = function(error, trap) {
     console.log ("Ignoring notifications");
-}
+};
 
 var receiver = snmp.createReceiver ({}, cb);
 var authorizer = receiver.getAuthorizer ();
@@ -22,10 +22,10 @@ console.log ("Fetch existing 'public' community:");
 console.log (authorizer.getCommunity("public"));
 console.log ("Fetch non-existent community 'notfound':");
 console.log (authorizer.getCommunity("notfound"));
-console.log ("Delete non-existent community 'notfound':")
+console.log ("Delete non-existent community 'notfound':");
 authorizer.deleteCommunity("notfound");
 console.log ("communities =", authorizer.getCommunities () );
-console.log ("Delete existing community 'private':")
+console.log ("Delete existing community 'private':");
 authorizer.deleteCommunity("private");
 console.log ("communities =", authorizer.getCommunities () );
 
@@ -62,10 +62,10 @@ console.log (authorizer.getUser("barney"));
 console.log ("Add existing user 'wilma' (should replace existing 'wilma'):");
 authorizer.addUser (newWilma);
 console.log ("users =", authorizer.getUsers () );
-console.log ("Delete non-existent user 'barney':")
+console.log ("Delete non-existent user 'barney':");
 authorizer.deleteUser("barney");
 console.log ("users =", authorizer.getUsers () );
-console.log ("Delete existing user 'wilma':")
+console.log ("Delete existing user 'wilma':");
 authorizer.deleteUser("wilma");
 console.log ("users =", authorizer.getUsers () );
 
