@@ -1,3 +1,5 @@
+/* eslint-disable no-unused-vars */
+
 var snmp = require ("../");
 var getopts = require ("getopts");
 
