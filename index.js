@@ -1371,7 +1371,7 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 		responseCb (new ResponseInvalidError ("Authentication digest "
 				+ this.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
 				+ " received in message does not match digest "
-				+ Authentication.calculateDigest (buffer, user.authProtocol, user.authKey,
+				+ Authentication.calculateDigest (this.buffer, user.authProtocol, user.authKey,
 					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
 				+ " calculated for message") );
 		return false;
@@ -2385,7 +2385,7 @@ Session.prototype.trap = function () {
 			options = arguments[1];
 		} else {
 			varbinds = arguments[1];
-			agentAddr = null;
+			options.agentAddr = null;
 		}
 		responseCb = arguments[2];
 	} else {
@@ -3378,7 +3378,7 @@ Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
 	return column;
 };
 
-Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry) {
+Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry, i) {
 	var column = null;
 	var tableProviders;
 	if ( ! indexEntry.columnName && ! indexEntry.columnNumber ) {
@@ -3407,11 +3407,11 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 		throw new Error ("Could not find column for index entry with column " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnName && indexEntry.columnName != column.name ) {
-		throw new Error ("Index entry " + i + ": Calculated column name " + calculatedColumnName +
+		throw new Error ("Index entry " + i + ": Calculated column name " + column.name +
 				"does not match supplied column name " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnNumber && indexEntry.columnNumber != column.number ) {
-		throw new Error ("Index entry " + i + ": Calculated column number " + calculatedColumnNumber +
+		throw new Error ("Index entry " + i + ": Calculated column number " + column.number +
 				" does not match supplied column number " + indexEntry.columnNumber);
 	}
 	if ( ! indexEntry.columnName ) {
@@ -3453,7 +3453,7 @@ Mib.prototype.registerProvider = function (provider) {
 					};
 				}
 				indexEntry = provider.tableIndex[i];
-				this.populateIndexEntryFromColumn (provider, indexEntry);
+				this.populateIndexEntryFromColumn (provider, indexEntry, i);
 			}
 		}
 	}
