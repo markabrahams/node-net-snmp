@@ -2516,7 +2516,7 @@ function walkCb (req, error, varbinds) {
 Session.prototype.walk  = function () {
 	var me = this;
 	var oid = arguments[0];
-	var maxRepetitions, feedCb, doneCb, baseOid;
+	var maxRepetitions, feedCb, doneCb;
 
 	if (arguments.length < 4) {
 		maxRepetitions = 20;
@@ -2652,7 +2652,7 @@ Listener.prototype.startListening = function () {
 };
 
 Listener.prototype.send = function (message, rinfo) {
-	var me = this;
+	// var me = this;
 	
 	var buffer = message.toBuffer ();
 

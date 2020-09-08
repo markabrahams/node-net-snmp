@@ -1,7 +1,6 @@
 
 // Copyright 2013 Stephen Vickers
 
-var snmp = require ("../");
 var options = require("./option-parser");
 
 var session = options.session;
