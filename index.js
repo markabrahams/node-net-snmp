@@ -3933,12 +3933,12 @@ Agent.prototype.registerProviders = function (providers) {
 	this.mib.registerProviders (providers);
 };
 
-Agent.prototype.unregisterProvider = function (provider) {
-	this.mib.unregisterProvider (provider);
+Agent.prototype.unregisterProvider = function (name) {
+	this.mib.unregisterProvider (name);
 };
 
-Agent.prototype.getProvider = function (provider) {
-	return this.mib.getProvider (provider);
+Agent.prototype.getProvider = function (name) {
+	return this.mib.getProvider (name);
 };
 
 Agent.prototype.getProviders = function () {
@@ -4713,6 +4713,7 @@ Subagent.prototype.registerProvider = function (provider, callback) {
 };
 
 Subagent.prototype.unregisterProvider = function (name, callback) {
+	var provider = this.getProvider (name);
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Unregister,
 		sessionID: this.sessionID,
@@ -4730,8 +4731,8 @@ Subagent.prototype.registerProviders = function (providers, callback) {
 	}
 };
 
-Subagent.prototype.getProvider = function (provider) {
-	return this.mib.getProvider (provider);
+Subagent.prototype.getProvider = function (name) {
+	return this.mib.getProvider (name);
 };
 
 Subagent.prototype.getProviders = function () {

@@ -2467,7 +2467,11 @@ Example programs are included under the module's `example` directory.
 
 ## Version 2.7.7 - 07/09/2020
 
- * Fix double-callback invocation on callback error
+ * Fix double callback invocation on callback error
+
+## Version 2.8.0 - 09/09/2020
+
+ * Add eslint rules and conformance, fix AgentX subagent Unregister
 
 # License
 
