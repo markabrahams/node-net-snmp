@@ -5070,11 +5070,11 @@ Subagent.prototype.getBulkRequest = function (pdu) {
 	}
 
 	while ( getBulkVarbinds.length < pdu.maxRepetitions && ! endOfMib ) {
-		for (var v = pdu.nonRepeaters ; v < pdu.searchRangeList.length ; v++ ) {
+		for (var w = pdu.nonRepeaters ; w < pdu.searchRangeList.length ; w++ ) {
 			if (getBulkVarbinds.length < pdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - pdu.nonRepeaters]);
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - pdu.nonRepeaters]);
 				if ( getNextNode ) {
-					startOid[v - pdu.nonRepeaters] = getNextNode.oid;
+					startOid[w - pdu.nonRepeaters] = getNextNode.oid;
 					if ( getNextNode.type == ObjectType.EndOfMibView ) {
 						endOfMib = true;
 					}
