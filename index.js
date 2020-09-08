@@ -336,7 +336,7 @@ function readUint (buffer, isSigned) {
 	var signedBitSet = false;
 
 	if (length > 5) {
-		 throw new RangeError ("Integer too long '" + length + "'");
+		throw new RangeError ("Integer too long '" + length + "'");
 	} else if (length == 5) {
 		if (buffer.readByte () !== 0)
 			throw new RangeError ("Integer too long '" + length + "'");
@@ -1266,7 +1266,7 @@ Message.prototype.toBufferV3 = function () {
 	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
-		 msgSecurityParametersWriter.writeString ("");
+		msgSecurityParametersWriter.writeString ("");
 	}
 	msgSecurityParametersWriter.endSequence ();
 
@@ -3834,34 +3834,34 @@ Mib.convertOidToAddress = function (oid) {
 
 		if (address[i] === true || address[i] === false) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 
 		n = Number(address[i]);
 
 		if (isNaN(n)) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 		if (n % 1 !== 0) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is not an integer');
+				address[i] + ' is not an integer');
 		}
 		if (i === 0 && n > 2) {
 			throw new RangeError('object identifier does not ' +
-			    'begin with 0, 1, or 2');
+				'begin with 0, 1, or 2');
 		}
 		if (i === 1 && n > 39) {
 			throw new RangeError('object identifier second ' +
-			    'component ' + n + ' exceeds encoding limit of 39');
+				'component ' + n + ' exceeds encoding limit of 39');
 		}
 		if (n < 0) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is negative');
+				address[i] + ' is negative');
 		}
 		if (n > MAX_INT32) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is too large');
+				address[i] + ' is too large');
 		}
 		oidArray.push(n);
 	}
