@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-expressions */
 
 var ber    = require ('asn1-ber').Ber;
 var assert = require('assert');
