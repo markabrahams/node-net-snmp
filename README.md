@@ -2473,6 +2473,10 @@ Example programs are included under the module's `example` directory.
 
  * Add eslint rules and conformance, fix AgentX subagent Unregister
 
+## Version 2.8.1 - 09/09/2020
+
+ * Add Travis CI configuration
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
