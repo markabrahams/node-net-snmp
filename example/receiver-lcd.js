@@ -7,7 +7,7 @@ var cb = function(error, trap) {
     if ( error ) {
         console.error (error);
     } else {
-        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
+        console.log (JSON.stringify(trap, null, 2));
     }
 };
 
@@ -80,7 +80,7 @@ console.log ("users =", authorizer.getUsers () );
 
 console.log ("\nAccess control");
 console.log ("==============\n");
-acm = authorizer.getAccessControlModel ();
+var acm = authorizer.getAccessControlModel ();
 acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
 acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
 console.log ("private = ", acm.getCommunityAccess ("private"));

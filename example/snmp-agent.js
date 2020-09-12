@@ -115,7 +115,7 @@ var data = mib.getTableSingleCell ("ifTable", 2, [2]);
 
 console.log(JSON.stringify (data, null, 2));
 
-acm = authorizer.getAccessControlModel ();
+var acm = authorizer.getAccessControlModel ();
 acm.setCommunityAccess ("denied", snmp.AccessLevel.None);
 acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
 acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);

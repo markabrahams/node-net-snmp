@@ -2743,7 +2743,7 @@ var Authorizer = function (options) {
 	this.communities = [];
 	this.users = [];
 	this.disableAuthorization = options.disableAuthorization;
-	this.accessControlModelType = options.accessControlModelType || AccessControlModelType.None
+	this.accessControlModelType = options.accessControlModelType || AccessControlModelType.None;
 
 	if ( this.accessControlModelType == AccessControlModelType.None ) {
 		this.accessControlModel = null;
@@ -2830,7 +2830,7 @@ SimpleAccessControlModel.prototype.getCommunityAccess = function (community) {
 
 SimpleAccessControlModel.prototype.getCommunityAccessLevel = function (community) {
 	var communityAccessEntry = this.getCommunityAccess (community);
-	return communityAccessEntry ? communityAccessEntry.level : AccessLevel.None
+	return communityAccessEntry ? communityAccessEntry.level : AccessLevel.None;
 };
 
 SimpleAccessControlModel.prototype.getCommunitiesAccess = function () {
@@ -2860,7 +2860,7 @@ SimpleAccessControlModel.prototype.getUserAccess = function (userName) {
 
 SimpleAccessControlModel.prototype.getUserAccessLevel = function (user) {
 	var userAccessEntry = this.getUserAccess (user);
-	return userAccessEntry ? userAccessEntry.level : AccessLevel.None
+	return userAccessEntry ? userAccessEntry.level : AccessLevel.None;
 };
 
 SimpleAccessControlModel.prototype.getUsersAccess = function () {
