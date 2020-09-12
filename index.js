@@ -204,6 +204,21 @@ var AgentXPduType = {
 
 _expandConstantObject (AgentXPduType);
 
+var AccessControlModelType = {
+	0: "None",
+	1: "Simple"
+};
+
+_expandConstantObject (AccessControlModelType);
+
+var AccessLevel = {
+	0: "None",
+	1: "ReadOnly",
+	2: "ReadWrite"
+};
+
+_expandConstantObject (AccessLevel);
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -2724,10 +2739,17 @@ Listener.prototype.close = function () {
 	}
 };
 
-var Authorizer = function (disableAuthorization) {
+var Authorizer = function (options) {
 	this.communities = [];
 	this.users = [];
-	this.disableAuthorization = disableAuthorization;
+	this.disableAuthorization = options.disableAuthorization;
+	this.accessControlModelType = options.accessControlModelType || AccessControlModelType.None
+
+	if ( this.accessControlModelType == AccessControlModelType.None ) {
+		this.accessControlModel = null;
+	} else if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+		this.accessControlModel = new SimpleAccessControlModel ();
+	}
 };
 
 Authorizer.prototype.addCommunity = function (community) {
@@ -2735,6 +2757,9 @@ Authorizer.prototype.addCommunity = function (community) {
 		return;
 	} else {
 		this.communities.push (community);
+		if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+			this.accessControlModel.setCommunityAccess (community, AccessLevel.ReadOnly);
+		}
 	}
 };
 
@@ -2758,6 +2783,9 @@ Authorizer.prototype.addUser = function (user) {
 		this.deleteUser (user.name);
 	}
 	this.users.push (user);
+	if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+		this.accessControlModel.setUserAccess (user.name, AccessLevel.ReadOnly);
+	}
 };
 
 Authorizer.prototype.getUser = function (userName) {
@@ -2775,6 +2803,124 @@ Authorizer.prototype.deleteUser = function (userName) {
 	}
 };
 
+Authorizer.prototype.getAccessControlModelType = function () {
+	return this.accessControlModelType;
+};
+
+Authorizer.prototype.getAccessControlModel = function () {
+	return this.accessControlModel;
+};
+
+Authorizer.prototype.isAccessAllowed = function (securityModel, securityName, pduType) {
+	if ( this.accessControlModel ) {
+		return this.accessControlModel.isAccessAllowed (securityModel, securityName, pduType);
+	} else {
+		return true;
+	}
+};
+
+var SimpleAccessControlModel = function () {
+	this.communitiesAccess = [];
+	this.usersAccess = [];
+};
+
+SimpleAccessControlModel.prototype.getCommunityAccess = function (community) {
+	return this.communitiesAccess.find (entry => entry.community == community );
+};
+
+SimpleAccessControlModel.prototype.getCommunityAccessLevel = function (community) {
+	var communityAccessEntry = this.getCommunityAccess (community);
+	return communityAccessEntry ? communityAccessEntry.level : AccessLevel.None
+};
+
+SimpleAccessControlModel.prototype.getCommunitiesAccess = function () {
+	return this.communitiesAccess;
+};
+
+SimpleAccessControlModel.prototype.setCommunityAccess = function (community, accessLevel) {
+	let accessEntry = this.getCommunityAccess (community);
+	if ( accessEntry ) {
+		accessEntry.level = accessLevel;
+	} else {
+		this.communitiesAccess.push ({
+			community: community,
+			level: accessLevel
+		});
+		this.communitiesAccess.sort ((a, b) => (a.community > b.community) ? 1 : -1);
+	}
+};
+
+SimpleAccessControlModel.prototype.removeCommunityAccess = function (community) {
+	this.communitiesAccess.splice ( this.communitiesAccess.findIndex (entry => entry.community == community), 1);
+};
+
+SimpleAccessControlModel.prototype.getUserAccess = function (userName) {
+	return this.usersAccess.find (entry => entry.userName == userName );
+};
+
+SimpleAccessControlModel.prototype.getUserAccessLevel = function (user) {
+	var userAccessEntry = this.getUserAccess (user);
+	return userAccessEntry ? userAccessEntry.level : AccessLevel.None
+};
+
+SimpleAccessControlModel.prototype.getUsersAccess = function () {
+	return this.usersAccess;
+};
+
+SimpleAccessControlModel.prototype.setUserAccess = function (userName, accessLevel) {
+	let accessEntry = this.getUserAccess (userName);
+	if ( accessEntry ) {
+		accessEntry.level = accessLevel;
+	} else {
+		this.usersAccess.push ({
+			userName: userName,
+			level: accessLevel
+		});
+		this.usersAccess.sort ((a, b) => (a.userName > b.userName) ? 1 : -1);
+	}
+};
+
+SimpleAccessControlModel.prototype.removeUserAccess = function (userName) {
+	this.usersAccess.splice ( this.usersAccess.findIndex (entry => entry.userName == userName), 1);
+};
+
+SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, securityName, pduType) {
+	var accessLevelConfigured;
+	var accessLevelRequired;
+
+	switch ( securityModel ) {
+		case Version1:
+		case Version2c:
+			accessLevelConfigured = this.getCommunityAccessLevel (securityName);
+			break;
+		case Version3:
+			accessLevelConfigured = this.getUserAccessLevel (securityName);
+			break;
+	}
+	switch ( pduType ) {
+		case PduType.SetRequest:
+			accessLevelRequired = AccessLevel.ReadWrite;
+			break;
+		case PduType.GetRequest:
+		case PduType.GetNextRequest:
+		case PduType.GetBulkRequest:
+			accessLevelRequired = AccessLevel.ReadOnly;
+			break;
+		default:
+			accessLevelRequired = AccessLevel.None;
+			break;
+	}
+	switch ( accessLevelRequired ) {
+		case AccessLevel.ReadWrite:
+			return accessLevelConfigured == AccessLevel.ReadWrite;
+		case AccessLevel.ReadOnly:
+			return accessLevelConfigured == AccessLevel.ReadWrite || accessLevelConfigured == AccessLevel.ReadOnly;
+		case AccessLevel.None:
+			return true;
+		default:
+			return false;
+	}
+};
 
 
 /*****************************************************************************
@@ -2784,7 +2930,7 @@ Authorizer.prototype.deleteUser = function (userName) {
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-	this.authorizer = new Authorizer (options.disableAuthorization);
+	this.authorizer = new Authorizer (options);
 	this.engine = new Engine (options.engineID);
 
 	this.engineBoots = 0;
@@ -3906,7 +4052,7 @@ var Agent = function (options, callback, mib) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
-	this.authorizer = new Authorizer (options.disableAuthorization);
+	this.authorizer = new Authorizer (options);
 	this.callback = callback || function () {};
 	this.mib = mib || new Mib ();
 	this.context = "";
@@ -3947,6 +4093,7 @@ Agent.prototype.getProviders = function () {
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+	var securityName;
 	var reportMessage;
 
 	if ( ! message ) {
@@ -3958,6 +4105,14 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
 		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
+		return;
+	}
+
+	// Access control check
+	securityName = message.version == Version3 ? message.user.name : message.community;
+	if ( this.authorizer.getAccessControlModelType () == AccessControlModelType.Simple &&
+			! this.authorizer.getAccessControlModel ().isAccessAllowed (message.version, securityName, message.pdu.type) ) {
+		this.callback (new RequestFailedError ("Access denied for " + securityName + " to PDU type " + PduType[message.pdu.type] ) );
 		return;
 	}
 
@@ -5181,6 +5336,8 @@ exports.MibProviderType = MibProviderType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;
+exports.AccessControlModelType = AccessControlModelType;
+exports.AccessLevel = AccessLevel;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;

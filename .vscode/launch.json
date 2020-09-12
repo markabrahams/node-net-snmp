@@ -194,6 +194,15 @@
         {
             "type": "node",
             "request": "launch",
+            "name": "Receiver LCD",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/example/receiver-lcd.js",
+        },
+        {
+            "type": "node",
+            "request": "launch",
             "name": "AgentX subagent",
             "skipFiles": [
                 "<node_internals>/**"
@@ -240,6 +249,15 @@
             "args": [
                 "-p", "1161"
             ]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "test",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/example/test.js",
         },
         {
             "type": "node",

@@ -4,10 +4,19 @@
 var snmp = require ("../");
 
 var cb = function(error, trap) {
-    console.log ("Ignoring notifications");
+    if ( error ) {
+        console.error (error);
+    } else {
+        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
+    }
 };
 
-var receiver = snmp.createReceiver ({}, cb);
+var options = {
+    disableAuthorization: true,
+    accessControlModelType: snmp.AccessControlModelType.Simple,
+    port: 1162
+};
+var receiver = snmp.createReceiver (options, cb);
 var authorizer = receiver.getAuthorizer ();
 
 console.log ("\nCommunity tests");
@@ -69,4 +78,18 @@ console.log ("Delete existing user 'wilma':");
 authorizer.deleteUser("wilma");
 console.log ("users =", authorizer.getUsers () );
 
-receiver.close();
+console.log ("\nAccess control");
+console.log ("==============\n");
+acm = authorizer.getAccessControlModel ();
+acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
+acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
+console.log ("private = ", acm.getCommunityAccess ("private"));
+console.log (acm.getCommunitiesAccess ());
+
+acm.setUserAccess ("fred", snmp.AccessLevel.ReadOnly);
+acm.setUserAccess ("barney", snmp.AccessLevel.ReadWrite);
+acm.removeUserAccess ("fred");
+console.log ("barney = ", acm.getUserAccess ("barney"));
+console.log (acm.getUsersAccess ());
+
+//receiver.close();

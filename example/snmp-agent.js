@@ -7,7 +7,8 @@ var snmpOptions = {
     disableAuthorization: options.n,
     port: options.p,
     engineID: options.e,
-    debug: options.d
+    debug: options.d,
+    accessControlModelType: snmp.AccessControlModelType.Simple
 };
 
 var callback = function (error, data) {
@@ -20,7 +21,9 @@ var callback = function (error, data) {
 
 var agent = snmp.createAgent(snmpOptions, callback);
 var authorizer = agent.getAuthorizer ();
+authorizer.addCommunity ("denied");
 authorizer.addCommunity ("public");
+authorizer.addCommunity ("private");
 authorizer.addUser ({
     name: "fred",
     level: snmp.SecurityLevel.noAuthNoPriv
@@ -111,3 +114,11 @@ var data = mib.getTableSingleCell ("ifTable", 2, [2]);
 // var data = mib.getScalarValue ("sysDescr");
 
 console.log(JSON.stringify (data, null, 2));
+
+acm = authorizer.getAccessControlModel ();
+acm.setCommunityAccess ("denied", snmp.AccessLevel.None);
+acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
+acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
+acm.setUserAccess ("fred", snmp.AccessLevel.ReadWrite);
+console.log ("private = ", acm.getCommunityAccess ("private"));
+console.log (acm.getCommunitiesAccess ());

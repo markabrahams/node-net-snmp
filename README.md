@@ -253,6 +253,16 @@ The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
  * `17 - RemoveAgentCaps`
  * `18 - Response`
 
+## snmp.AccessControlModelType
+
+ * `None` - no access control for defined communities and users
+ * `Simple` - simple access control of levels "read-only" or "read-write" for defined communites and users
+
+## snmp.AccessLevel
+
+- `None` - no access granted to the community or user
+- `ReadOnly` - read-only access granted to the community or user
+- `ReadWrite` - read-write access granted to the community or user
 
 # OID Strings & Varbinds
 
@@ -1324,6 +1334,7 @@ class:
     var options = {
         port: 162,
         disableAuthorization: false,
+        accessControlModelType: snmp.AccessControlModelType.None,
         engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
         transport: "udp4"
     };
@@ -1426,6 +1437,7 @@ class:
     var options = {
         port: 161,
         disableAuthorization: false,
+        accessControlModelType: snmp.AccessControlModelType.None,
         engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
         transport: "udp4"
     };
@@ -1450,6 +1462,10 @@ an object, possibly empty, and can contain the following fields:
  * `disableAuthorization` - disables local authorization for all community-based
  notifications received and for those user-based notifications received with no
  message authentication or privacy (noAuthNoPriv) - defaults to false
+ * `accessControlModelType` - specifies which access control model to use.  Defaults
+ to `snmp.AccessControlModelType.None`, but can be set to `snmp.AccessControlModelType.Simple`
+ for further access control capabilities.  See the `Authorization` class description
+ for more information.
  * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
@@ -1505,8 +1521,23 @@ as the library still requires access to the correct keys for the message authent
 and encryption operations, and these keys are stored against a user in the user
 authorization list.
 
-The API allows the receiver's community authorization and user authorization lists
+The API allows the receiver's / agent's community authorization and user authorization lists
 to be managed with adds, queries and deletes.
+
+For an agent, there is a further optional access control check, that can limit the
+access for a given community or user according to the `AccessControlModelType` supplied
+as an option to the agent.  The default model type is `snmp.AccessControlModelType.None`,
+which means that - after the authorization list checks described in the preceding paragraphs -
+there is no further access control restrictions i.e. all requests are granted access by
+the agent.  A second access control model type `snmp.AccessControlModelType.Simple` can
+be selected, which creates a `SimpleAccessControlModel` object that can be manipulated
+to specify that a community or user has one of three levels of access to agent information:
+ * none
+ * read-only
+ * read-write
+
+More information on how to configure access with the `SimpleAccessControlModel` class is
+provided below under the description of that class.
 
 The authorizer instance can be obtained by using the `getAuthorizer()`
 call, for both the receiver and the agent.  For example:
@@ -1564,6 +1595,91 @@ Returns the receiver's user authorization list.
 
 Deletes a user from the receiver's user authorization list.  Does nothing if the user
 with the supplied name is not in the list.
+
+## authorizer.getAccessControlModelType ()
+
+Returns the `snmp.AccessControlModelType` of this authorizer, which is one of:
+- `snmp.AccessControlModelType.None`
+- `snmp.AccessControlModelType.Simple`
+
+## authorizer.getAccessControlModel ()
+
+Returns the access control model object:
+- for a type of `snmp.AccessControlModelType.None` - returns null (as the access control check returns positive every time)
+- for a type of `snmp.AccessControlModelType.Simple` - returns a `SimpleAccessControlModel` object
+
+# Simple Access Control Model
+
+The `SimpleAccessControlModel` class can be optionally selected as the access control model used by an `Agent`.  The
+`SimpleAccessControlModel` provides basic three-level access control for a given community or user.
+The access levels are specified in the snmp.AccessLevel constant:
+ * `snmp.AccessLevel.None` - no access is granted to the community or user
+ * `snmp.AccessLevel.ReadOnly` - access is granted for the community or user for Get, GetNext and GetBulk requests but not Set requests
+ * `snmp.AccessLevel.ReadWrite` - access is granted for the community or user for Get, GetNext, GetBulk and Set requests
+
+The `SimpleAccessControlModel` is not created via a direct API call, but is created internally by an `Agent`'s `Authorizer` singleton.
+So an agent's access control model can be accessed with:
+
+    var acm = agent.getAuthorizer ().getAccessControlModel ();
+
+Note that any community or user that is used in any of the API calls in this section must first be created in the agent's `Authorizer`,
+otherwise the agent will fail the initial community/user list check that the authorizer performs.
+
+When using the Simple Access Control Model, the default access level for a newly created community or user in the
+`Authorizer` is read-only.
+
+Example use:
+
+    var agent = snmp.createAgent({
+        accessControlModelType: snmp.AccessControlModelType.Simple
+    }, function (error, data) {
+        // null callback for example brevity
+    });
+    var authorizer = agent.getAuthorizer ();
+    authorizer.addCommunity ("public");
+    authorizer.addCommunity ("private");
+    authorizer.addUser ({
+        name: "fred",
+        level: snmp.SecurityLevel.noAuthNoPriv
+    });
+    var acm = authorizer.getAccessControlModel ();
+    // Since read-only is the default, explicitly setting read-only access is not required - just shown here as an example
+    acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
+    acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
+    acm.setUserAccess ("fred", snmp.AccessLevel.ReadWrite);
+
+## simpleAccessControlModel.setCommunityAccess (community, accessLevel)
+
+Grant the given community the given access level.
+
+## simpleAccessControlModel.removeCommunityAccess (community)
+
+Remove all access for the given community.
+
+## simpleAccessControlModel.getCommunityAccessLevel (community)
+
+Return the access level for the given community.
+
+## simpleAccessControlModel.getCommunitiesAccess ()
+
+Return a list of all community access control entries defined by this access control model.
+
+## simpleAccessControlModel.setUserAccess (userName, accessLevel)
+
+Grant the given user the given access level.
+
+## simpleAccessControlModel.removeUserAccess (userName)
+
+Remove all access for the given user.
+
+## simpleAccessControlModel.getUserAccessLevel (userName)
+
+Return the access level for the given user.
+
+## simpleAccessControlModel.getUsersAccess ()
+
+Return a list of all user access control entries defined by this access control model.
+
 
 # Mib Module
 
@@ -2476,6 +2592,11 @@ Example programs are included under the module's `example` directory.
 ## Version 2.8.1 - 09/09/2020
 
  * Add Travis CI configuration
+
+## Version 2.9.0 - 12/09/2020
+
+ * Add simple access control model for agent
+
 
 # License
 
