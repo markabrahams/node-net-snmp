@@ -1771,7 +1771,14 @@ A table provider has a similar definition:
             {
                 number: 3,
                 name: "ifType",
-                type: snmp.ObjectType.Integer
+                type: snmp.ObjectType.Integer,
+                constraints: {
+                    enumeration: {
+                        "1": "goodif",
+                        "2": "averageif",
+                        "3": "badif"
+                    }
+                }
             }
         ],
         tableIndex: [
@@ -1827,6 +1834,9 @@ A provider definition has these fields:
   give the type of the variable, selected from `snmp.ObjectType`
  * `tableColumns` *(mandatory for table types)* - gives any array of column definition objects for the
  table.  Each column object must have a unique `number`, a `name` and a `type` from `snmp.ObjectType`.
+ A column object with type `ObjectType.Integer` can optionally contain a `constraints` object, the
+ format and meaning of which is identical to that defined on a single scalar provider (see `constraints`
+ below for the details on this).
  * `tableIndex` *(optional for table types)* - gives an array of index entry objects used for row indexes.
  Use a single-element array for a single-column index, and multiple values for a composite index.
  An index entry object has a `columnName` field, and if the entry is in another provider's table, then
@@ -1845,6 +1855,11 @@ A provider definition has these fields:
  with the instance OID being operated on, and an `operation` field with the request type from
  `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
  `setType` contain the value and type received in the `SetRequest` varbind.
+ * `constraints` *(optional for scalar types)* - an optional object to specify constraints for
+ integer-based enumerated types.  The only supported constraint at the moment is an `enumeration`
+ object, which maps integers to their named types to capture "named-number enumerations" as described
+ in RFC 2578 Section 7.1.1.  Note that table columns can specify such `constraints` in an identical way,
+ except that these are stored under the column object definition for each column.
 
 After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
 
@@ -2596,6 +2611,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.9.0 - 12/09/2020
 
  * Add simple access control model for agent
+
+## Version 2.9.1 - 17/09/2020
+
+ * Add MIB integer enumeration constraints for providers and SetRequests
 
 
 # License

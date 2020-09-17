@@ -69,7 +69,15 @@ var tableProvider = {
         {
             number: 3,
             name: "ifType",
-            type: snmp.ObjectType.Integer
+            type: snmp.ObjectType.Integer,
+            constraints: {
+                enumeration: {
+                    "1": "goodif",
+                    "2": "badif",
+                    "6": "someif",
+                    "24": "anotherif"
+                }
+            }
         }
     ],
     tableIndex: [
@@ -110,7 +118,8 @@ mib.dump ({
 // var data = mib.getTableColumnCells ("ifTable", 2);
 // var data = mib.getTableRowCells ("ifTable", [1]);
 // mib.setTableSingleCell ("ifTable", 2, [2], "changed!");
-var data = mib.getTableSingleCell ("ifTable", 2, [2]);
+mib.setTableSingleCell ("ifTable", 3, [2], 99);
+var data = mib.getTableSingleCell ("ifTable", 3, [2]);
 // var data = mib.getScalarValue ("sysDescr");
 
 console.log(JSON.stringify (data, null, 2));

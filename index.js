@@ -3077,6 +3077,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	var entryArray;
 	var currentTableProvider;
 	var parentOid;
+	var integerEnumeration;
 
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
@@ -3088,8 +3089,12 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 		var syntax = mibEntry.SYNTAX;
 
 		if ( syntax ) {
+			// detect INTEGER enumerations
 			if ( typeof syntax == "object" ) {
+				integerEnumeration = syntax.INTEGER;
 				syntax = "INTEGER";
+			} else {
+				integerEnumeration = null;
 			}
 			if ( syntax.startsWith ("SEQUENCE OF") ) {
 				// start of table
@@ -3109,8 +3114,12 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					}
 					syntax = mibEntry.SYNTAX;
 
+					// detect INTEGER enumerations
 					if ( typeof syntax == "object" ) {
+						integerEnumeration = syntax.INTEGER;
 						syntax = "INTEGER";
+					} else {
+						integerEnumeration = null;
 					}
 
 					if ( mibEntry.MACRO == "SEQUENCE" ) {
@@ -3152,11 +3161,17 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							}
 						} else if ( parentOid == currentTableProvider.name ) {
 							// table column
-							currentTableProvider.tableColumns.push ({
+							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
 								type: syntaxTypes[syntax]
-							});
+							};
+							if ( integerEnumeration ) {
+								columnDefinition.constraints = {
+									enumeration: integerEnumeration
+								};
+							}
+							currentTableProvider.tableColumns.push (columnDefinition);
 						} else {
 							// table finished
 							tables.push (currentTableProvider);
@@ -3168,12 +3183,18 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				}
 			} else if ( mibEntry.MACRO == "OBJECT-TYPE" ) {
 				// OBJECT-TYPE entries not in a table are scalars
-				scalars.push ({
+				var scalarDefinition = {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,
 					oid: mibEntry.OID,
 					scalarType: syntaxTypes[syntax]
-				});
+				};
+				if ( integerEnumeration ) {
+					scalarDefinition.constraints = {
+						enumeration: integerEnumeration
+					};
+				}
+				scalars.push (scalarDefinition);
 				// console.log ("Scalar: " + mibEntry.ObjectName);
 			}
 		}
@@ -3270,6 +3291,51 @@ MibNode.prototype.getAncestorProvider = function () {
 	} else {
 		return this.parent.getAncestorProvider ();
 	}
+};
+
+MibNode.prototype.getTableColumnFromInstanceNode = function () {
+	if ( this.parent && this.parent.provider ) {
+		return this.address[this.address.length - 1];
+	} else if ( ! this.parent ) {
+		return null;
+	} else {
+		return this.parent.getTableColumnFromInstanceNode ();
+	}
+};
+
+MibNode.prototype.getConstraintsFromProvider = function () {
+	var providerNode = this.getAncestorProvider ();
+	if ( ! providerNode ) {
+		return null;
+	}
+	var provider = providerNode.provider;
+	if ( provider.type == MibProviderType.Scalar ) {
+		return provider.constraints;
+	} else if ( provider.type == MibProviderType.Table ) {
+		var columnNumber = this.getTableColumnFromInstanceNode ();
+		if ( ! columnNumber ) {
+			return null;
+		}
+		var columnDefinition = provider.tableColumns.filter (column => column.number == columnNumber)[0];
+		return columnDefinition ? columnDefinition.constraints : null;
+	} else {
+		return null;
+	}
+};
+
+MibNode.prototype.setValue = function (newValue) {
+	var constraints = this.getConstraintsFromProvider ();
+	if ( ! constraints ) {
+		this.value = newValue;
+		return true;
+	}
+	if ( constraints.enumeration ) {
+		if ( ! constraints.enumeration[newValue] ) {
+			return false;
+		}
+	}
+	this.value = newValue;
+	return true;
 };
 
 MibNode.prototype.getInstanceNodeForTableRow = function () {
@@ -3653,6 +3719,7 @@ Mib.prototype.getScalarValue = function (scalarName) {
 Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	var providerNode;
 	var instanceNode;
+	var provider;
 
 	if ( ! this.providers[scalarName] ) {
 		throw new ReferenceError ("Provider " + scalarName + " not registered with this MIB");
@@ -3662,7 +3729,8 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	if ( ! providerNode ) {
 		providerNode = this.addProviderToNode (this.providers[scalarName]);
 	}
-	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
+	provider = providerNode.provider;
+	if ( ! providerNode || ! provider || provider.type != MibProviderType.Scalar ) {
 		throw new ReferenceError ("Could not find MIB node for registered provider " + scalarName);
 	}
 	var instanceAddress = providerNode.address.concat ([0]);
@@ -3670,9 +3738,10 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	if ( ! instanceNode ) {
 		this.addNodesForAddress (instanceAddress);
 		instanceNode = this.lookup (instanceAddress);
-		instanceNode.valueType = providerNode.provider.scalarType;
+		instanceNode.valueType = provider.scalarType;
 	}
 	instanceNode.value = newValue;
+	// return instanceNode.setValue (newValue);
 };
 
 Mib.prototype.getProviderNodeForTable = function (table) {
@@ -3921,6 +3990,7 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	columnNode = providerNode.children[columnNumber];
 	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 	instanceNode.value = value;
+	// return instanceNode.setValue (value);
 };
 
 Mib.prototype.deleteTableRow = function (table, rowIndex) {
@@ -4212,7 +4282,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					};
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
-						mibRequests[savedIndex].instanceNode.value = requestPdu.varbinds[savedIndex].value;
+						mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {

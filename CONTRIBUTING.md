@@ -68,6 +68,12 @@ description alone.  Include these four things:
   - the problematic API call
   - the results you get from the API
   - how the results you get from the API differ from the results you expect
+It doesn't matter how trivial you think the example is and how brilliantly you've
+explained it.  Runnable code is the complete specification of your problem statement.
+Anyone looking to reproduce your problem should be able to copy-paste your code, and
+instantly observe what you have reported, without the inconvenience of having to piece
+together what you may or may not have done, or spend time reverse engineering your prose.
+Even if it may be only one line - still - please always post copy-paste-able, runnable code!
 
 6. **Include packet captures** &mdash; Include a packet capture of the failed interaction,
 using a tool such as Wireshark or tcpdump.  Also, please include a second packet capture
