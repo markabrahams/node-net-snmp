@@ -1858,8 +1858,11 @@ A provider definition has these fields:
  * `constraints` *(optional for scalar types)* - an optional object to specify constraints for
  integer-based enumerated types.  The only supported constraint at the moment is an `enumeration`
  object, which maps integers to their named types to capture "named-number enumerations" as described
- in RFC 2578 Section 7.1.1.  Note that table columns can specify such `constraints` in an identical way,
- except that these are stored under the column object definition for each column.
+ in RFC 2578 Section 7.1.1.  Any SetRequest protocol operations are checked against the defined
+ constraints, and are not actioned if the value in the SetRequest would violate the constraints e.g.
+ the value is not a member of the defined enumeration.  Note that table columns can specify such
+ `constraints` in an identical way, except that these are stored under the column object definition
+ for each column.
 
 After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
 
@@ -2616,6 +2619,9 @@ Example programs are included under the module's `example` directory.
 
  * Add MIB integer enumeration constraints for providers and SetRequests
 
+## Version 2.9.2 - 25/09/2020
+
+ * Fix MIB parsing of files leading with a comment
 
 # License
 
