@@ -2655,6 +2655,7 @@ var Listener = function (options, receiver) {
 	this.callback = receiver.onMsg;
 	this.family = options.transport || 'udp4';
 	this.port = options.port || 161;
+	this.address = options.address;
 	this.disableAuthorization = options.disableAuthorization || false;
 };
 
@@ -2662,7 +2663,7 @@ Listener.prototype.startListening = function () {
 	var me = this;
 	this.dgram = dgram.createSocket (this.family);
 	this.dgram.on ("error", me.receiver.callback);
-	this.dgram.bind (this.port);
+	this.dgram.bind (this.port, this.address);
 	this.dgram.on ("message", me.callback.bind (me.receiver));
 };
 
