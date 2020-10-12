@@ -1336,6 +1336,7 @@ class:
         disableAuthorization: false,
         accessControlModelType: snmp.AccessControlModelType.None,
         engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+        address: null
         transport: "udp4"
     };
 
@@ -1361,6 +1362,8 @@ an object, possibly empty, and can contain the following fields:
  * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
+ * `address` - the IP address to bind to - default to `null`, which means bind to all IP
+ addresses
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
@@ -1439,6 +1442,7 @@ class:
         disableAuthorization: false,
         accessControlModelType: snmp.AccessControlModelType.None,
         engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+        address: null
         transport: "udp4"
     };
 
@@ -1469,6 +1473,8 @@ an object, possibly empty, and can contain the following fields:
  * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
+ * `address` - the IP address to bind to - default to `null`, which means bind to all IP
+ addresses
 
 The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
 If not supplied, the agent creates itself a new empty `Mib` singleton.  If supplied,
@@ -2622,6 +2628,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.9.2 - 25/09/2020
 
  * Fix MIB parsing of files leading with a comment
+
+## Version 2.9.3 - 12/10/2020
+
+ * Add bind address support for agent
 
 # License
 

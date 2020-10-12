@@ -8,6 +8,7 @@ var snmpOptions = {
     port: options.p,
     engineID: options.e,
     debug: options.d,
+    address: null,
     accessControlModelType: snmp.AccessControlModelType.Simple
 };
 
