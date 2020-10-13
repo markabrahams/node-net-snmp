@@ -686,7 +686,7 @@ first 20 OIDs in the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifType
     
     var nonRepeaters = 2;
     
-    session.getNext (oids, nonRepeaters, function (error, varbinds) {
+    session.getBulk (oids, nonRepeaters, function (error, varbinds) {
         if (error) {
             console.error (error.toString ());
         } else {
@@ -710,6 +710,7 @@ first 20 OIDs in the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifType
                         console.log (varbinds[i][j].oid + "|"
                         		+ varbinds[i][j].value);
                 }
+            }
         }
     });
 
@@ -2632,6 +2633,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.9.3 - 12/10/2020
 
  * Add bind address support for agent
+
+## Version 2.9.4 - 14/10/2020
+
+ * Fix getBulk documentation errors
 
 # License
 
