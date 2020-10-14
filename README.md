@@ -5,7 +5,7 @@ Protocol (SNMP)][SNMP].
 
 This module is installed using [node package manager (npm)][npm]:
 
-```console
+```bash
 npm install net-snmp
 ```
 
@@ -2097,8 +2097,11 @@ mib.registerProviders (providers);
 mib.setScalarValue ("sysDescr", "The most powerful system you can think of");
 mib.setScalarValue ("sysName", "multiplied-by-six");
 mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreamed up this MIB", 20]);
+```
 
-// Then hit those bad boys with your favourite SNMP tools (or library ;-), e.g.
+Then hit those bad boys with your favourite SNMP tools (or library ;-), e.g.
+
+```bash
 snmpwalk -v 2c -c public localhost 1.3.6.1
 ```
 
