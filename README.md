@@ -1398,7 +1398,7 @@ var options = {
     disableAuthorization: false,
     accessControlModelType: snmp.AccessControlModelType.None,
     engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
-    address: null
+    address: null,
     transport: "udp4"
 };
 
@@ -1508,7 +1508,7 @@ var options = {
     disableAuthorization: false,
     accessControlModelType: snmp.AccessControlModelType.None,
     engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
-    address: null
+    address: null,
     transport: "udp4"
 };
 
@@ -1648,7 +1648,7 @@ object is in the same format as that used for the `session.createV3Session()` ca
 
 ```js
 var user = {
-    name: "elsa"
+    name: "elsa",
     level: snmp.SecurityLevel.authPriv,
     authProtocol: snmp.AuthProtocols.sha,
     authKey: "imlettingitgo",
@@ -2296,10 +2296,10 @@ class:
 ```js
 // Default options
 var options = {
-    master: localhost
+    master: "localhost",
     masterPort: 705,
     timeout: 0,
-    description: "Node net-snmp AgentX sub-agent",
+    description: "Node net-snmp AgentX sub-agent"
 };
 
 subagent = snmp.createSubagent (options);
@@ -2724,6 +2724,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.9.4 - 14/10/2020
 
  * Fix getBulk documentation errors
+
+## Version 2.9.5 - 15/10/2020
+
+ * Add syntax definitions to README code blocks
 
 # License
 
