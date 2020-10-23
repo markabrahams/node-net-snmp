@@ -2729,6 +2729,10 @@ Example programs are included under the module's `example` directory.
 
  * Add syntax definitions to README code blocks
 
+## Version 2.9.6 - 24/10/2020
+
+ * Fix providers for MIB table at end of MIB file
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

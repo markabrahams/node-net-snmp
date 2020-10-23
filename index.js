@@ -3111,6 +3111,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					i++;
 					mibEntry = entryArray[i];
 					if ( ! mibEntry ) {
+						tables.push (currentTableProvider);
+						currentTableProvider = null;
+						i--;
 						break;
 					}
 					syntax = mibEntry.SYNTAX;
