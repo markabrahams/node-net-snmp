@@ -64,10 +64,10 @@ reproduction, please post the code for this in the bug report.  Even though it m
 seem obvious from a description, always include code for the library call in question.
 This serves to remove ambiguity that can otherwise inadvertently creep in from a
 description alone.  Include these four things:
-  - any set up or context information
-  - the problematic API call
-  - the results you get from the API
-  - how the results you get from the API differ from the results you expect
+ * any set up or context information
+ * the problematic API call
+ * the results you get from the API
+ * how the results you get from the API differ from the results you expect  
 It doesn't matter how trivial you think the example is and how brilliantly you've
 explained it.  Runnable code is the complete specification of your problem statement.
 Anyone looking to reproduce your problem should be able to copy-paste your code, and

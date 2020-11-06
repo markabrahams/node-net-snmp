@@ -3,6 +3,8 @@
 This module implements versions 1, 2c and 3 of the [Simple Network Management
 Protocol (SNMP)][SNMP].
 
+*Read this in other languages: [English](README.md), [简体中文](README.cn.md).*
+
 This module is installed using [node package manager (npm)][npm]:
 
 ```bash
@@ -2732,6 +2734,10 @@ Example programs are included under the module's `example` directory.
 ## Version 2.9.6 - 24/10/2020
 
  * Fix providers for MIB table at end of MIB file
+
+## Version 2.9.7 - 06/11/2020
+
+ * Add README.cn.md for Chinese language.
 
 # License
 
