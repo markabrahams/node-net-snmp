@@ -350,6 +350,16 @@ function readUint (buffer, isSigned) {
 	var value = 0;
 	var signedBitSet = false;
 
+	// Handle BER long-form length encoding
+	if ((length & 0x80) == 0x80) {
+		var lengthOctets = (length & 0x7f);
+		length = 0;
+		for (var lengthOctet = 0; lengthOctet < lengthOctets; lengthOctet++) {
+			length *= 256;
+			length += buffer.readByte ();
+		}
+	}
+
 	if (length > 5) {
 		throw new RangeError ("Integer too long '" + length + "'");
 	} else if (length == 5) {
@@ -895,7 +905,7 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	hashAlgorithm.update(engineID);
 	hashAlgorithm.update(firstDigest);
 	finalDigest = hashAlgorithm.digest();
-	debug ("Localized key: " + finalDigest.toString('hex'));
+	// debug ("Localized key: " + finalDigest.toString('hex'));
 
 	return finalDigest;
 };
@@ -910,7 +920,7 @@ Authentication.addParametersToMessageBuffer = function (messageBuffer, authProto
 
 	digestToAdd = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
 	digestToAdd.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
-	debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
+	// debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
 };
 
 Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
@@ -926,8 +936,8 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 	// replace previously cleared authenticationParameters field in message
 	digestInMessage.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
 
-	debug ("Digest in message: " + digestInMessage.toString('hex'));
-	debug ("Calculated digest: " + calculatedDigest.toString('hex'));
+	// debug ("Digest in message: " + digestInMessage.toString('hex'));
+	// debug ("Calculated digest: " + calculatedDigest.toString('hex'));
 	return calculatedDigest.equals (digestInMessage, Authentication.AUTHENTICATION_CODE_LENGTH);
 };
 
@@ -2977,7 +2987,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	}
 
 	// Inform/trap processing
-	debug (JSON.stringify (message.pdu, null, 2));
+	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
 		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
 	} else if ( message.pdu.type == PduType.InformRequest ) {
@@ -4191,7 +4201,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 
 	// Request processing
-	debug (JSON.stringify (message.pdu, null, 2));
+	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
 		this.onProxyRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {

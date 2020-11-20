@@ -2737,7 +2737,11 @@ Example programs are included under the module's `example` directory.
 
 ## Version 2.9.7 - 06/11/2020
 
- * Add README.cn.md for Chinese language.
+ * Add README.cn.md for Chinese language
+
+## Version 2.9.8 - 21/11/2020
+
+ * Add support for BER long-form length encoding
 
 # License
 
