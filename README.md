@@ -2743,6 +2743,10 @@ Example programs are included under the module's `example` directory.
 
  * Add support for BER long-form length encoding
 
+## Version 2.10.0 - 02/12/2020
+
+ * Add message security level checks against user security level
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

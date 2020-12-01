@@ -2730,6 +2730,16 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 				};
 			}
 		}
+		if ( (message.user.level == SecurityLevel.authNoPriv || message.user.level == SecurityLevel.authPriv) && ! message.hasAuthentication() ) {
+			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+					" requires authentication but message does not provide it"));
+			return;
+		}
+		if ( message.user.level == SecurityLevel.authPriv && ! message.hasPrivacy() ) {
+			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+					" requires privacy but message does not provide it"));
+			return;
+		}
 		if ( ! message.processIncomingSecurity (message.user, callback) ) {
 			return;
 		}
