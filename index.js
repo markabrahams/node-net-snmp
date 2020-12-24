@@ -2951,7 +2951,6 @@ SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, se
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-console.log("Receiver: listener=", this.listener, ", options=", options);
 	this.authorizer = new Authorizer (options);
 	this.engine = new Engine (options.engineID);
 
@@ -2976,34 +2975,24 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
 	var reportMessage;
 
-console.log("loc R1");
 	if ( ! message ) {
-console.log("loc R2");
 		return;
 	}
 
 	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
-console.log("loc R3");
 	if ( message.pdu.type == PduType.GetRequest ) {
-console.log("loc R4");
 		if ( message.version != Version3 ) {
-console.log("loc R5");
 			this.callback (new RequestInvalidError ("Only SNMPv3 discovery GetRequests are supported"));
 			return;
 		} else if ( message.hasAuthentication() ) {
-console.log("loc R6");
 			this.callback (new RequestInvalidError ("Only discovery (noAuthNoPriv) GetRequests are supported but this message has authentication"));
 			return;
 		} else if ( ! message.isReportable () ) {
-console.log("loc R7");
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-console.log("loc R8");
 		reportMessage = message.createReportResponseMessage (this.engine, this.context);
-console.log("loc R9");
 		this.listener.send (reportMessage, rinfo);
-console.log("loc R10");
 		return;
 	}
 
@@ -3264,7 +3253,6 @@ ModuleStore.BASE_MODULES = [
 var MibNode = function(address, parent) {
 	this.address = address;
 	this.oid = this.address.join('.');
-console.log("Creating MibNode for oid=", this.oid);
 	this.parent = parent;
 	this.children = {};
 };
@@ -4162,19 +4150,12 @@ MibRequest.prototype.isTabular = function () {
 var Agent = function (options, callback, mib) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-console.log("Agent listener=", this.listener);
 	this.engine = new Engine (options.engineID);
-console.log("Agent 1");
 	this.authorizer = new Authorizer (options);
-console.log("Agent 2");
 	this.callback = callback || function () {};
-console.log("Agent 3");
 	this.mib = mib || new Mib ();
-console.log("Agent 4");
 	this.context = "";
-console.log("Agent 5");
 	this.forwarder = new Forwarder (this.listener, this.callback);
-console.log("Agent 6");
 };
 
 Agent.prototype.getMib = function () {
@@ -4214,55 +4195,42 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	var securityName;
 	var reportMessage;
 
-console.log("loc a");
 	if ( ! message ) {
 		return;
 	}
 
 	// SNMPv3 discovery
-console.log("loc b");
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
 		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
-console.log("loc c");
 		return;
 	}
 
 	// Access control check
-console.log("loc d");
 	securityName = message.version == Version3 ? message.user.name : message.community;
 	if ( this.authorizer.getAccessControlModelType () == AccessControlModelType.Simple &&
 			! this.authorizer.getAccessControlModel ().isAccessAllowed (message.version, securityName, message.pdu.type) ) {
 		this.callback (new RequestFailedError ("Access denied for " + securityName + " to PDU type " + PduType[message.pdu.type] ) );
-console.log("loc e");
 		return;
 	}
 
 	// Request processing
 	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
-console.log("loc f");
 		this.onProxyRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
-console.log("loc g");
 		this.getRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.SetRequest ) {
-console.log("loc h");
 		this.setRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetNextRequest ) {
-console.log("loc i");
 		this.getNextRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetBulkRequest ) {
-console.log("loc j");
 		this.getBulkRequest (message, rinfo);
 	} else {
-console.log("loc k");
 		this.callback (new RequestInvalidError ("Unexpected PDU type " +
 			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
-console.log("loc l");
-
 };
 
 Agent.prototype.request = function (requestMessage, rinfo) {
@@ -4285,7 +4253,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			requestPdu.varbinds[i].oid = "1.3.6.1";
 		}
 
-console.log("loc 1: instanceNode=", instanceNode, "oid=", requestPdu.varbinds[i].oid);
 		if ( ! instanceNode ) {
 			mibRequests[i] = new MibRequest ({
 				operation: requestPdu.type,
@@ -4301,7 +4268,6 @@ console.log("loc 1: instanceNode=", instanceNode, "oid=", requestPdu.varbinds[i]
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-console.log("loc 2: providerNode=", providerNode);
 			if ( ! providerNode ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
@@ -4327,14 +4293,12 @@ console.log("loc 2: providerNode=", providerNode);
 					mibRequests[i].setValue = requestPdu.varbinds[i].value;
 				}
 				handlers[i] = providerNode.provider.handler;
-console.log(`loc 3: handler[${i}]=`, handlers[i]);
 			}
 		}
 
 		(function (savedIndex) {
 			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
-console.log(`loc 4: error=`, error);
 				if ( error ) {
 					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
@@ -4524,7 +4488,6 @@ Agent.prototype.close  = function() {
 };
 
 Agent.create = function (options, callback, mib) {
-console.log("Agent.create: options=", options);
 	var agent = new Agent (options, callback, mib);
 	agent.listener.startListening ();
 	return agent;
