@@ -2747,6 +2747,10 @@ Example programs are included under the module's `example` directory.
 
  * Add message security level checks against user security level
 
+## Version 2.10.1 - 25/12/2020
+
+ * Fix UNITS key recognition in MIB parser
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
