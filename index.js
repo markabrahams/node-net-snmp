@@ -219,6 +219,16 @@ var AccessLevel = {
 
 _expandConstantObject (AccessLevel);
 
+var MaxAccess = {
+	0: "not-accessible",
+	1: "accessible-for-notify",
+	2: "read-only",
+	3: "read-write",
+	4: "read-create",
+};
+
+_expandConstantObject (MaxAccess);
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -3108,6 +3118,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	for ( var i = 0; i < entryArray.length ; i++ ) {
 		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
+		var maxAccess = mibEntry["MAX-ACCESS"];
 
 		if ( syntax ) {
 			// detect INTEGER enumerations
@@ -3126,6 +3137,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					tableColumns: [],
 					tableIndex: [1]  // default - assume first column is index
 				};
+				if ( maxAccess ) {
+					currentTableProvider.maxAccess = MaxAccess[maxAccess];
+				}
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
 					i++;
@@ -3213,6 +3227,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					oid: mibEntry.OID,
 					scalarType: syntaxTypes[syntax]
 				};
+				if ( maxAccess ) {
+					scalarDefinition.maxAccess = MaxAccess[maxAccess] ;
+				}
 				if ( integerEnumeration ) {
 					scalarDefinition.constraints = {
 						enumeration: integerEnumeration
@@ -4233,9 +4250,27 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
+Agent.prototype.isAllowed = function (pduType, providerMaxAccess, provider) {
+	switch( PduType[pduType] ) {
+		case "SetRequest":
+			// SetRequest requires at least read-write access
+			return providerMaxAccess >= MaxAccess["read-write"];
+
+		case "GetRequest":
+		case "GetNextRequest":
+		case "GetBulkRequest":
+			// GetRequests require at least read-only access
+			return providerMaxAccess >= MaxAccess["read-only"];
+
+		default:
+		  // Disallow other pdu types (TODO: verify no others needed)
+		  return false;
+	}
+};
+
 Agent.prototype.request = function (requestMessage, rinfo) {
 	var me = this;
-    var mib = this.mib;
+	var mib = this.mib;
 	var varbindsCompleted = 0;
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
@@ -4281,6 +4316,20 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
+			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider.maxAccess, providerNode.provider ) ) {
+					// requested access not allowed (by MAX-ACCESS)
+					mibRequests[i] = new MibRequest ({
+						operation: requestPdu.type,
+						oid: requestPdu.varbinds[i].oid
+					});
+					handlers[i] = function getRanaHandler (mibRequestForRana) {
+						mibRequestForRana.done ({
+							errorStatus: ErrorStatus.NoAccess,
+							errorIndex: 0,
+							type: ObjectType.Null,
+							value: null
+						});
+					};
 			} else {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
@@ -4288,10 +4337,9 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					instanceNode: instanceNode,
 					oid: requestPdu.varbinds[i].oid
 				});
-				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequests[i].setType = requestPdu.varbinds[i].type;
-					mibRequests[i].setValue = requestPdu.varbinds[i].value;
-				}
+
+				mibRequests[i].setType = requestPdu.varbinds[i].type;
+				mibRequests[i].setValue = requestPdu.varbinds[i].value;
 				handlers[i] = providerNode.provider.handler;
 			}
 		}
@@ -4300,7 +4348,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
-					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
 						responsePdu.errorIndex = error.errorIndex;
 					}
@@ -5438,6 +5486,7 @@ exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;
 exports.AccessControlModelType = AccessControlModelType;
 exports.AccessLevel = AccessLevel;
+exports.MaxAccess = MaxAccess;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
