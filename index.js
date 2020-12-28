@@ -3784,7 +3784,6 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 		instanceNode.valueType = provider.scalarType;
 	}
 	instanceNode.value = newValue;
-    this.emit("setScalarValue", instanceNode, provider);
 	// return instanceNode.setValue (newValue);
 };
 
@@ -3927,7 +3926,6 @@ Mib.prototype.addTableRow = function (table, row) {
 		instanceNode = this.lookup (instanceAddress);
 		instanceNode.valueType = column.type;
 		instanceNode.value = row[rowValueOffset + i];
-        this.emit("addTableRow", instanceNode, provider);
 	}
 };
 
@@ -4035,7 +4033,6 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	columnNode = providerNode.children[columnNumber];
 	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 	instanceNode.value = value;
-    this.emit("setTableSingleCell", instanceNode, providerNode.provider);
 	// return instanceNode.setValue (value);
 };
 
@@ -4360,7 +4357,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
 						mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
-                        mib.emit("agentSetValue", instanceNode, providerNode.provider);
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
