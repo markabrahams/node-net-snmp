@@ -1934,6 +1934,12 @@ A provider definition has these fields:
  table, and doesn't exist in the local table's column definitions.  If the `tableIndex` field is
  absent, `tableAugments` is mandatory i.e. one of `tableIndex` and `tableAugments` needs to be
  present to define the table index.
+ * `maxAccess` *(optional)* - specifies the maximum allowed access
+level provided by this provider. The allowable values are the
+numeric values from the MaxAccess export. If a `maxAccess` value is
+specified, a `get` request to the agent will return a `noAccess`
+error if `maxAccess` is not at least "read-only" (2). `maxAccess`
+must be at least "read-write" (3) for a `set` request to suceed.
  * `handler` *(optional)* - an optional callback function, which is called before the request to the
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
