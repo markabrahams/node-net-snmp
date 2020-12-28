@@ -4248,7 +4248,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 };
 
 Agent.prototype.isAllowed = function (pduType, providerMaxAccess, provider) {
-	switch( PduType[pduType] ) {
+	switch ( PduType[pduType] ) {
 		case "SetRequest":
 			// SetRequest requires at least read-write access
 			return providerMaxAccess >= MaxAccess["read-write"];
@@ -4260,14 +4260,13 @@ Agent.prototype.isAllowed = function (pduType, providerMaxAccess, provider) {
 			return providerMaxAccess >= MaxAccess["read-only"];
 
 		default:
-		  // Disallow other pdu types (TODO: verify no others needed)
-		  return false;
+			// Disallow other pdu types (TODO: verify no others needed)
+			return false;
 	}
 };
 
 Agent.prototype.request = function (requestMessage, rinfo) {
 	var me = this;
-	var mib = this.mib;
 	var varbindsCompleted = 0;
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
