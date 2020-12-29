@@ -3222,6 +3222,27 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 									enumeration: integerEnumeration
 								};
 							}
+							// If this column has syntax RowStatus and
+							// the MIB module imports RowStatus from
+							// SNMPv2-TC, mark this column as the
+							// rowStatus column so we can act on it.
+							// (See lib/mibs/SNMPv2-TC.mib#L186.)
+							if ( syntax == "RowStatus" &&
+									"IMPORTS" in mibModule &&
+									Array.isArray(mibModule.IMPORTS["SNMPv2-TC"]) && 
+									mibModule.IMPORTS["SNMPv2-TC"].includes("RowStatus") ) {
+
+								// Mark this column as being rowStatus
+								columnDefinition.rowStatus = true;
+
+								// Also keep track of the rowStatus
+								// column on a provider basis. (Note
+								// that this will not work correctly
+								// if there are multiple columns in a
+								// single table with syntax RowStatus.
+								// Only the last one will be honored.)
+								currentTableProvider.rowStatusColumn = columnDefinition.number;
+							}
 							currentTableProvider.tableColumns.push (columnDefinition);
 						} else {
 							// table finished
@@ -4259,7 +4280,73 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-// providerNode.provider.maxAccess, 
+Agent.prototype.tryCreateInstance = function (varbind, requestType) {
+    var len;
+    var row;
+    var column;
+    var subOid;
+    var address;
+    var provider;
+    var providersByOid = {};
+    var providers = this.mib.providers;
+    var oid = varbind.oid;
+
+    // providersByOid should be generated only once. Either invalidate
+    // it upon each change to this.mib.providers, so that it's recreated
+    // as needed; or keep it in sync with this.mib.providers. It
+    // probably should be maintained as this.mib.providersByOid rather
+    // than local, here.
+    for (var name in providers) {
+        providersByOid[providers[name].oid] = providers[name];
+    }
+
+    if (providersByOid[oid]) {
+        console.log("FOUND EXACT MATCH:\n", providersByOid[oid]);
+
+        // This is where we would support "read-create" of scalars. Create
+        // the instance and return its instanceNode
+        return undefined;
+    }
+
+    // No exact match for provider. Look for a parent provider.
+    address = Mib.convertOidToAddress (oid);
+    len = address.length;
+    if ( len < 3 ) {
+      console.log("OID is fubar; don't try further");
+      return undefined;
+    }
+    row = oid[len - 1];
+    column = oid[len - 2];
+    while ( address.length > 0 ) {
+        address.pop();              // remove trailing address component
+        subOid = address.join("."); // create an oid from the current address
+
+        // Does this parent exist?
+        provider = providersByOid[subOid];
+        if (provider) {
+            // Yup
+            console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+
+            // This is where we would support "read-create" of table
+            // columns. Create the instance and return its instanceNode
+
+            // Look for RowStatus SETs
+            if ( requestType == PduType.SetRequest &&
+                	typeof provider.rowStatusColumn == "number" &&
+                	column == provider.rowStatusColumn ) {
+
+              // This is where we would support RowStatus create
+              // operations. Create the row then return the
+              // nodeInstance for the requested column.
+          }
+          return undefined;
+        }
+    }
+
+    console.log(`NO MATCH TO ${oid}`);
+    return undefined;
+};
+
 Agent.prototype.isAllowed = function (pduType, provider, address) {
 	var row;
 	var column;
@@ -4323,6 +4410,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var providerNode;
 		var responseVarbindType;
 
+		// If we didn't find an instance node, see if we can
+		// automatically create it, either because it has
+		// "read-create" MAX-ACCESS, or because it's a RowStatus SET
+		// indicating create.
+		instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
 		if ( requestPdu.varbinds[i].oid.split('.').length < 4 ) {
 			requestPdu.varbinds[i].oid = "1.3.6.1";
@@ -4379,6 +4472,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				});
 
 				if ( requestPdu.type == PduType.SetRequest ) {
+                    // Check here for whether this is a RowStatus
+                    // column with a value of 6 (delete), and do the
+                    // deletion here. (Need to figure out how to
+                    // respond and exit early, in that case.)
+
 					mibRequests[i].setType = requestPdu.varbinds[i].type;
 					mibRequests[i].setValue = requestPdu.varbinds[i].value;
 				}
