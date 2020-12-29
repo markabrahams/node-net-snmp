@@ -1920,7 +1920,7 @@ A provider definition has these fields:
  * `scalarType`  *(mandatory for scalar types)* - only relevant to scalar provider type, this
   give the type of the variable, selected from `snmp.ObjectType`
  * `tableColumns` *(mandatory for table types)* - gives any array of column definition objects for the
- table.  Each column object must have a unique `number`, a `name` and a `type` from `snmp.ObjectType`.
+ table.  Each column object must have a unique `number`, a `name`, a `type` from `snmp.ObjectType`, and a numeric `maxAccess` from `snmp.MaxAccess`.
  A column object with type `ObjectType.Integer` can optionally contain a `constraints` object, the
  format and meaning of which is identical to that defined on a single scalar provider (see `constraints`
  below for the details on this).
@@ -1934,7 +1934,7 @@ A provider definition has these fields:
  table, and doesn't exist in the local table's column definitions.  If the `tableIndex` field is
  absent, `tableAugments` is mandatory i.e. one of `tableIndex` and `tableAugments` needs to be
  present to define the table index.
- * `maxAccess` *(optional)* - specifies the maximum allowed access
+ * `maxAccess` *(mandatory)* - specifies the maximum allowed access
 level provided by this provider. The allowable values are the
 numeric values from the MaxAccess export. If a `maxAccess` value is
 specified, a `get` request to the agent will return a `noAccess`

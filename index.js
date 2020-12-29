@@ -219,6 +219,7 @@ var AccessLevel = {
 
 _expandConstantObject (AccessLevel);
 
+// SMIv2 MAX-ACCESS values
 var MaxAccess = {
 	0: "not-accessible",
 	1: "accessible-for-notify",
@@ -228,6 +229,15 @@ var MaxAccess = {
 };
 
 _expandConstantObject (MaxAccess);
+
+// SMIv1 ACCESS value mapping to SMIv2 MAX-ACCESS
+var AccessToMaxAccess = {
+	"none": MaxAccess["not accessible"],
+	"read-only": MaxAccess["read-only"],
+	"read-write": MaxAccess["read-write"],
+	"write-only": MaxAccess["read-write"],
+};
+
 
 /*****************************************************************************
  ** Exception class definitions
@@ -3118,7 +3128,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	for ( var i = 0; i < entryArray.length ; i++ ) {
 		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
-		var maxAccess = mibEntry["MAX-ACCESS"];
+		var access = mibEntry["ACCESS"];
+		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : 0));
 
 		if ( syntax ) {
 			// detect INTEGER enumerations
@@ -3135,11 +3146,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					type: MibProviderType.Table,
 					//oid: mibEntry.OID,
 					tableColumns: [],
-					tableIndex: [1]  // default - assume first column is index
+					tableIndex: [1]	 // default - assume first column is index
 				};
-				if ( maxAccess ) {
-					currentTableProvider.maxAccess = MaxAccess[maxAccess];
-				}
+				currentTableProvider.maxAccess = MaxAccess[maxAccess];
+
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
 					i++;
@@ -3151,6 +3161,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 						break;
 					}
 					syntax = mibEntry.SYNTAX;
+					access = mibEntry["ACCESS"];
+					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : 0));
 
 					// detect INTEGER enumerations
 					if ( typeof syntax == "object" ) {
@@ -3202,7 +3214,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
-								type: syntaxTypes[syntax]
+								type: syntaxTypes[syntax],
+								maxAccess: MaxAccess[maxAccess]
 							};
 							if ( integerEnumeration ) {
 								columnDefinition.constraints = {
@@ -3225,11 +3238,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,
 					oid: mibEntry.OID,
-					scalarType: syntaxTypes[syntax]
+					scalarType: syntaxTypes[syntax],
+					maxAccess: MaxAccess[maxAccess]
 				};
-				if ( maxAccess ) {
-					scalarDefinition.maxAccess = MaxAccess[maxAccess] ;
-				}
+
 				if ( integerEnumeration ) {
 					scalarDefinition.constraints = {
 						enumeration: integerEnumeration
@@ -4247,17 +4259,49 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-Agent.prototype.isAllowed = function (pduType, providerMaxAccess, provider) {
+// providerNode.provider.maxAccess, 
+Agent.prototype.isAllowed = function (pduType, provider, address) {
+	var row;
+	var column;
+	var maxAccess;
+	var columnEntry;
+
+	// Copy the address as we'll pull row and then column off of its
+	// tail end
+	address = address.slice(0);
+
+	// Are we working with a scalar or a table column? Scalars have a
+	// final address component of 0; table columns have a positive
+	// integer in the final address component, indicating the row
+	// number.
+	row = address.pop();
+	if (row === 0) {
+		// It's a scalar. We'll use the provider's maxAccess
+		maxAccess = provider.maxAccess;
+	} else {
+		// It's a table column. Use that column's maxAccess.
+		column = address.pop();
+
+		// In the typical case, we could use (column - 1) to index
+		// into tableColumns to get to the correct entry. There is no
+		// guarantee, however, that column numbers in the OID are
+		// necessarily consecutive; theoretically some could be
+		// missing. We'll therefore play it safe and search for the
+		// specified column entry.
+		columnEntry = provider.tableColumns.find(entry => entry.number === column);
+		maxAccess = columnEntry ? columnEntry.maxAccess || 0 : 0;
+	}
+
 	switch ( PduType[pduType] ) {
 		case "SetRequest":
 			// SetRequest requires at least read-write access
-			return providerMaxAccess >= MaxAccess["read-write"];
+			return maxAccess >= MaxAccess["read-write"];
 
 		case "GetRequest":
 		case "GetNextRequest":
 		case "GetBulkRequest":
 			// GetRequests require at least read-only access
-			return providerMaxAccess >= MaxAccess["read-only"];
+			return maxAccess >= MaxAccess["read-only"];
 
 		default:
 			// Disallow other pdu types (TODO: verify no others needed)
@@ -4312,7 +4356,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
-			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider.maxAccess, providerNode.provider ) ) {
+			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode.address ) ) {
 					// requested access not allowed (by MAX-ACCESS)
 					mibRequests[i] = new MibRequest ({
 						operation: requestPdu.type,
