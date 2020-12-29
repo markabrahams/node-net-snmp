@@ -1813,6 +1813,7 @@ var myScalarProvider = {
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
     scalarType: snmp.ObjectType.OctetString,
+    maxAccess: snmp.MaxAccess["read-write"],
     handler: function (mibRequest) {
        // e.g. can update the MIB data before responding to the request here
        mibRequest.done ();
@@ -1847,17 +1848,20 @@ var myTableProvider = {
         {
             number: 1,
             name: "ifIndex",
-            type: snmp.ObjectType.Integer
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess["not-accessible"]
         },
         {
             number: 2,
             name: "ifDescr",
-            type: snmp.ObjectType.OctetString
+            type: snmp.ObjectType.OctetString,
+            maxAccess: snmp.MaxAccess["read-only"],
         },
         {
             number: 3,
             name: "ifType",
             type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess["read-write"],
             constraints: {
                 enumeration: {
                     "1": "goodif",
