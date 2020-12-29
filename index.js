@@ -4334,8 +4334,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				mibRequests[i].setType = requestPdu.varbinds[i].type;
-				mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				if ( requestPdu.type == PduType.SetRequest ) {
+					mibRequests[i].setType = requestPdu.varbinds[i].type;
+					mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				}
 				handlers[i] = providerNode.provider.handler;
 			}
 		}
