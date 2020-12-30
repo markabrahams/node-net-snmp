@@ -3136,7 +3136,6 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
 	}
-console.log("mibModule=", mibModule);
 	syntaxTypes = this.getSyntaxTypes ();
 	entryArray = Object.values (mibModule);
 	for ( var i = 0; i < entryArray.length ; i++ ) {
@@ -3776,7 +3775,7 @@ Mib.prototype.setScalarDefaultValue = function (name, value) {
 
 Mib.prototype.setTableColumnDefaultValue = function(name, columnNumber, value) {
 	throw new Error("setTableColumnDefaultValue is not yet implemented");
-}
+};
 
 Mib.prototype.registerProviders = function (providers) {
 	for ( var provider of providers ) {
@@ -4313,12 +4312,11 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 };
 
 Agent.prototype.castFromDefVal = function ( type, value ) {
-	switch(type) {
+	switch (type) {
 		case ObjectType.Boolean:
 			return !! value;
 
 		case ObjectType.Integer:
-console.log("Integer: typeof", value, " =", typeof value);
 			if ( typeof value != "number" && typeof value != "string" ) {
 				throw new Error("Invalid Integer", value);
 			}
@@ -4358,7 +4356,7 @@ console.log("Integer: typeof", value, " =", typeof value);
 Agent.prototype.guessSetDefaultScalarValue = function ( type, name ) {
     // There's no specified default, so do the best we can.
     // TODO: take constraints into consideration
-    switch(type) {
+    switch (type) {
       case ObjectType.Boolean:
           this.mib.setScalarValue(name, false);
           break;
@@ -4387,7 +4385,6 @@ Agent.prototype.guessSetDefaultScalarValue = function ( type, name ) {
       case ObjectType.Opaque:
       default :
           // We can't guess at default values for these types
-console.log(`guess failed`);
           return undefined;
     }
 };
@@ -4420,8 +4417,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	address = Mib.convertOidToAddress (oid);
 	len = address.length;
 	if ( len < 3 ) {
-	  console.log("OID is fubar; don't try further");
-	  return undefined;
+		console.log("OID is fubar; don't try further");
+		return undefined;
 	}
 
 	// Extract the row and column number before we start searching
