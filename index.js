@@ -3136,6 +3136,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
 	}
+console.log("mibModule=", mibModule);
 	syntaxTypes = this.getSyntaxTypes ();
 	entryArray = Object.values (mibModule);
 	for ( var i = 0; i < entryArray.length ; i++ ) {
@@ -3143,6 +3144,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 		var syntax = mibEntry.SYNTAX;
 		var access = mibEntry["ACCESS"];
 		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
+		var defVal = mibEntry["DEFVAL"];
 
 		if ( syntax ) {
 			// detect INTEGER enumerations
@@ -3162,6 +3164,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					tableIndex: [1]	 // default - assume first column is index
 				};
 				currentTableProvider.maxAccess = MaxAccess[maxAccess];
+				if (defVal) {
+					currentTableProvider.defVal = defVal[0];
+				}
 
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
@@ -3176,6 +3181,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					syntax = mibEntry.SYNTAX;
 					access = mibEntry["ACCESS"];
 					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
+					defVal = mibEntry["DEFVAL"];
 
 					// detect INTEGER enumerations
 					if ( typeof syntax == "object" ) {
@@ -3187,7 +3193,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 					if ( mibEntry.MACRO == "SEQUENCE" ) {
 						// table entry sequence - ignore
-					} else  if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
+					} else	if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
 						// unexpected
 					} else {
 						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
@@ -3275,6 +3281,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					scalarType: syntaxTypes[syntax],
 					maxAccess: MaxAccess[maxAccess]
 				};
+
+				if (defVal) {
+					scalarDefinition.defVal = defVal[0];
+				}
 
 				if ( integerEnumeration ) {
 					scalarDefinition.constraints = {
@@ -3758,6 +3768,15 @@ Mib.prototype.registerProvider = function (provider) {
 		}
 	}
 };
+
+Mib.prototype.setScalarDefaultValue = function (name, value) {
+	var provider = this.getProvider(name);
+	provider.defVal = value;
+};
+
+Mib.prototype.setTableColumnDefaultValue = function(name, columnNumber, value) {
+	throw new Error("setTableColumnDefaultValue is not yet implemented");
+}
 
 Mib.prototype.registerProviders = function (providers) {
 	for ( var provider of providers ) {
@@ -4293,39 +4312,116 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-Agent.prototype.autoCreateTableRow = function(provider, rowStatusOp) {
+Agent.prototype.castFromDefVal = function ( type, value ) {
+	switch(type) {
+		case ObjectType.Boolean:
+			return !! value;
+
+		case ObjectType.Integer:
+console.log("Integer: typeof", value, " =", typeof value);
+			if ( typeof value != "number" && typeof value != "string" ) {
+				throw new Error("Invalid Integer", value);
+			}
+			return typeof value == "number" ? value : parseInt(value, 10);
+
+		case ObjectType.OctetString:
+			if ( typeof value != "string" ) {
+				throw new Error("Invalid OctetString", value);
+			}
+			return value;
+
+		case ObjectType.OID:
+			if ( typeof value != "string" || ! value.match(/[0-9]+\([.][0-9]+\)+/) ) {
+				throw new Error("Invalid OID", value);
+			}
+			return value;
+
+		case ObjectType.Counter:
+		case ObjectType.Counter64:
+			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
+			// We'll do so.
+			return 0;
+
+		case ObjectType.IpAddress:
+			// A 32-bit internet address represented as OCTET STRING of length 4
+			if ( typeof value != "string" || value.length != 4 ) {
+				throw new Error("Invalid IpAddress", value);
+			}
+			return value;
+
+		default :
+			throw new Error("Don't know how to cast type ", type);
+	}
+};
+
+
+Agent.prototype.guessSetDefaultScalarValue = function ( type, name ) {
+    // There's no specified default, so do the best we can.
+    // TODO: take constraints into consideration
+    switch(type) {
+      case ObjectType.Boolean:
+console.log(`guess. Calling this.mib.setScalarValue(${name}, false);`);
+          this.mib.setScalarValue(name, false);
+          break;
+
+      case ObjectType.Integer:
+console.log(`guess. Calling this.mib.setScalarValue(${name}, 0);`);
+          this.mib.setScalarValue(name, 0);
+          break;
+
+      case ObjectType.OctetString:
+console.log(`guess. Calling this.mib.setScalarValue(${name}, "");`);
+          this.mib.setScalarValue(name, "");
+          break;
+
+      case ObjectType.OID:
+console.log(`guess. Calling this.mib.setScalarValue(${name}, "0.0");`);
+          this.mib.setScalarValue(name, "0.0");
+          break;
+
+      case ObjectType.Counter:
+      case ObjectType.Counter64:
+console.log(`guess. Calling this.mib.setScalarValue(${name}, 0);`);
+          this.mib.setScalarValue(name, 0);
+          break;
+
+      case ObjectType.IpAddress:
+      case ObjectType.Null:
+      case ObjectType.Gauge:
+      case ObjectType.TimeTicks:
+      case ObjectType.Opaque:
+      default :
+          // We can't guess at default values for these types
+console.log(`guess failed`);
+          return undefined;
+    }
+};
+
+Agent.prototype.autoCreateTableRow = function (provider, rowNum, colNum, rowStatusOp) {
   this.mib.addTableRow(provider.name, [ 1 ]);
 };
 
 Agent.prototype.tryCreateInstance = function (varbind, requestType) {
-    var len;
-    var row;
-    var column;
-    var subOid;
-    var address;
-    var provider;
-    var providersByOid = {};
-    var providers = this.mib.providers;
-    var oid = varbind.oid;
+	var len;
+	var row;
+	var column;
+	var subOid;
+	var address;
+	var provider;
+	var providersByOid = {};
+	var providers = this.mib.providers;
+	var oid = varbind.oid;
 
-    // providersByOid should be generated only once. Either invalidate
-    // it upon each change to this.mib.providers, so that it's recreated
-    // as needed; or keep it in sync with this.mib.providers. It
-    // probably should be maintained as this.mib.providersByOid rather
-    // than local, here.
-    for (var name in providers) {
-        providersByOid[providers[name].oid] = providers[name];
-    }
+	// providersByOid should be generated only once. Either invalidate
+	// it upon each change to this.mib.providers, so that it's recreated
+	// as needed; or keep it in sync with this.mib.providers. It
+	// probably should be maintained as this.mib.providersByOid rather
+	// than local, here.
+	for (var name in providers) {
+		providersByOid[providers[name].oid] = providers[name];
+	}
 
-    if (providersByOid[oid]) {
-        console.log("FOUND EXACT MATCH:\n", providersByOid[oid]);
-
-        // This is where we would support "read-create" of scalars. Create
-        // the instance and return its instanceNode
-        return undefined;
-    }
-
-	// No exact match for provider. Look for a parent provider.
+	// Look for the provider.
 	address = Mib.convertOidToAddress (oid);
 	len = address.length;
 	if ( len < 3 ) {
@@ -4337,18 +4433,41 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	// upwards for the provider
 	row = address[len - 1];
 	column = address[len - 2];
-	while ( address.length > 0 ) {
-		address.pop();				// remove trailing address component
+	for ( ; address.length > 0; address.pop() ) {
 		subOid = address.join("."); // create an oid from the current address
 
-		// Does this parent exist?
+		// Does this oid have a provider?
 		provider = providersByOid[subOid];
 		if (provider) {
-			// Yup
+			// Yup. Figure out what to do with it.
 			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
+			// Is this a scalar?
+			if ( provider.type === MibProviderType.Scalar ) {
+				// Yes. Does this provider support "read-create"?
+				if ( provider.maxAccess != MaxAccess["read-create"] ) {
+					// Nope. Nothing we can do to help 'em.
+					return undefined;
+				}
+
+				// Is there a specified default value?
+				if (provider.defVal) {
+					// Yup. Use it.
+console.log(`found defVal. Calling this.mib.setScalarValue(${provider.name}, ${provider.defVal});`);
+                    this.mib.setScalarValue ( provider.name, this.castFromDefVal( provider.scalarType, provider.defVal ) );
+				} else {
+					// There's no specified default, so guess at one based on type.
+					this.guessSetDefaultScalarValue (provider.scalarType, name);
+				}
+
+				// Now there should be an instanceNode available.
+				return this.mib.lookup (oid);
+			}
+
 			// This is where we would support "read-create" of table
-			// columns. Create the instance and return its instanceNode
+			// columns. Create the table and return its instanceNode
+
+
 
 			// Look for RowStatus SETs
 			if ( requestType === PduType.SetRequest &&
@@ -4356,12 +4475,16 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					column === provider.rowStatusColumn &&
 					(varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) ) {
 
-			  // This is where we would support RowStatus create
-			  // operations. Create the row then return the
-			  // nodeInstance for the requested column.
-              this.autoCreateTableRow(provider, RowStatus[varbind.value]);
-		  }
-		  return undefined;
+				// This is where we would support RowStatus create
+				// operations. Create the row then return the
+				// nodeInstance for the requested column.
+				this.autoCreateTableRow(provider, row, column, RowStatus[varbind.value]);
+
+				// Now there should be an instanceNode available.
+				return this.mib.lookup (oid);
+			}
+
+			return undefined;
 		}
 	}
 
@@ -4370,7 +4493,6 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 };
 
 Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
-	var row;
 	var column;
 	var maxAccess;
 	var columnEntry;
@@ -4399,10 +4521,13 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 			return maxAccess >= MaxAccess["read-write"];
 
 		case "GetRequest":
-		case "GetNextRequest":
 		case "GetBulkRequest":
 			// GetRequests require at least read-only access
 			return maxAccess >= MaxAccess["read-only"];
+
+		case "GetNextRequest":
+			// Retrieving the next OID is always allowed. Used for smpwalk.
+			return true;
 
 		default:
 			// Disallow other pdu types (TODO: verify no others needed)
@@ -4428,7 +4553,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		// automatically create it, either because it has
 		// "read-create" MAX-ACCESS, or because it's a RowStatus SET
 		// indicating create.
-		instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+		if (! instanceNode) {
+			instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+console.log("after tryCreateInstance: instanceNode=", instanceNode);
+		}
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
 		if ( requestPdu.varbinds[i].oid.split('.').length < 4 ) {
