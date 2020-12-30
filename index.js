@@ -238,6 +238,19 @@ var AccessToMaxAccess = {
 	"write-only": "read-write"
 };
 
+var RowStatus = {
+	// status values
+	1: "active",
+	2: "notInService",
+	3: "notReady",
+
+	// actions
+	4: "createAndGo",
+	5: "createAndWait",
+	6: "destroy"
+};
+
+_expandConstantObject (RowStatus);
 
 /*****************************************************************************
  ** Exception class definitions
@@ -4280,6 +4293,10 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
+Agent.prototype.autoCreateTableRow = function(provider, rowStatusOp) {
+  this.mib.addTableRow(provider.name, [ 1 ]);
+};
+
 Agent.prototype.tryCreateInstance = function (varbind, requestType) {
     var len;
     var row;
@@ -4308,43 +4325,48 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
         return undefined;
     }
 
-    // No exact match for provider. Look for a parent provider.
-    address = Mib.convertOidToAddress (oid);
-    len = address.length;
-    if ( len < 3 ) {
-      console.log("OID is fubar; don't try further");
-      return undefined;
-    }
-    row = oid[len - 1];
-    column = oid[len - 2];
-    while ( address.length > 0 ) {
-        address.pop();              // remove trailing address component
-        subOid = address.join("."); // create an oid from the current address
+	// No exact match for provider. Look for a parent provider.
+	address = Mib.convertOidToAddress (oid);
+	len = address.length;
+	if ( len < 3 ) {
+	  console.log("OID is fubar; don't try further");
+	  return undefined;
+	}
 
-        // Does this parent exist?
-        provider = providersByOid[subOid];
-        if (provider) {
-            // Yup
-            console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+	// Extract the row and column number before we start searching
+	// upwards for the provider
+	row = address[len - 1];
+	column = address[len - 2];
+	while ( address.length > 0 ) {
+		address.pop();				// remove trailing address component
+		subOid = address.join("."); // create an oid from the current address
 
-            // This is where we would support "read-create" of table
-            // columns. Create the instance and return its instanceNode
+		// Does this parent exist?
+		provider = providersByOid[subOid];
+		if (provider) {
+			// Yup
+			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
-            // Look for RowStatus SETs
-            if ( requestType == PduType.SetRequest &&
-                	typeof provider.rowStatusColumn == "number" &&
-                	column == provider.rowStatusColumn ) {
+			// This is where we would support "read-create" of table
+			// columns. Create the instance and return its instanceNode
 
-              // This is where we would support RowStatus create
-              // operations. Create the row then return the
-              // nodeInstance for the requested column.
-          }
-          return undefined;
-        }
-    }
+			// Look for RowStatus SETs
+			if ( requestType === PduType.SetRequest &&
+					typeof provider.rowStatusColumn == "number" &&
+					column === provider.rowStatusColumn &&
+					(varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) ) {
 
-    console.log(`NO MATCH TO ${oid}`);
-    return undefined;
+			  // This is where we would support RowStatus create
+			  // operations. Create the row then return the
+			  // nodeInstance for the requested column.
+              this.autoCreateTableRow(provider, RowStatus[varbind.value]);
+		  }
+		  return undefined;
+		}
+	}
+
+	console.log(`NO MATCH TO ${oid}`);
+	return undefined;
 };
 
 Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
