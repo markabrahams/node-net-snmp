@@ -4442,9 +4442,12 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			// Yup. Figure out what to do with it.
 			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
-			// Is this a scalar?
+			//
+			// Scalar
+			//
 			if ( provider.type === MibProviderType.Scalar ) {
-				// Yes. Does this provider support "read-create"?
+
+				// Does this provider support "read-create"?
 				if ( provider.maxAccess != MaxAccess["read-create"] ) {
 					// Nope. Nothing we can do to help 'em.
 					return undefined;
@@ -4453,8 +4456,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				// Is there a specified default value?
 				if (provider.defVal) {
 					// Yup. Use it.
-console.log(`found defVal. Calling this.mib.setScalarValue(${provider.name}, ${provider.defVal});`);
-                    this.mib.setScalarValue ( provider.name, this.castFromDefVal( provider.scalarType, provider.defVal ) );
+					this.mib.setScalarValue ( provider.name, this.castFromDefVal( provider.scalarType, provider.defVal ) );
 				} else {
 					// There's no specified default, so guess at one based on type.
 					this.guessSetDefaultScalarValue (provider.scalarType, name);
@@ -4464,12 +4466,19 @@ console.log(`found defVal. Calling this.mib.setScalarValue(${provider.name}, ${p
 				return this.mib.lookup (oid);
 			}
 
+
+			//
+			// Table
+			//
+
 			// This is where we would support "read-create" of table
-			// columns. Create the table and return its instanceNode
+			// columns. Create the table and return the requested
+			// column's instanceNode
 
 
-
-			// Look for RowStatus SETs
+			//
+			// RowStatus setter
+			//
 			if ( requestType === PduType.SetRequest &&
 					typeof provider.rowStatusColumn == "number" &&
 					column === provider.rowStatusColumn &&
