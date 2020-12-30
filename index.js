@@ -225,17 +225,17 @@ var MaxAccess = {
 	1: "accessible-for-notify",
 	2: "read-only",
 	3: "read-write",
-	4: "read-create",
+	4: "read-create"
 };
 
 _expandConstantObject (MaxAccess);
 
 // SMIv1 ACCESS value mapping to SMIv2 MAX-ACCESS
 var AccessToMaxAccess = {
-	"none": MaxAccess["not accessible"],
-	"read-only": MaxAccess["read-only"],
-	"read-write": MaxAccess["read-write"],
-	"write-only": MaxAccess["read-write"],
+	"not-accessible": "not-accessible",
+	"read-only": "read-only",
+	"read-write": "read-write",
+	"write-only": "read-write"
 };
 
 
@@ -3129,7 +3129,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
 		var access = mibEntry["ACCESS"];
-		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : 0));
+		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 
 		if ( syntax ) {
 			// detect INTEGER enumerations
@@ -3162,7 +3162,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					}
 					syntax = mibEntry.SYNTAX;
 					access = mibEntry["ACCESS"];
-					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : 0));
+					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 
 					// detect INTEGER enumerations
 					if ( typeof syntax == "object" ) {
@@ -4347,27 +4347,18 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
     return undefined;
 };
 
-Agent.prototype.isAllowed = function (pduType, provider, address) {
+Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 	var row;
 	var column;
 	var maxAccess;
 	var columnEntry;
 
-	// Copy the address as we'll pull row and then column off of its
-	// tail end
-	address = address.slice(0);
-
-	// Are we working with a scalar or a table column? Scalars have a
-	// final address component of 0; table columns have a positive
-	// integer in the final address component, indicating the row
-	// number.
-	row = address.pop();
-	if (row === 0) {
+	if (provider.type === MibProviderType.Scalar) {
 		// It's a scalar. We'll use the provider's maxAccess
 		maxAccess = provider.maxAccess;
 	} else {
 		// It's a table column. Use that column's maxAccess.
-		column = address.pop();
+		column = instanceNode.getTableColumnFromInstanceNode();
 
 		// In the typical case, we could use (column - 1) to index
 		// into tableColumns to get to the correct entry. There is no
@@ -4375,8 +4366,9 @@ Agent.prototype.isAllowed = function (pduType, provider, address) {
 		// necessarily consecutive; theoretically some could be
 		// missing. We'll therefore play it safe and search for the
 		// specified column entry.
+
 		columnEntry = provider.tableColumns.find(entry => entry.number === column);
-		maxAccess = columnEntry ? columnEntry.maxAccess || 0 : 0;
+		maxAccess = columnEntry ? columnEntry.maxAccess || MaxAccess['not-accessible'] : MaxAccess['not-accessible'];
 	}
 
 	switch ( PduType[pduType] ) {
@@ -4449,7 +4441,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
-			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode.address ) ) {
+			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
 					// requested access not allowed (by MAX-ACCESS)
 					mibRequests[i] = new MibRequest ({
 						operation: requestPdu.type,

@@ -89,7 +89,7 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "SNMP user set",
+            "name": "SNMP community set",
             "skipFiles": [
                 "<node_internals>/**"
             ],
@@ -98,9 +98,9 @@
                 "-v", "2c",
                 "-c", "private",
                 "127.0.0.1",
-                "1.3.6.1.2.1.1.6.0",
-                "OctetString",
-                "Big"
+                "1.3.6.1.2.1.1.7.0",
+                "Integer",
+                "40"
             ]
         },
         {
@@ -257,7 +257,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/example/test.js",
+            "program": "${workspaceFolder}/example/test.js"
         },
         {
             "type": "node",

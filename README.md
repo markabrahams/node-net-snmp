@@ -1844,24 +1844,25 @@ var myTableProvider = {
     name: "smallIfTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
+    maxAccess: snmp.MaxAccess["not-accessible"],
     tableColumns: [
         {
             number: 1,
             name: "ifIndex",
             type: snmp.ObjectType.Integer,
-            maxAccess: snmp.MaxAccess["not-accessible"]
+            maxAccess: snmp.MaxAccess["read-only"]
         },
         {
             number: 2,
             name: "ifDescr",
             type: snmp.ObjectType.OctetString,
-            maxAccess: snmp.MaxAccess["read-only"],
+            maxAccess: snmp.MaxAccess["read-write"],
         },
         {
             number: 3,
             name: "ifType",
             type: snmp.ObjectType.Integer,
-            maxAccess: snmp.MaxAccess["read-write"],
+            maxAccess: snmp.MaxAccess["read-only"],
             constraints: {
                 enumeration: {
                     "1": "goodif",
@@ -1924,10 +1925,10 @@ A provider definition has these fields:
  * `scalarType`  *(mandatory for scalar types)* - only relevant to scalar provider type, this
   give the type of the variable, selected from `snmp.ObjectType`
  * `tableColumns` *(mandatory for table types)* - gives any array of column definition objects for the
- table.  Each column object must have a unique `number`, a `name`, a `type` from `snmp.ObjectType`, and a numeric `maxAccess` from `snmp.MaxAccess`.
- A column object with type `ObjectType.Integer` can optionally contain a `constraints` object, the
- format and meaning of which is identical to that defined on a single scalar provider (see `constraints`
- below for the details on this).
+ table.  Each column object must have a unique `number`, a `name`, a `type` from `snmp.ObjectType`, and
+ a `maxAccess` value from `snmp.MaxAccess`. A column object with type `ObjectType.Integer` can optionally
+ contain a `constraints` object, the format and meaning of which is identical to that defined on a single
+ scalar provider (see `constraints` below for the details on this).
  * `tableIndex` *(optional for table types)* - gives an array of index entry objects used for row indexes.
  Use a single-element array for a single-column index, and multiple values for a composite index.
  An index entry object has a `columnName` field, and if the entry is in another provider's table, then
@@ -2756,6 +2757,14 @@ Example programs are included under the module's `example` directory.
 ## Version 2.10.0 - 02/12/2020
 
  * Add message security level checks against user security level
+
+## Version 2.10.1 - 25/12/2020
+
+ * Fix UNITS key recognition in MIB parser
+
+## Version 3.0.0 - 30/12/2020
+
+ * Add MAX-ACCESS provider and agent support
 
 # License
 
