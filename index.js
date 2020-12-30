@@ -4360,28 +4360,23 @@ Agent.prototype.guessSetDefaultScalarValue = function ( type, name ) {
     // TODO: take constraints into consideration
     switch(type) {
       case ObjectType.Boolean:
-console.log(`guess. Calling this.mib.setScalarValue(${name}, false);`);
           this.mib.setScalarValue(name, false);
           break;
 
       case ObjectType.Integer:
-console.log(`guess. Calling this.mib.setScalarValue(${name}, 0);`);
           this.mib.setScalarValue(name, 0);
           break;
 
       case ObjectType.OctetString:
-console.log(`guess. Calling this.mib.setScalarValue(${name}, "");`);
           this.mib.setScalarValue(name, "");
           break;
 
       case ObjectType.OID:
-console.log(`guess. Calling this.mib.setScalarValue(${name}, "0.0");`);
           this.mib.setScalarValue(name, "0.0");
           break;
 
       case ObjectType.Counter:
       case ObjectType.Counter64:
-console.log(`guess. Calling this.mib.setScalarValue(${name}, 0);`);
           this.mib.setScalarValue(name, 0);
           break;
 
