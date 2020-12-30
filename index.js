@@ -219,6 +219,26 @@ var AccessLevel = {
 
 _expandConstantObject (AccessLevel);
 
+// SMIv2 MAX-ACCESS values
+var MaxAccess = {
+	0: "not-accessible",
+	1: "accessible-for-notify",
+	2: "read-only",
+	3: "read-write",
+	4: "read-create"
+};
+
+_expandConstantObject (MaxAccess);
+
+// SMIv1 ACCESS value mapping to SMIv2 MAX-ACCESS
+var AccessToMaxAccess = {
+	"not-accessible": "not-accessible",
+	"read-only": "read-only",
+	"read-write": "read-write",
+	"write-only": "read-write"
+};
+
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -3108,6 +3128,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	for ( var i = 0; i < entryArray.length ; i++ ) {
 		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
+		var access = mibEntry["ACCESS"];
+		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 
 		if ( syntax ) {
 			// detect INTEGER enumerations
@@ -3124,8 +3146,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					type: MibProviderType.Table,
 					//oid: mibEntry.OID,
 					tableColumns: [],
-					tableIndex: [1]  // default - assume first column is index
+					tableIndex: [1]	 // default - assume first column is index
 				};
+				currentTableProvider.maxAccess = MaxAccess[maxAccess];
+
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
 					i++;
@@ -3137,6 +3161,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 						break;
 					}
 					syntax = mibEntry.SYNTAX;
+					access = mibEntry["ACCESS"];
+					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 
 					// detect INTEGER enumerations
 					if ( typeof syntax == "object" ) {
@@ -3188,7 +3214,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
-								type: syntaxTypes[syntax]
+								type: syntaxTypes[syntax],
+								maxAccess: MaxAccess[maxAccess]
 							};
 							if ( integerEnumeration ) {
 								columnDefinition.constraints = {
@@ -3211,8 +3238,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,
 					oid: mibEntry.OID,
-					scalarType: syntaxTypes[syntax]
+					scalarType: syntaxTypes[syntax],
+					maxAccess: MaxAccess[maxAccess]
 				};
+
 				if ( integerEnumeration ) {
 					scalarDefinition.constraints = {
 						enumeration: integerEnumeration
@@ -3517,6 +3546,8 @@ var Mib = function () {
 	this.providers = {};
 	this.providerNodes = {};
 };
+
+util.inherits (Mib, events.EventEmitter);
 
 Mib.prototype.addNodesForOid = function (oidString) {
 	var address = Mib.convertOidToAddress (oidString);
@@ -4226,7 +4257,48 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " +
 			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
+};
 
+// providerNode.provider.maxAccess, 
+Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
+	var row;
+	var column;
+	var maxAccess;
+	var columnEntry;
+
+	if (provider.type === MibProviderType.Scalar) {
+		// It's a scalar. We'll use the provider's maxAccess
+		maxAccess = provider.maxAccess;
+	} else {
+		// It's a table column. Use that column's maxAccess.
+		column = instanceNode.getTableColumnFromInstanceNode();
+
+		// In the typical case, we could use (column - 1) to index
+		// into tableColumns to get to the correct entry. There is no
+		// guarantee, however, that column numbers in the OID are
+		// necessarily consecutive; theoretically some could be
+		// missing. We'll therefore play it safe and search for the
+		// specified column entry.
+
+		columnEntry = provider.tableColumns.find(entry => entry.number === column);
+		maxAccess = columnEntry ? columnEntry.maxAccess || MaxAccess['not-accessible'] : MaxAccess['not-accessible'];
+	}
+
+	switch ( PduType[pduType] ) {
+		case "SetRequest":
+			// SetRequest requires at least read-write access
+			return maxAccess >= MaxAccess["read-write"];
+
+		case "GetRequest":
+		case "GetNextRequest":
+		case "GetBulkRequest":
+			// GetRequests require at least read-only access
+			return maxAccess >= MaxAccess["read-only"];
+
+		default:
+			// Disallow other pdu types (TODO: verify no others needed)
+			return false;
+	}
 };
 
 Agent.prototype.request = function (requestMessage, rinfo) {
@@ -4276,6 +4348,20 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
+			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
+					// requested access not allowed (by MAX-ACCESS)
+					mibRequests[i] = new MibRequest ({
+						operation: requestPdu.type,
+						oid: requestPdu.varbinds[i].oid
+					});
+					handlers[i] = function getRanaHandler (mibRequestForRana) {
+						mibRequestForRana.done ({
+							errorStatus: ErrorStatus.NoAccess,
+							errorIndex: 0,
+							type: ObjectType.Null,
+							value: null
+						});
+					};
 			} else {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
@@ -4283,6 +4369,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					instanceNode: instanceNode,
 					oid: requestPdu.varbinds[i].oid
 				});
+
 				if ( requestPdu.type == PduType.SetRequest ) {
 					mibRequests[i].setType = requestPdu.varbinds[i].type;
 					mibRequests[i].setValue = requestPdu.varbinds[i].value;
@@ -4295,7 +4382,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
-					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
 						responsePdu.errorIndex = error.errorIndex;
 					}
@@ -5432,6 +5519,7 @@ exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;
 exports.AccessControlModelType = AccessControlModelType;
 exports.AccessLevel = AccessLevel;
+exports.MaxAccess = MaxAccess;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;

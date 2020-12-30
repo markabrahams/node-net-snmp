@@ -49,28 +49,33 @@ var scalarProvider = {
     name: "sysDescr",
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
-    scalarType: snmp.ObjectType.OctetString
+    scalarType: snmp.ObjectType.OctetString,
+    maxAccess: snmp.MaxAccess['read-write']
 };
 agent.registerProvider (scalarProvider);
 var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
+    maxAccess: snmp.MaxAccess['not-accessible'],
     tableColumns: [
         {
             number: 1,
             name: "ifIndex",
-            type: snmp.ObjectType.Integer
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess['read-only']
         },
         {
             number: 2,
             name: "ifDescr",
-            type: snmp.ObjectType.OctetString
+            type: snmp.ObjectType.OctetString,
+            maxAccess: snmp.MaxAccess['read-write']
         },
         {
             number: 3,
             name: "ifType",
             type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess['read-only'],
             constraints: {
                 enumeration: {
                     "1": "goodif",

@@ -257,7 +257,7 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/example/test.js",
+            "program": "${workspaceFolder}/example/test.js"
         },
         {
             "type": "node",
