@@ -4259,9 +4259,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-// providerNode.provider.maxAccess, 
 Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
-	var row;
 	var column;
 	var maxAccess;
 	var columnEntry;
@@ -4328,7 +4326,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
-					errorIndex: 0,
+					errorIndex: i + 1,
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
@@ -4343,7 +4341,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
-						errorIndex: 0,
+						errorIndex: i + 1,
 						type: ObjectType.NoSuchInstance,
 						value: null
 					});
@@ -4357,7 +4355,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					handlers[i] = function getRanaHandler (mibRequestForRana) {
 						mibRequestForRana.done ({
 							errorStatus: ErrorStatus.NoAccess,
-							errorIndex: 0,
+							errorIndex: i + 1,
 							type: ObjectType.Null,
 							value: null
 						});

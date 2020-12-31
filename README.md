@@ -2766,6 +2766,10 @@ Example programs are included under the module's `example` directory.
 
  * Add MAX-ACCESS provider and agent support
 
+## Version 3.0.1 - 01/01/2021
+
+ * Fix error indexing for failed varbinds from agent
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
