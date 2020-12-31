@@ -4268,6 +4268,14 @@ Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
 };
 
+Agent.prototype.setScalarReadCreateHandler = function (handler) {
+  this.scalarReadCreateHandler = handler;
+};
+
+Agent.prototype.setTableRowStatusHandler = function (handler) {
+  this.tableRowStatusHandler = handler;
+};
+
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
 	var securityName;
@@ -4311,7 +4319,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-Agent.prototype.castFromDefVal = function ( type, value ) {
+Agent.prototype.cast = function ( type, value ) {
 	switch (type) {
 		case ObjectType.Boolean:
 			return !! value;
@@ -4348,55 +4356,17 @@ Agent.prototype.castFromDefVal = function ( type, value ) {
 			return value;
 
 		default :
-			throw new Error("Don't know how to cast type ", type);
+            // Assume the caller knows what he's doing
+            return value;
 	}
 };
 
-
-Agent.prototype.guessSetDefaultScalarValue = function ( type, name ) {
-    // There's no specified default, so do the best we can.
-    // TODO: take constraints into consideration
-    switch (type) {
-      case ObjectType.Boolean:
-          this.mib.setScalarValue(name, false);
-          break;
-
-      case ObjectType.Integer:
-          this.mib.setScalarValue(name, 0);
-          break;
-
-      case ObjectType.OctetString:
-          this.mib.setScalarValue(name, "");
-          break;
-
-      case ObjectType.OID:
-          this.mib.setScalarValue(name, "0.0");
-          break;
-
-      case ObjectType.Counter:
-      case ObjectType.Counter64:
-          this.mib.setScalarValue(name, 0);
-          break;
-
-      case ObjectType.IpAddress:
-      case ObjectType.Null:
-      case ObjectType.Gauge:
-      case ObjectType.TimeTicks:
-      case ObjectType.Opaque:
-      default :
-          // We can't guess at default values for these types
-          return undefined;
-    }
-};
-
-Agent.prototype.autoCreateTableRow = function (provider, rowNum, colNum, rowStatusOp) {
-  this.mib.addTableRow(provider.name, [ 1 ]);
-};
 
 Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var len;
 	var row;
 	var column;
+	var value;
 	var subOid;
 	var address;
 	var provider;
@@ -4445,14 +4415,25 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					return undefined;
 				}
 
-				// Is there a specified default value?
-				if (provider.defVal) {
-					// Yup. Use it.
-					this.mib.setScalarValue ( provider.name, this.castFromDefVal( provider.scalarType, provider.defVal ) );
-				} else {
-					// There's no specified default, so guess at one based on type.
-					this.guessSetDefaultScalarValue (provider.scalarType, name);
+				// See if there is a registered handler for
+				// auto-creating scalars. The handler should return
+				// the value to be used, or undefined if the instance
+				// should not be auto-created. The handler may make
+				// use of the DEFVAL read either from the MIB or set
+				// through mib.setScalarDefaultValue.
+				if (! this.scalarReadCreateHandler) {
+					return undefined;
 				}
+
+				value = this.scalarReadCreateHandler ( provider );
+				if ( typeof value == "undefined" ) {
+					// Handler said do not create instance
+					return undefined;
+				}
+
+				// Ensure the value is of the correct type, and save it
+				value = this.cast( provider.scalarType, value );
+				this.mib.setScalarValue ( provider.name,  value );
 
 				// Now there should be an instanceNode available.
 				return this.mib.lookup (oid);
@@ -4464,25 +4445,57 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			//
 
 			// This is where we would support "read-create" of table
-			// columns. Create the table and return the requested
-			// column's instanceNode
-
+			// columns. RFC2578 section 7.1.12.1, however, implies
+			// that rows should be created only via use of the
+			// RowStatus column. We'll therefore avoid creating rows
+			// based solely on any other column's "read-create"
+			// max-access value.
 
 			//
-			// RowStatus setter
+			// RowStatus setter (actions)
 			//
 			if ( requestType === PduType.SetRequest &&
 					typeof provider.rowStatusColumn == "number" &&
-					column === provider.rowStatusColumn &&
-					(varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) ) {
+					column === provider.rowStatusColumn ) {
 
-				// This is where we would support RowStatus create
-				// operations. Create the row then return the
-				// nodeInstance for the requested column.
-				this.autoCreateTableRow(provider, row, column, RowStatus[varbind.value]);
 
-				// Now there should be an instanceNode available.
-				return this.mib.lookup (oid);
+				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
+						this.tableRowStatusHandler ) {
+
+					// The registered tableRowStatusHandler's
+					// responsibility is to return an array containing
+					// the table column values for the table row to be
+					// added. The handler may make use of any defVal
+					// values in the elements of the
+					// provider.tableColumns array.
+					value = this.tableRowStatusHandler( provider, row, RowStatus[varbind.value] );
+					if ( typeof value == "undefined") {
+						// Handler said do not create instance
+						return undefined;
+					}
+
+					if (! Array.isArray( value ) ) {
+						throw new Error("tableRowStatusHandler must return an array or undefined; got", value);
+					}
+
+					if ( value.length != provider.tableColumns.length ) {
+						throw new Error("tableRowStatusHandler's returned array must contain a value for for each column" );
+					}
+
+					// Map each column's value to the appropriate type
+					value = value.map( (v, i) => this.cast( provider.tableColumns[i].type, v ) );
+
+					// Add the table row
+					this.mib.addTableRow ( provider.name, value );
+
+					// Now there should be an instanceNode available.
+					return this.mib.lookup (oid);
+
+				} else if ( varbind.value === RowStatus["destroy"] ) {
+
+					// Delete the table row
+					this.mib.deleteTableRow ( provider.name, row );
+				}
 			}
 
 			return undefined;
