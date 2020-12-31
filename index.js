@@ -4295,6 +4295,9 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 			// GetRequests require at least read-only access
 			return maxAccess >= MaxAccess["read-only"];
 
+//		case "GetNextRequest":
+//			return true;
+
 		default:
 			// Disallow other pdu types (TODO: verify no others needed)
 			return false;
