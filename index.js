@@ -4582,7 +4582,7 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
-					errorIndex: 0,
+					errorIndex: i + 1,
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
@@ -4597,7 +4597,7 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
-						errorIndex: 0,
+						errorIndex: i + 1,
 						type: ObjectType.NoSuchInstance,
 						value: null
 					});
@@ -4611,7 +4611,7 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 					handlers[i] = function getRanaHandler (mibRequestForRana) {
 						mibRequestForRana.done ({
 							errorStatus: ErrorStatus.NoAccess,
-							errorIndex: 0,
+							errorIndex: i + 1,
 							type: ObjectType.Null,
 							value: null
 						});
