@@ -4535,13 +4535,10 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 			return maxAccess >= MaxAccess["read-write"];
 
 		case "GetRequest":
+		case "GetNextRequest":
 		case "GetBulkRequest":
 			// GetRequests require at least read-only access
 			return maxAccess >= MaxAccess["read-only"];
-
-		case "GetNextRequest":
-			// Retrieving the next OID is always allowed. Used for smpwalk.
-			return true;
 
 		default:
 			// Disallow other pdu types (TODO: verify no others needed)
