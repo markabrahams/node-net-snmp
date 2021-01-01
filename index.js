@@ -3192,7 +3192,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 					if ( mibEntry.MACRO == "SEQUENCE" ) {
 						// table entry sequence - ignore
-					} else	if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
+					} else if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
 						// unexpected
 					} else {
 						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
@@ -4356,8 +4356,8 @@ Agent.prototype.cast = function ( type, value ) {
 			return value;
 
 		default :
-            // Assume the caller knows what he's doing
-            return value;
+			// Assume the caller knows what he's doing
+			return value;
 	}
 };
 
@@ -4374,11 +4374,11 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var providers = this.mib.providers;
 	var oid = varbind.oid;
 
-	// providersByOid should be generated only once. Either invalidate
-	// it upon each change to this.mib.providers, so that it's recreated
-	// as needed; or keep it in sync with this.mib.providers. It
-	// probably should be maintained as this.mib.providersByOid rather
-	// than local, here.
+	// TODO: providersByOid should be generated only once. Either
+	// invalidate it upon each change to this.mib.providers, so that
+	// it's recreated as needed; or keep it in sync with
+	// this.mib.providers. It probably should be maintained as
+	// this.mib.providersByOid rather than local, here.
 	for (var name in providers) {
 		providersByOid[providers[name].oid] = providers[name];
 	}
@@ -4491,10 +4491,6 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					// Now there should be an instanceNode available.
 					return this.mib.lookup (oid);
 
-				} else if ( varbind.value === RowStatus["destroy"] ) {
-
-					// Delete the table row
-					this.mib.deleteTableRow ( provider.name, row );
 				}
 			}
 
@@ -4624,14 +4620,31 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				if ( requestPdu.type == PduType.SetRequest ) {
-                    // Check here for whether this is a RowStatus
-                    // column with a value of 6 (delete), and do the
-                    // deletion here. (Need to figure out how to
-                    // respond and exit early, in that case.)
+				if ( requestPdu.type == PduType.SetRequest && instanceNode.address.length >= 2 ) {
+					var addrLen = instanceNode.address.length;
+					var row = instanceNode.address[addrLen - 1];
+                    var column = instanceNode.address[addrLen - 2];
+                    var provider = providerNode.provider;
+					var name = provider.name;
 
-					mibRequests[i].setType = requestPdu.varbinds[i].type;
-					mibRequests[i].setValue = requestPdu.varbinds[i].value;
+					// Check here for whether this is a RowStatus
+					// column with a value of 6 (delete), and do the
+					// deletion here. (Need to figure out how to
+					// respond and exit early, in that case.)
+					if ( requestPdu.varbind.value === RowStatus["destroy"] &&
+						typeof provider.rowStatusColumn == "number" &&
+						column === provider.rowStatusColumn ) {
+
+						// Delete the table row
+						this.mib.deleteTableRow ( name, row );
+
+                        //
+                        // TODO: What goes in mibRequests[i]?????
+                        //
+					} else {
+						mibRequests[i].setType = requestPdu.varbinds[i].type;
+						mibRequests[i].setValue = requestPdu.varbinds[i].value;
+					}
 				}
 				handlers[i] = providerNode.provider.handler;
 			}
