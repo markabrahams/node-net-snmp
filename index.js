@@ -4623,8 +4623,8 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 				if ( requestPdu.type == PduType.SetRequest && instanceNode.address.length >= 2 ) {
 					var addrLen = instanceNode.address.length;
 					var row = instanceNode.address[addrLen - 1];
-                    var column = instanceNode.address[addrLen - 2];
-                    var provider = providerNode.provider;
+					var column = instanceNode.address[addrLen - 2];
+					var provider = providerNode.provider;
 					var name = provider.name;
 
 					// Check here for whether this is a RowStatus
@@ -4638,9 +4638,9 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 						// Delete the table row
 						this.mib.deleteTableRow ( name, row );
 
-                        //
-                        // TODO: What goes in mibRequests[i]?????
-                        //
+						//
+						// TODO: What goes in mibRequests[i]?????
+						//
 					} else {
 						mibRequests[i].setType = requestPdu.varbinds[i].type;
 						mibRequests[i].setValue = requestPdu.varbinds[i].value;
