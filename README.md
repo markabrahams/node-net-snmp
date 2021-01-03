@@ -2770,6 +2770,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix error indexing for failed varbinds from agent
 
+## Version 3.0.2 - 03/01/2021
+
+ * Fix agent hang on GetBulk with non-repeaters greater than varbind length
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
