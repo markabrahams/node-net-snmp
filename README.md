@@ -1949,7 +1949,9 @@ must be at least "read-write" (3) for a `set` request to suceed.
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
  The callback function takes a `MibRequest` instance, which has a `done()` function.  This
- must be called when finished processing the request.  The `MibRequest` also has an `oid` field
+ must be called when finished processing the request.  To signal an error, give a single error object
+ in the form of `{errorStatus: <status>}`, where `<status>` is a value from ErrorStatus e.g.
+ `{errorStatus: snmp.ErrorStatus.GeneralError}`.  The `MibRequest` also has an `oid` field
  with the instance OID being operated on, and an `operation` field with the request type from
  `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
  `setType` contain the value and type received in the `SetRequest` varbind.
@@ -2773,6 +2775,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.0.2 - 03/01/2021
 
  * Fix agent hang on GetBulk with non-repeaters greater than varbind length
+
+## Version 3.0.3 - 03/01/2021
+
+ * Add agent errorStatus signalling support
 
 # License
 

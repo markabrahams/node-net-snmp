@@ -4326,7 +4326,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
-					errorIndex: i + 1,
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
@@ -4341,7 +4340,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
-						errorIndex: i + 1,
 						type: ObjectType.NoSuchInstance,
 						value: null
 					});
@@ -4355,7 +4353,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					handlers[i] = function getRanaHandler (mibRequestForRana) {
 						mibRequestForRana.done ({
 							errorStatus: ErrorStatus.NoAccess,
-							errorIndex: i + 1,
 							type: ObjectType.Null,
 							value: null
 						});
@@ -4382,11 +4379,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
-						responsePdu.errorIndex = error.errorIndex;
+						responsePdu.errorIndex = savedIndex + 1;
 					}
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
-						type: error.type,
+						type: error.type || ObjectType.Null,
 						value: error.value || null
 					};
 				} else {
