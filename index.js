@@ -3952,7 +3952,7 @@ function getRowIndexFromOid (oid, index) {
 		}
 	}
 	return values;
-};
+}
 
 Mib.prototype.getRowIndexFromOid = getRowIndexFromOid;
 
@@ -4383,7 +4383,6 @@ Agent.prototype.cast = function ( type, value ) {
 
 
 Agent.prototype.tryCreateInstance = function (varbind, requestType) {
-	var len;
 	var row;
 	var column;
 	var value;
@@ -4637,8 +4636,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
-			}
-			else if ( requestPdu.type === PduType.SetRequest &&
+			} else if ( requestPdu.type === PduType.SetRequest &&
 					typeof providerNode.provider.rowStatusColumn == "number" &&
 					instanceNode.getTableColumnFromInstanceNode() === providerNode.provider.rowStatusColumn) {
 

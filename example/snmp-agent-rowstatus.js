@@ -445,7 +445,7 @@ function addScalarProvider(registrationInfo)
 
   // Create the full handler given the inner handler
   handler =
-    async (mibRequest) =>
+    async function(mibRequest)
     {
       const           value = await innerHandler(mibRequest);
 
