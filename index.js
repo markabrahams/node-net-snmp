@@ -4738,11 +4738,21 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							var subAddr = subOid.split(".");
 
 							subAddr.shift(); // shift off the column number, leaving the row index values
-							row = instanceNode.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+							row = getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
 							name = provider.name;
 
 							// Delete the table row
-							this.mib.deleteTableRow ( name, row );
+							me.mib.deleteTableRow ( name, row );
+
+							// This is going to return the prior state of the RowStatus column,
+							// i.e., either "active" or "notInService". That feels wrong, but there
+							// is no value we can set it to to indicate just-deleted. One would
+							// think we could set it to "notReady", but that is explicitly defined
+							// in RFC-2579 as "the conceptual row exists in the agent", which is
+							// no longer the case now that we've deleted the row. We're not allowed
+							// to ever return "destroy" as a status, so that doesn't give us an
+							// option either.
+
 						} else {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
