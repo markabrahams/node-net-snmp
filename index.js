@@ -4471,8 +4471,6 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			column = parseInt(subAddr.shift(), 10);
 			row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
 
-console.log(`row=${JSON.stringify(row)} column=${column} rowStatusColumn=${provider.rowStatusColumn} fullAddress=${JSON.stringify(fullAddress)}`);
-console.log(`requestType=${requestType} SetRequest=${PduType.SetRequest} typeof rowStatusColumn=${typeof provider.rowStatusColumn} isRightColumn=${column === provider.rowStatusColumn} varbind.value=${varbind.value}`);
 			if ( requestType === PduType.SetRequest &&
 					typeof provider.rowStatusColumn == "number" &&
 					column === provider.rowStatusColumn ) {
@@ -4484,7 +4482,6 @@ console.log(`requestType=${requestType} SetRequest=${PduType.SetRequest} typeof 
 					// return an array containing all table column
 					// values for the table row to be added.
 					value = this.tableRowStatusHandler( provider, RowStatus[varbind.value], row );
-console.log(`tableRowStatusHandler returned ${JSON.stringify(value)}`);
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
 						return undefined;
@@ -4499,8 +4496,6 @@ console.log(`tableRowStatusHandler returned ${JSON.stringify(value)}`);
 					}
 
 					// Map each column's value to the appropriate type
-value.forEach((v, i) => 
-console.log(`Mapping ${JSON.stringify(v)} (type ${typeof v}) to ${ObjectType[provider.tableColumns[i].type]}`));
 					value = value.map( (v, i) => this.cast( provider.tableColumns[i].type, v ) );
 
 					// Add the table row
@@ -4595,7 +4590,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		// indicating create.
 		if (! instanceNode) {
 			instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
-console.log("after tryCreateInstance: instanceNode=", instanceNode);
 		}
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
