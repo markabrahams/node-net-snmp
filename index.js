@@ -3254,11 +3254,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 								columnDefinition.rowStatus = true;
 
 								// Also keep track of the rowStatus
-								// column on a provider basis. (Note
-								// that this will not work correctly
-								// if there are multiple columns in a
-								// single table with syntax RowStatus.
-								// Only the last one will be honored.)
+								// column on a provider basis.
 								currentTableProvider.rowStatusColumn = columnDefinition.number;
 							}
 							currentTableProvider.tableColumns.push (columnDefinition);
@@ -3890,9 +3886,11 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 	return oidComponents;
 };
 
+/* What is this empty function here for?
 Mib.prototype.getValueFromOidAddress = function (oid, indexPart) {
 
 };
+*/
 
 Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	var rowIndex = [];
@@ -3918,7 +3916,7 @@ Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	return rowIndex;
 };
 
-Mib.prototype.getRowIndexFromOid = function (oid, index) {
+function getRowIndexFromOid (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
@@ -3955,6 +3953,8 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 	}
 	return values;
 };
+
+Mib.prototype.getRowIndexFromOid = getRowIndexFromOid;
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	var rowIndexOid = [];
@@ -4272,6 +4272,26 @@ Agent.prototype.setScalarReadCreateHandler = function (handler) {
   this.scalarReadCreateHandler = handler;
 };
 
+// The registered tableRowStatusHandler's responsibility is to
+// return an array containing all table column values for the
+// table row to be added. The handler may make use of any defVal
+// values in the elements of the provider.tableColumns array.
+//
+// The signature of the provided handler must be:
+//	 @param provider
+//		The provider for the table
+//	 @param action
+//		One of "createAndGo" or "createAndWait"
+//	 @param row
+//		The row index (array) of the row to be added
+//
+// For conformance with the state table on page 8 of RFC-2579, the
+// handler must set the value of the RowStatus column to
+// RowStatus["active"] if `action` is "createAndGo"; and to
+// RowStatus["notInService"] if `action` is "createAndWait".
+// (Because the handler is required to return values for all
+// columns in the row, this implementation never uses the
+// state RowStatus["notReady"].)
 Agent.prototype.setTableRowStatusHandler = function (handler) {
   this.tableRowStatusHandler = handler;
 };
@@ -4368,7 +4388,9 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var column;
 	var value;
 	var subOid;
+	var subAddr;
 	var address;
+	var fullAddress;
 	var provider;
 	var providersByOid = {};
 	var providers = this.mib.providers;
@@ -4384,18 +4406,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	}
 
 	// Look for the provider.
-	address = Mib.convertOidToAddress (oid);
-	len = address.length;
-	if ( len < 3 ) {
-		console.log("OID is fubar; don't try further");
-		return undefined;
-	}
-
-	// Extract the row and column number before we start searching
-	// upwards for the provider
-	row = address[len - 1];
-	column = address[len - 2];
-	for ( ; address.length > 0; address.pop() ) {
+    fullAddress = Mib.convertOidToAddress (oid);
+	for ( address = fullAddress.slice(0) ; address.length > 0; address.pop() ) {
 		subOid = address.join("."); // create an oid from the current address
 
 		// Does this oid have a provider?
@@ -4454,21 +4466,25 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			//
 			// RowStatus setter (actions)
 			//
+			subOid = Mib.getSubOidFromBaseOid (oid, provider.oid);
+			subAddr = subOid.split(".");
+			column = parseInt(subAddr.shift(), 10);
+			row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+
+console.log(`row=${JSON.stringify(row)} column=${column} rowStatusColumn=${provider.rowStatusColumn} fullAddress=${JSON.stringify(fullAddress)}`);
+console.log(`requestType=${requestType} SetRequest=${PduType.SetRequest} typeof rowStatusColumn=${typeof provider.rowStatusColumn} isRightColumn=${column === provider.rowStatusColumn} varbind.value=${varbind.value}`);
 			if ( requestType === PduType.SetRequest &&
 					typeof provider.rowStatusColumn == "number" &&
 					column === provider.rowStatusColumn ) {
 
-
 				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
 						this.tableRowStatusHandler ) {
 
-					// The registered tableRowStatusHandler's
-					// responsibility is to return an array containing
-					// the table column values for the table row to be
-					// added. The handler may make use of any defVal
-					// values in the elements of the
-					// provider.tableColumns array.
-					value = this.tableRowStatusHandler( provider, row, RowStatus[varbind.value] );
+					// The registered tableRowStatusHandler will
+					// return an array containing all table column
+					// values for the table row to be added.
+					value = this.tableRowStatusHandler( provider, RowStatus[varbind.value], row );
+console.log(`tableRowStatusHandler returned ${JSON.stringify(value)}`);
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
 						return undefined;
@@ -4483,6 +4499,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					}
 
 					// Map each column's value to the appropriate type
+value.forEach((v, i) => 
+console.log(`Mapping ${JSON.stringify(v)} (type ${typeof v}) to ${ObjectType[provider.tableColumns[i].type]}`));
 					value = value.map( (v, i) => this.cast( provider.tableColumns[i].type, v ) );
 
 					// Add the table row
@@ -4551,6 +4569,21 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var mibRequests = [];
 	var handlers = [];
 
+	// TODO: consider sorting varbinds with RowHandler insertions
+	// first, then other SETs, then RowHandler deletions, then types
+	// other than SET. That will ensure that new table rows exist
+	// before columns other than the RowHandler are set. Currently,
+	// setting a column other than the RowStatus one, in a row that
+	// doesn't yet exist, will result in an error even if a later
+	// varbind would create the row. (It's also a fair amount of extra
+	// work that we should ensure is really necessary. I've always
+	// seen `snmpset` example commands that specified the requests in
+	// the above order anyway. Maybe it's up to the user to do so? The
+	// NOTE WELL on RFC-2579 page 7, however, indicates that the
+	// "active" state is relevant "before or after processing the PDU"
+	// implying that the user-provided order is irrelevant and we must
+	// handle it here. Sigh.
+
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		var providerNode;
@@ -4599,20 +4632,75 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 					});
 				};
 			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
-					// requested access not allowed (by MAX-ACCESS)
-					mibRequests[i] = new MibRequest ({
-						operation: requestPdu.type,
-						oid: requestPdu.varbinds[i].oid
+				// requested access not allowed (by MAX-ACCESS)
+				mibRequests[i] = new MibRequest ({
+					operation: requestPdu.type,
+					oid: requestPdu.varbinds[i].oid
+				});
+				handlers[i] = function getRanaHandler (mibRequestForRana) {
+					mibRequestForRana.done ({
+						errorStatus: ErrorStatus.NoAccess,
+						errorIndex: i + 1,
+						type: ObjectType.Null,
+						value: null
 					});
-					handlers[i] = function getRanaHandler (mibRequestForRana) {
-						mibRequestForRana.done ({
-							errorStatus: ErrorStatus.NoAccess,
-							errorIndex: i + 1,
-							type: ObjectType.Null,
-							value: null
+				};
+			}
+			else if ( requestPdu.type === PduType.SetRequest &&
+					typeof providerNode.provider.rowStatusColumn == "number" &&
+					instanceNode.getTableColumnFromInstanceNode() === providerNode.provider.rowStatusColumn) {
+
+				switch ( requestPdu.varbinds[i].value ) {
+					case RowStatus["active"]:
+					case RowStatus["notInService"]:
+						// Setting either of these states, when the
+						// row already exists, is fine
+						break;
+
+					case RowStatus["destroy"]:
+						// This case is handled later
+						break;
+
+					case RowStatus["createAndGo"]:
+						// Valid, but now set to active
+						requestPdu.varbinds[i].value = RowStatus["active"];
+						break;
+
+					case RowStatus["createAndWait"]:
+						// Valid, but now set to notInService
+						requestPdu.varbinds[i].value = RowStatus["notInService"];
+						break;
+
+					case RowStatus["notReady"]:
+					default:
+						// It's not ever legal to set the RowStatus to
+						// any value but the six that are defined, and
+						// it's not legal to change the state to
+						// "notReady".
+						//
+						// The row already exists, as determined by
+						// the fact that we have an instanceNode, so
+						// we can not apply a create action to the
+						// RowStatus column, as dictated RFC-2579.
+						// (See the summary state table on Page 8
+						// (inconsistent value)
+						mibRequests[i] = new MibRequest ({
+							operation: requestPdu.type,
+							oid: requestPdu.varbinds[i].oid
 						});
-					};
-			} else {
+						handlers[i] = function getIcsHandler (mibRequestForIcs) {
+							mibRequestForIcs.done ({
+								errorStatus: ErrorStatus.InconsistentValue,
+								errorIndex: i + 1,
+								type: ObjectType.Null,
+								value: null
+							});
+						};
+						break;
+				}
+			}
+
+			if ( ! handlers[i] ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
 					providerNode: providerNode,
@@ -4620,32 +4708,8 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				if ( requestPdu.type == PduType.SetRequest && instanceNode.address.length >= 2 ) {
-					var addrLen = instanceNode.address.length;
-					var row = instanceNode.address[addrLen - 1];
-					var column = instanceNode.address[addrLen - 2];
-					var provider = providerNode.provider;
-					var name = provider.name;
-
-					// Check here for whether this is a RowStatus
-					// column with a value of 6 (delete), and do the
-					// deletion here. (Need to figure out how to
-					// respond and exit early, in that case.)
-					if ( requestPdu.varbind.value === RowStatus["destroy"] &&
-						typeof provider.rowStatusColumn == "number" &&
-						column === provider.rowStatusColumn ) {
-
-						// Delete the table row
-						this.mib.deleteTableRow ( name, row );
-
-						//
-						// TODO: What goes in mibRequests[i]?????
-						//
-					} else {
-						mibRequests[i].setType = requestPdu.varbinds[i].type;
-						mibRequests[i].setValue = requestPdu.varbinds[i].value;
-					}
-				}
+				mibRequests[i].setType = requestPdu.varbinds[i].type;
+				mibRequests[i].setValue = requestPdu.varbinds[i].value;
 				handlers[i] = providerNode.provider.handler;
 			}
 		}
@@ -4665,7 +4729,30 @@ console.log("after tryCreateInstance: instanceNode=", instanceNode);
 					};
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
-						mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+						var column = instanceNode.getTableColumnFromInstanceNode();
+						var provider = providerNode.provider;
+
+						// Is this a RowStatus column with a value of 6 (delete)?
+						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
+							typeof provider.rowStatusColumn == "number" &&
+							column === provider.rowStatusColumn ) {
+
+							// Yup. Do the deletion.
+							var row;
+							var name;
+							var subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
+							var subAddr = subOid.split(".");
+
+							subAddr.shift(); // shift off the column number, leaving the row index values
+							row = instanceNode.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+							name = provider.name;
+
+							// Delete the table row
+							this.mib.deleteTableRow ( name, row );
+						} else {
+							// No special handling required. Just save the new value.
+							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
@@ -5792,6 +5879,7 @@ exports.PrivProtocols = PrivProtocols;
 exports.AccessControlModelType = AccessControlModelType;
 exports.AccessLevel = AccessLevel;
 exports.MaxAccess = MaxAccess;
+exports.RowStatus = RowStatus;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
