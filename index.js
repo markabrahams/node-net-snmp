@@ -4569,10 +4569,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var mibRequests = [];
 	var handlers = [];
 
-	// TODO: consider sorting varbinds with RowHandler insertions
-	// first, then other SETs, then RowHandler deletions, then types
+	// TODO: consider sorting varbinds with RowStatus insertions
+	// first, then other SETs, then RowStatus deletions, then types
 	// other than SET. That will ensure that new table rows exist
-	// before columns other than the RowHandler are set. Currently,
+	// before columns other than the RowStatus are set. Currently,
 	// setting a column other than the RowStatus one, in a row that
 	// doesn't yet exist, will result in an error even if a later
 	// varbind would create the row. (It's also a fair amount of extra
