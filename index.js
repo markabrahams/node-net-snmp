@@ -4605,7 +4605,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
-					errorIndex: i + 1,
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
@@ -4620,7 +4619,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
-						errorIndex: i + 1,
 						type: ObjectType.NoSuchInstance,
 						value: null
 					});
@@ -4714,11 +4712,11 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
-						responsePdu.errorIndex = error.errorIndex;
+						responsePdu.errorIndex = savedIndex + 1;
 					}
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
-						type: error.type,
+						type: error.type || ObjectType.Null,
 						value: error.value || null
 					};
 				} else {
@@ -4848,22 +4846,25 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	var getNextNode;
 	var endOfMib = false;
 
-	for (var n = 0 ; n < requestPdu.nonRepeaters ; n++ ) {
+	for (var n = 0 ; n < Math.min (requestPdu.nonRepeaters, requestVarbinds.length) ; n++ ) {
 		this.addGetNextVarbind (getBulkVarbinds, requestVarbinds[n].oid);
 	}
 
-	for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
-		startOid.push (requestVarbinds[v].oid);
-	}
+	if ( requestPdu.nonRepeaters < requestVarbinds.length ) {
+	
+		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
+			startOid.push (requestVarbinds[v].oid);
+		}
 
-	while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
-		for (var w = requestPdu.nonRepeaters ; w < requestVarbinds.length ; w++ ) {
-			if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - requestPdu.nonRepeaters]);
-				if ( getNextNode ) {
-					startOid[w - requestPdu.nonRepeaters] = getNextNode.oid;
-					if ( getNextNode.type == ObjectType.EndOfMibView ) {
-						endOfMib = true;
+		while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
+			for (var w = requestPdu.nonRepeaters ; w < requestVarbinds.length ; w++ ) {
+				if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
+					getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - requestPdu.nonRepeaters]);
+					if ( getNextNode ) {
+						startOid[w - requestPdu.nonRepeaters] = getNextNode.oid;
+						if ( getNextNode.type == ObjectType.EndOfMibView ) {
+							endOfMib = true;
+						}
 					}
 				}
 			}
