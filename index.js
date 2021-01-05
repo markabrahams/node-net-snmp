@@ -3581,9 +3581,24 @@ MibNode.oidIsDescended = function (oid, ancestor) {
 };
 
 var Mib = function () {
+	var providersByOid;
 	this.root = new MibNode ([], null);
-	this.providers = {};
 	this.providerNodes = {};
+
+	// this.providers will be modified throughout this code.
+	// Keep this.providersByOid in sync with it
+	providersByOid = this.providersByOid = {};
+	this.providers = new Proxy({}, {
+		set: function (target, key, value) {
+			target[key] = value;
+			providersByOid[value.oid] = value;
+		},
+
+		deleteProperty: function (target, key) {
+			delete providersByOid[target[key].oid];
+			delete target[key];
+		}
+  });
 };
 
 util.inherits (Mib, events.EventEmitter);
@@ -4391,21 +4406,12 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var address;
 	var fullAddress;
 	var provider;
-	var providersByOid = {};
 	var providers = this.mib.providers;
+	var providersByOid = this.mib.providersByOid;
 	var oid = varbind.oid;
 
-	// TODO: providersByOid should be generated only once. Either
-	// invalidate it upon each change to this.mib.providers, so that
-	// it's recreated as needed; or keep it in sync with
-	// this.mib.providers. It probably should be maintained as
-	// this.mib.providersByOid rather than local, here.
-	for (var name in providers) {
-		providersByOid[providers[name].oid] = providers[name];
-	}
-
 	// Look for the provider.
-    fullAddress = Mib.convertOidToAddress (oid);
+	fullAddress = Mib.convertOidToAddress (oid);
 	for ( address = fullAddress.slice(0) ; address.length > 0; address.pop() ) {
 		subOid = address.join("."); // create an oid from the current address
 
@@ -4549,7 +4555,7 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 			return maxAccess >= MaxAccess["read-only"];
 
 		default:
-			// Disallow other pdu types (TODO: verify no others needed)
+			// Disallow other pdu types
 			return false;
 	}
 };
