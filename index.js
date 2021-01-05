@@ -4413,7 +4413,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 		provider = providersByOid[subOid];
 		if (provider) {
 			// Yup. Figure out what to do with it.
-			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+//			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
 			//
 			// Scalar
@@ -4510,7 +4510,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 		}
 	}
 
-	console.log(`NO MATCH TO ${oid}`);
+//	console.log(`NO MATCH TO ${oid}`);
 	return undefined;
 };
 

@@ -53,11 +53,24 @@ var scalarProvider = {
     maxAccess: snmp.MaxAccess['read-write']
 };
 agent.registerProvider (scalarProvider);
+
+scalarProvider = {
+    name: "snmpEnableAuthenTraps",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.2.1.11.30",
+    scalarType: snmp.ObjectType.Integer,
+    maxAccess: snmp.MaxAccess['read-create'],
+	defVal: 1
+};
+agent.registerProvider (scalarProvider);
+
+
 var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
     maxAccess: snmp.MaxAccess['not-accessible'],
+	rowStatusColumn: 99,
     tableColumns: [
         {
             number: 1,
@@ -83,7 +96,15 @@ var tableProvider = {
                     "6": "someif",
                     "24": "anotherif"
                 }
-            }
+            },
+			defVal: 2
+        },
+        {
+            number: 99,
+            name: "ifStatus",
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess['read-write'],
+            rowStatus: true
         }
     ],
     tableIndex: [
@@ -98,10 +119,82 @@ var tableProvider = {
 };
 agent.registerProvider (tableProvider);
 
+agent.setScalarReadCreateHandler(
+    (provider) =>
+    {
+      // If there's a default value specified...
+      if (typeof provider.defVal != "undefined")
+      {
+        // ... then use it
+        return provider.defVal;
+      }
+
+      // Choose an appropriate default value, when possible
+      switch(provider.scalarType)
+      {
+      case snmp.ObjectType.Boolean :
+        return false;
+
+      case snmp.ObjectType.Integer :
+        return 0;
+
+      case snmp.ObjectType.OctetString :
+        return "";
+
+      case snmp.ObjectType.OID :
+        return "0.0";
+
+      case snmp.ObjectType.Counter :
+      case snmp.ObjectType.Counter64 :
+        return 0;
+
+      default :
+        console.log("No default scalar value available:", provider);
+        return undefined;
+      }
+    });
+
+
+agent.setTableRowStatusHandler(
+	(provider, action, row) =>
+	{
+	  const			  tc = provider.tableColumns;
+	  const			  RowStatus = snmp.RowStatus;
+
+	  function defVal(col, valueIfNotFound)
+	  {
+		if (typeof tc[col].defVal == "undefined")
+		{
+		  return valueIfNotFound;
+		}
+
+		return tc[col].defVal;
+	  }
+
+	  switch(provider.name)
+	  {
+	  case "ifTable" :
+		return (
+		  [
+			Array.isArray(row) ? row[0] : row,
+			defVal(1, "Hello world!"),
+			defVal(2, 24),
+			(action == "createAndGo"
+			 ? RowStatus["active"]
+			 : RowStatus["notInService"])
+		  ]);
+
+	  default :
+		return undefined;
+	  }
+	});
+  
+
+
 var mib = agent.getMib ();
 mib.setScalarValue ("sysDescr", "Rage inside the machine!");
-mib.addTableRow ("ifTable", [1, "lo", 24]);
-mib.addTableRow ("ifTable", [2, "eth0", 6]);
+mib.addTableRow ("ifTable", [1, "lo", 24, 1]);
+mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 // mib.deleteTableRow ("ifTable", [2]);
 // mib.unregisterProvider ("ifTable");
 // mib.unregisterProvider ("sysDescr");
