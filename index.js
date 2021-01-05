@@ -4406,7 +4406,6 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var address;
 	var fullAddress;
 	var provider;
-	var providers = this.mib.providers;
 	var providersByOid = this.mib.providersByOid;
 	var oid = varbind.oid;
 
