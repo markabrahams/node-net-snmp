@@ -4569,21 +4569,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var mibRequests = [];
 	var handlers = [];
 
-	// TODO: consider sorting varbinds with RowStatus insertions
-	// first, then other SETs, then RowStatus deletions, then types
-	// other than SET. That will ensure that new table rows exist
-	// before columns other than the RowStatus are set. Currently,
-	// setting a column other than the RowStatus one, in a row that
-	// doesn't yet exist, will result in an error even if a later
-	// varbind would create the row. (It's also a fair amount of extra
-	// work that we should ensure is really necessary. I've always
-	// seen `snmpset` example commands that specified the requests in
-	// the above order anyway. Maybe it's up to the user to do so? The
-	// NOTE WELL on RFC-2579 page 7, however, indicates that the
-	// "active" state is relevant "before or after processing the PDU"
-	// implying that the user-provided order is irrelevant and we must
-	// handle it here. Sigh.
-
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		var providerNode;
