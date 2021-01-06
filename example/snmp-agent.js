@@ -16,7 +16,7 @@ var callback = function (error, data) {
     if ( error ) {
         console.error (error);
     } else {
-        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
+        console.log ("callback: " + JSON.stringify(data.pdu.varbinds, null, 2));
     }
 };
 
@@ -165,3 +165,8 @@ acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
 acm.setUserAccess ("fred", snmp.AccessLevel.ReadWrite);
 console.log ("private = ", acm.getCommunityAccess ("private"));
 console.log (acm.getCommunitiesAccess ());
+
+agent.setAgentEventHandler(
+	(message) => {
+	  console.log("Agent event: ", message);
+	});
