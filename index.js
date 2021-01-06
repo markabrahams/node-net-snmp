@@ -252,6 +252,26 @@ var RowStatus = {
 
 _expandConstantObject (RowStatus);
 
+
+var AgentEvent = {
+    // error events
+    "-1": "ERRnoInstance",
+    "-2": "ERRnoProvider",
+    "-3": "ERRnoAccess",
+    "-4": "ERRbadRowStatusAction",
+
+    // successful action events
+    0: "autoCreateScalar",
+    1: "tableRowCreated",
+    2: "tableRowDeleted",
+    3: "getEndOfMibView",
+    4: "get",
+    5: "set"
+};
+
+_expandConstantObject (AgentEvent);
+
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -4272,7 +4292,14 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
+	this.on("agentRequest", (event) => {
+		if (this.agentEventHandler) {
+		  this.agentEventHandler(event);
+		}
+	});
 };
+
+util.inherits (Agent, events.EventEmitter);
 
 Agent.prototype.getMib = function () {
 	return this.mib;
@@ -4307,7 +4334,7 @@ Agent.prototype.getProviders = function () {
 };
 
 Agent.prototype.setScalarReadCreateHandler = function (handler) {
-  this.scalarReadCreateHandler = handler;
+	this.scalarReadCreateHandler = handler;
 };
 
 // The registered tableRowStatusHandler's responsibility is to
@@ -4331,7 +4358,19 @@ Agent.prototype.setScalarReadCreateHandler = function (handler) {
 // columns in the row, this implementation never uses the
 // state RowStatus["notReady"].)
 Agent.prototype.setTableRowStatusHandler = function (handler) {
-  this.tableRowStatusHandler = handler;
+	this.tableRowStatusHandler = handler;
+};
+
+// The registered agentEventHandler will receive one or more event
+// messages for each operation requested of the agent. The reason
+// there may be more than one is that some operations, like RowStatus
+// actions, cause an instance to be created, in addition to setting a
+// value.
+//
+// The handler will be called with a single argument, a map, which
+// details the cause of the event.
+Agent.prototype.setAgentEventHandler = function (handler) {
+	this.agentEventHandler = handler;
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -4474,6 +4513,13 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				value = this.cast( provider.scalarType, value );
 				this.mib.setScalarValue ( provider.name,  value );
 
+				this.emit ("agentRequest",	{
+					eventType: "autoCreateScalar",
+					oid: oid,
+					providerName: provider.name,
+					value: value
+				});
+
 				// Now there should be an instanceNode available.
 				return this.mib.lookup (oid);
 			}
@@ -4527,6 +4573,13 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
+
+					this.emit ("agentRequest",	{
+						eventType: "tableRowCreated",
+						oid: oid,
+						providerName: provider.name,
+						values: value
+					});
 
 					// Now there should be an instanceNode available.
 					return this.mib.lookup (oid);
@@ -4620,6 +4673,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
+
+				me.emit ("agentRequest",  {
+					eventType: "ERRnoInstance",
+					requestType: PduType[requestPdu.type],
+					oid: requestPdu.varbinds[i].oid,
+					errorStatus: ErrorStatus.NoError,
+					errorType: ObjectType.NoSuchObject
+				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
@@ -4635,6 +4696,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
+
+				me.emit ("agentRequest",  {
+					eventType: "ERRnoProvider",
+					requestType: PduType[requestPdu.type],
+					oid: requestPdu.varbinds[i].oid,
+					errorStatus: ErrorStatus.NoError,
+					errorType: ObjectType.NoSuchInstance
+				});
 			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
 				// requested access not allowed (by MAX-ACCESS)
 				mibRequests[i] = new MibRequest ({
@@ -4649,6 +4718,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
+
+				me.emit ("agentRequest",  {
+					eventType: "ERRnoAccess",
+					requestType: PduType[requestPdu.type],
+					oid: requestPdu.varbinds[i].oid,
+					errorStatus: ErrorStatus.NoAccess,
+					errorIndex: i + 1
+				});
 			} else if ( requestPdu.type === PduType.SetRequest &&
 					typeof providerNode.provider.rowStatusColumn == "number" &&
 					instanceNode.getTableColumnFromInstanceNode() === providerNode.provider.rowStatusColumn) {
@@ -4699,6 +4776,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 								value: null
 							});
 						};
+
+						me.emit ("agentRequest",  {
+							eventType: "ERRbadRowStatusAction",
+							requestType: PduType[requestPdu.type],
+							oid: requestPdu.varbinds[i].oid,
+							errorStatus: ErrorStatus.InconstentValue,
+							errorIndex: i + 1
+						});
 						break;
 				}
 			}
@@ -4730,6 +4815,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						type: error.type || ObjectType.Null,
 						value: error.value || null
 					};
+
+					// appNotifies is already updated for errors; nothing more to do here
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
 						var column = instanceNode.getTableColumnFromInstanceNode();
@@ -4753,6 +4840,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// Delete the table row
 							me.mib.deleteTableRow ( name, row );
 
+							me.emit ("agentRequest",  {
+								eventType: "tableRowDeleted",
+								requestType: PduType[requestPdu.type],
+								oid: requestPdu.varbinds[i].oid,
+								providerName: name,
+								row: row
+							});
+
 							// This is going to return the prior state of the RowStatus column,
 							// i.e., either "active" or "notInService". That feels wrong, but there
 							// is no value we can set it to to indicate just-deleted. One would
@@ -4765,13 +4860,37 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						} else {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+
+							me.emit ("agentRequest",  {
+								eventType: "set",
+								requestType: PduType[requestPdu.type],
+								oid: requestPdu.varbinds[i].oid,
+								providerName: providerNode.provider.name,
+								value: requestPdu.varbinds[savedIndex].value
+							});
 						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbindType = ObjectType.EndOfMibView;
+
+						me.emit ("agentRequest",  {
+							eventType: "getEndOfMibView",
+							requestType: PduType[requestPdu.type],
+							oid: requestPdu.varbinds[i].oid,
+							providerName: providerNode.provider.name,
+							value: mibRequests[savedIndex].instanceNode.value
+						});
 					} else {
 						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
+
+						me.emit ("agentRequest",  {
+							eventType: "get",
+							requestType: PduType[requestPdu.type],
+							oid: requestPdu.varbinds[i].oid,
+							providerName: providerNode.provider.name,
+							value: mibRequests[savedIndex].instanceNode.value
+						});
 					}
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
