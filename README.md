@@ -2780,6 +2780,10 @@ Example programs are included under the module's `example` directory.
 
  * Add agent errorStatus signalling support
 
+## Version 3.0.4 - 06/01/2021
+
+ * Prevent non-accessible index objects from being columns in table rows
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
