@@ -3465,7 +3465,11 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 				return null;
 			}
 			remainingIndex = index.slice(1);
-			return this.children[nextChildIndexPart].getInstanceNodeForTableRowIndex(remainingIndex);
+			if ( this.children[nextChildIndexPart] ) {
+				return this.children[nextChildIndexPart].getInstanceNodeForTableRowIndex(remainingIndex);
+			} else {
+				return null;
+			}
 		}
 	}
 };
@@ -3600,8 +3604,6 @@ var Mib = function () {
 		}
   });
 };
-
-util.inherits (Mib, events.EventEmitter);
 
 Mib.prototype.addNodesForOid = function (oidString) {
 	var address = Mib.convertOidToAddress (oidString);
@@ -4000,11 +4002,15 @@ Mib.prototype.addTableRow = function (table, row) {
 	instance = this.getTableRowInstanceFromRow (provider, row);
 	for ( var i = 0; i < provider.tableColumns.length ; i++ ) {
 		var column = provider.tableColumns[i];
-		instanceAddress = providerNode.address.concat (column.number).concat (instance);
-		this.addNodesForAddress (instanceAddress);
-		instanceNode = this.lookup (instanceAddress);
-		instanceNode.valueType = column.type;
-		instanceNode.value = row[rowValueOffset + i];
+		var isColumnIndex = provider.tableIndex.some ( indexPart => indexPart.columnNumber == column.number );
+		// prevent not-accessible index entries from being added as columns in the row
+		if ( ! isColumnIndex || column.maxAccess !== MaxAccess['not-accessible'] ) {
+			instanceAddress = providerNode.address.concat (column.number).concat (instance);
+			this.addNodesForAddress (instanceAddress);
+			instanceNode = this.lookup (instanceAddress);
+			instanceNode.valueType = column.type;
+			instanceNode.value = row[rowValueOffset + i];
+		}
 	}
 };
 
@@ -4022,6 +4028,9 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstan
 	var providerIndex = provider.tableIndex;
 	var providerNode = this.getProviderNodeForTable (table);
 	var columnNode = providerNode.children[columnNumber];
+	if ( ! columnNode ) {
+		return null;
+	}
 	var instanceNodes = columnNode.getInstanceNodesForColumn ();
 	var instanceOid;
 	var indexValues = [];
@@ -4046,16 +4055,30 @@ Mib.prototype.getTableRowCells = function (table, rowIndex) {
 	var instanceAddress;
 	var instanceNode;
 	var row = [];
+	var rowFound = false;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
 	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	for ( var columnNumber of Object.keys (providerNode.children) ) {
 		columnNode = providerNode.children[columnNumber];
-		instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
-		row.push (instanceNode.value);
+		if ( columnNode ) {
+			instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
+			if ( instanceNode ) {
+				row.push (instanceNode.value);
+				rowFound = true;
+			} else {
+				row.push (null);
+			}
+		} else {
+			row.push (null);
+		}
 	}
-	return row;
+	if ( rowFound ) {
+		return row;
+	} else {
+		return null;
+	}
 };
 
 Mib.prototype.getTableCells = function (table, byRows, includeInstances) {
