@@ -224,5 +224,5 @@ console.log (acm.getCommunitiesAccess ());
 
 agent.setAgentEventHandler(
 	(message) => {
-	  console.log("Agent event: ", message);
+		console.log("Agent event: ", message);
 	});

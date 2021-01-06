@@ -4294,7 +4294,7 @@ var Agent = function (options, callback, mib) {
 	this.forwarder = new Forwarder (this.listener, this.callback);
 	this.on("agentRequest", (event) => {
 		if (this.agentEventHandler) {
-		  this.agentEventHandler(event);
+			this.agentEventHandler(event);
 		}
 	});
 };
