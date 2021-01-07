@@ -2784,6 +2784,10 @@ Example programs are included under the module's `example` directory.
 
  * Prevent non-accessible index objects from being columns in table rows
 
+## Version 3.0.5 - 08/01/2021
+
+ * Fix MIB file reading from relative paths
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
