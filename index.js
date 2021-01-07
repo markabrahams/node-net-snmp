@@ -3163,9 +3163,6 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					tableIndex: [1]	 // default - assume first column is index
 				};
 				currentTableProvider.maxAccess = MaxAccess[maxAccess];
-				if (defVal) {
-					currentTableProvider.defVal = defVal[0];
-				}
 
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
@@ -3240,6 +3237,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 									enumeration: integerEnumeration
 								};
 							}
+							if (defVal) {
+								columnDefinition.defVal = defVal;
+							}
 							// If this column has syntax RowStatus and
 							// the MIB module imports RowStatus from
 							// SNMPv2-TC, mark this column as the
@@ -3278,7 +3278,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				};
 
 				if (defVal) {
-					scalarDefinition.defVal = defVal[0];
+					scalarDefinition.defVal = defVal;
 				}
 
 				if ( integerEnumeration ) {
@@ -3602,7 +3602,7 @@ var Mib = function () {
 			delete providersByOid[target[key].oid];
 			delete target[key];
 		}
-  });
+	});
 };
 
 Mib.prototype.addNodesForOid = function (oidString) {
@@ -4307,7 +4307,7 @@ Agent.prototype.getProviders = function () {
 };
 
 Agent.prototype.setScalarReadCreateHandler = function (handler) {
-  this.scalarReadCreateHandler = handler;
+	this.scalarReadCreateHandler = handler;
 };
 
 // The registered tableRowStatusHandler's responsibility is to
@@ -4331,7 +4331,7 @@ Agent.prototype.setScalarReadCreateHandler = function (handler) {
 // columns in the row, this implementation never uses the
 // state RowStatus["notReady"].)
 Agent.prototype.setTableRowStatusHandler = function (handler) {
-  this.tableRowStatusHandler = handler;
+	this.tableRowStatusHandler = handler;
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -4377,7 +4377,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-Agent.prototype.cast = function ( type, value ) {
+Agent.prototype.castSetValue = function ( type, value ) {
 	switch (type) {
 		case ObjectType.Boolean:
 			return !! value;
@@ -4441,7 +4441,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 		provider = providersByOid[subOid];
 		if (provider) {
 			// Yup. Figure out what to do with it.
-//			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+			// console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
 			//
 			// Scalar
@@ -4460,7 +4460,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				// should not be auto-created. The handler may make
 				// use of the DEFVAL read either from the MIB or set
 				// through mib.setScalarDefaultValue.
-				if (! this.scalarReadCreateHandler) {
+				if ( ! this.scalarReadCreateHandler) {
 					return undefined;
 				}
 
@@ -4471,8 +4471,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				}
 
 				// Ensure the value is of the correct type, and save it
-				value = this.cast( provider.scalarType, value );
-				this.mib.setScalarValue ( provider.name,  value );
+				value = this.castSetValue ( provider.scalarType, value );
+				this.mib.setScalarValue ( provider.name, value );
 
 				// Now there should be an instanceNode available.
 				return this.mib.lookup (oid);
@@ -4523,7 +4523,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					}
 
 					// Map each column's value to the appropriate type
-					value = value.map( (v, i) => this.cast( provider.tableColumns[i].type, v ) );
+					value = value.map( (v, i) => this.castSetValue ( provider.tableColumns[i].type, v ) );
 
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
@@ -4644,7 +4644,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				handlers[i] = function getRanaHandler (mibRequestForRana) {
 					mibRequestForRana.done ({
 						errorStatus: ErrorStatus.NoAccess,
-						errorIndex: i + 1,
 						type: ObjectType.Null,
 						value: null
 					});
@@ -4694,7 +4693,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						handlers[i] = function getIcsHandler (mibRequestForIcs) {
 							mibRequestForIcs.done ({
 								errorStatus: ErrorStatus.InconsistentValue,
-								errorIndex: i + 1,
 								type: ObjectType.Null,
 								value: null
 							});
@@ -4711,8 +4709,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				mibRequests[i].setType = requestPdu.varbinds[i].type;
-				mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				if ( requestPdu.type == PduType.SetRequest ) {
+					mibRequests[i].setType = requestPdu.varbinds[i].type;
+					mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				}
 				handlers[i] = providerNode.provider.handler;
 			}
 		}

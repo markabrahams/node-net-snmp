@@ -149,13 +149,14 @@ agent.setScalarReadCreateHandler(
 				console.log("No default scalar value available:", provider);
 				return undefined;
 		}
-	});
+    }
+);
 
 
 agent.setTableRowStatusHandler(
 	(provider, action, row) => {
-		const			  tc = provider.tableColumns;
-		const			  RowStatus = snmp.RowStatus;
+		const tc = provider.tableColumns;
+		const RowStatus = snmp.RowStatus;
 
 		function defVal(col, valueIfNotFound) {
 			if (typeof tc[col].defVal == "undefined") {
@@ -166,21 +167,21 @@ agent.setTableRowStatusHandler(
 		}
 
 		switch (provider.name) {
-		case "ifTable" :
-			return (
-				[
-					Array.isArray(row) ? row[0] : row,
-					defVal(1, "Hello world!"),
-					defVal(2, 24),
-					(action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"])
-				]);
+            case "ifTable" :
+                return (
+                    [
+                        Array.isArray(row) ? row[0] : row,
+                        defVal(1, "Hello world!"),
+                        defVal(2, 24),
+                        (action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"])
+                    ]
+                );
 
-		default :
-			return undefined;
-		}
-	});
-  
-
+            default :
+                return undefined;
+        }
+    }
+);
 
 var mib = agent.getMib ();
 mib.setScalarValue ("sysDescr", "Rage inside the machine!");
