@@ -274,6 +274,26 @@ The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
 - `ReadOnly` - read-only access granted to the community or user
 - `ReadWrite` - read-write access granted to the community or user
 
+## snmp.MaxAccess
+- `0 - not-accessible`
+- `1 - accessible-for-notify`
+- `2 - read-only`
+- `3 - read-write`
+- `4 - read-create`
+};
+
+# snmp.RowStatus
+Status values
+- `1 - active`
+- `2 - notInService`
+- `3 - notReady`
+
+Actions
+- `4 - createAndGo`
+- `5 - createAndWait`
+- `6 - destroy`
+
+
 # OID Strings & Varbinds
 
 Some parts of this module accept simple OID strings, e.g.:
@@ -1945,6 +1965,13 @@ numeric values from the MaxAccess export. If a `maxAccess` value is
 specified, a `get` request to the agent will return a `noAccess`
 error if `maxAccess` is not at least "read-only" (2). `maxAccess`
 must be at least "read-write" (3) for a `set` request to suceed.
+ * `defVal` *(optional)* - the default value to assign for scalar
+objects automatically created, when `maxAccess` is set to
+"read-create" (4). Note that table columns can specify such `defVal`
+default values in an identical way, to be used when a new row is to be
+automatically created, except that these are stored under the column
+object definition for each column. See `Automatic creation of
+objects`, below, for details.
  * `handler` *(optional)* - an optional callback function, which is called before the request to the
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
@@ -2055,6 +2082,27 @@ in the same way as for the `getTableRowCells()` call.  If this was the last row 
 the table is pruned from the MIB, although the provider still remains registered with the MIB.
 Meaning that on the addition of another row, the table will be instantiated again.
 
+## mib.setScalarDefaultValue (tableProviderName, defaultValue)
+
+Adds a default value, called `defVal`, to a scalar provider. This
+default value will be used for automatic creation of the scalar's
+object instance, when its `maxAccess` value is "read-create". This
+method is of primary usefulness when providers are automatically
+created, e.g., via `store.getProvidersForModule`. See `Automatic
+creation of objects` for details.
+
+## mib.setTableRowDefaultValues (tableProviderName, defaultValues)
+
+Add default values, called `defVal`, to each table column in a table
+provider. These default values will be used for automatic creation of
+a table row. `defaultValues` must be an array of values of length
+equal to the length of the tableColumns array in the provider. When a
+specific column need not be given a default value, that element of the
+array should be set to `undefined`. This method is of primary
+usefulness when providers are automatically created, e.g., via
+`store.getProvidersForModule`. See `Automatic creation of objects` for
+details.
+
 ## mib.dump (options)
 
 Dumps the MIB in text format.  The `options` object controls the display of the dump with these
@@ -2085,6 +2133,138 @@ produces this sort of output:
 1.3.6.1.2.1.2.2.1.3.1 = Integer: 24
 1.3.6.1.2.1.2.2.1.3.2 = Integer: 6
 ```
+
+## Automatic creation of objects
+
+### Scalars
+When a provider's `maxAccess` is set to "read-create" (4), then an
+agent request to access the object's instance will result in the
+instance being automatically created, if `defVal` is also defined in
+the provider. The new instance's value will be set to the default
+value specified in `defVal`. If `defVal` is not specified in the
+provider, then the instance will not, by default, be automatically
+created.
+
+The default handling of instance creation can be overridden by
+providing a handler to the method `setScalarReadCreateHandler`. This
+method takes one parameter, the handler to be used for generating the
+value of a scalar instance to be automatically created. The handler is
+passed a single argument, the provider for the scalar. The method must
+return either the value to be assigned to the newly-created instance;
+or `undefined` to indicate that the instance should not be created.
+
+An example handler method, accomplishing the default behavior, looks
+like this:
+
+```
+function scalarReadCreateHandler (provider) {
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+}
+```
+
+Automatic instance creation of scalars can be disabled entirely by
+calling `setScalarReadCreateHandler(null);`.
+
+### Table rows
+
+Table rows may be added to a table, or deleted from it, if the table
+has a column defined with `rowStatus: true` in the provider, and that
+column's number referenced by the provider's `rowStatusColumn` member.
+The semantics of adding and deleting rows is described beginning on
+page 5 of RFC-2579, and in
+[SNMPv2-TC.mib](https://github.com/markabrahams/node-net-snmp/blob/master/lib/mibs/SNMPv2-TC.mib#L186).
+The row status column is typically referred to, simply, as the Status
+column.
+
+When a row does not exist and its Status column's value is set to
+"createAndGo" (4) or "createAndWait" (5), the specified row will be
+created, by default, using the default values specified in each
+non-index and non-Status column's `defVal` member. If `defVal` is not
+specified in any column other than index or Status columns, the row
+will not be automatically created.
+
+The default handling of row creation can be overridden by providing a
+handler to the method, `setTableRowStatusHandler`. This method takes
+one parameter, the handler to be used for generating the values for
+each column of the row to be automatically created. The handler is
+passed three arguments:
+
+- the provider for the table
+- the action invoking the row creation: one of "createAndGo" or "createAndWait"
+- an array of columns forming the table index, where each element of
+  the array is an index into the `tableColumns` array of the provider
+
+The handler must return either an array of column values for the new
+row, with exactly one value corresponding to each column specified in
+`tableColumns`; or `undefined` to indicate that the row should not be
+created.
+
+An example handler method, accomplishing the default behavior, looks
+like this:
+
+```
+function tableRowStatusHandler(provider, action, row) {
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Replace the action with the appropriate state
+				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
+			} else if ( "defVal" in tc[index] ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
+}
+```
+
+Automatic instance creation of table rows can be disabled entirely by
+calling `setTableRowStatusHandler(null);`.
+
+### Mapping from MIB files
+
+When a MIB is read from a file using `ModuleStore`'s `loadFromFile`
+method, and the providers for that module automatically created via a
+call to the store's `getProvidersForModule` method, default values
+specified as `DEFVAL` in the MIB are mapped to `defVal` within the
+provider, both from scalar definitions and from table columns
+definitions.
+
+If the MIB files do not contain some or all of the default values
+needed for automatic creation of scalar objects or table rows, the
+methods `Mib.setScalarDefaultValue` and `Mib.setTableRowDefaultValues`
+may be used to conveniently add defaults after the MIB files are
+loaded.
 
 # Using This Module: Module Store
 
