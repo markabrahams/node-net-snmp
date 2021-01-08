@@ -82,7 +82,8 @@ var tableProvider = {
             number: 2,
             name: "ifDescr",
             type: snmp.ObjectType.OctetString,
-            maxAccess: snmp.MaxAccess['read-write']
+			maxAccess: snmp.MaxAccess['read-write'],
+			defVal: "Hello world!"
         },
         {
             number: 3,
@@ -119,6 +120,7 @@ var tableProvider = {
 };
 agent.registerProvider (tableProvider);
 
+/*
 agent.setScalarReadCreateHandler(
 	(provider) => {
 		// If there's a default value specified...
@@ -152,7 +154,6 @@ agent.setScalarReadCreateHandler(
     }
 );
 
-
 agent.setTableRowStatusHandler(
 	(provider, action, row) => {
 		const tc = provider.tableColumns;
@@ -167,21 +168,22 @@ agent.setTableRowStatusHandler(
 		}
 
 		switch (provider.name) {
-            case "ifTable" :
-                return (
-                    [
-                        Array.isArray(row) ? row[0] : row,
-                        defVal(1, "Hello world!"),
-                        defVal(2, 24),
-                        (action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"])
-                    ]
-                );
+			case "ifTable" :
+				return (
+					[
+						Array.isArray(row) ? row[0] : row,
+						"Hi there",
+						defVal(2, 24),
+						(action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"])
+					]
+				);
 
-            default :
-                return undefined;
-        }
-    }
+			default :
+				return undefined;
+		}
+	}
 );
+*/
 
 var mib = agent.getMib ();
 mib.setScalarValue ("sysDescr", "Rage inside the machine!");
@@ -198,7 +200,7 @@ mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 //console.log (JSON.stringify (providers, null, 2));
 
 mib.dump ({
-    leavesOnly: true,
+	leavesOnly: true,
     showProviders: true,
     showValues: true,
     showTypes: true

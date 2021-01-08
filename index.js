@@ -3782,12 +3782,25 @@ Mib.prototype.registerProvider = function (provider) {
 };
 
 Mib.prototype.setScalarDefaultValue = function (name, value) {
-	var provider = this.getProvider(name);
+	let provider = this.getProvider(name);
 	provider.defVal = value;
 };
 
-Mib.prototype.setTableColumnDefaultValue = function(name, columnNumber, value) {
-	throw new Error("setTableColumnDefaultValue is not yet implemented");
+Mib.prototype.setTableRowDefaultValues = function (name, values) {
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+
+	// We must be given an array of exactly the right number of columns
+	if (values.length != tc.length) {
+		throw new Error(`Incorrect values length: got ${values.length}; expected ${tc.length}`);
+	}
+
+	// Add defVal to each table column.
+	tc.forEach((entry, i) => {
+		if (typeof values[i] != "undefined") {
+			entry.defVal = values[i];
+		}
+  });
 };
 
 Mib.prototype.registerProviders = function (providers) {
@@ -4272,6 +4285,8 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
+	this.scalarReadCreateHandler = this.scalarReadCreateHandlerInternal;
+	this.tableRowStatusHandler = this.tableRowStatusHandlerInternal;
 };
 
 Agent.prototype.getMib = function () {
@@ -4332,6 +4347,54 @@ Agent.prototype.setScalarReadCreateHandler = function (handler) {
 // state RowStatus["notReady"].)
 Agent.prototype.setTableRowStatusHandler = function (handler) {
 	this.tableRowStatusHandler = handler;
+};
+
+Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+};
+
+Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Replace the action with the appropriate state
+				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
+			} else if ( "defVal" in tc[index] ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
