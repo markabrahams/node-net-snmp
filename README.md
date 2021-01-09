@@ -2788,6 +2788,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix MIB file reading from relative paths
 
+## Version 3.0.6 - 10/01/2021
+
+ * Fix MIB parsing of tab characters
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
