@@ -2792,6 +2792,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix MIB parsing of tab characters
 
+## Version 3.0.7 - 10/01/2021
+
+ * Fix MIB parsing of quoted unmatched brackets
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
