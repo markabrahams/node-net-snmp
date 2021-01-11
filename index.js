@@ -3183,9 +3183,6 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					tableIndex: [1]	 // default - assume first column is index
 				};
 				currentTableProvider.maxAccess = MaxAccess[maxAccess];
-				if (defVal) {
-					currentTableProvider.defVal = defVal[0];
-				}
 
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
@@ -3260,6 +3257,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 									enumeration: integerEnumeration
 								};
 							}
+							if (defVal) {
+								columnDefinition.defVal = defVal;
+							}
 							// If this column has syntax RowStatus and
 							// the MIB module imports RowStatus from
 							// SNMPv2-TC, mark this column as the
@@ -3298,7 +3298,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				};
 
 				if (defVal) {
-					scalarDefinition.defVal = defVal[0];
+					scalarDefinition.defVal = defVal;
 				}
 
 				if ( integerEnumeration ) {
@@ -3622,7 +3622,7 @@ var Mib = function () {
 			delete providersByOid[target[key].oid];
 			delete target[key];
 		}
-  });
+	});
 };
 
 Mib.prototype.addNodesForOid = function (oidString) {
@@ -3802,12 +3802,25 @@ Mib.prototype.registerProvider = function (provider) {
 };
 
 Mib.prototype.setScalarDefaultValue = function (name, value) {
-	var provider = this.getProvider(name);
+	let provider = this.getProvider(name);
 	provider.defVal = value;
 };
 
-Mib.prototype.setTableColumnDefaultValue = function(name, columnNumber, value) {
-	throw new Error("setTableColumnDefaultValue is not yet implemented");
+Mib.prototype.setTableRowDefaultValues = function (name, values) {
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+
+	// We must be given an array of exactly the right number of columns
+	if (values.length != tc.length) {
+		throw new Error(`Incorrect values length: got ${values.length}; expected ${tc.length}`);
+	}
+
+	// Add defVal to each table column.
+	tc.forEach((entry, i) => {
+		if (typeof values[i] != "undefined") {
+			entry.defVal = values[i];
+		}
+  });
 };
 
 Mib.prototype.registerProviders = function (providers) {
@@ -4292,11 +4305,15 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
+
 	this.on("agentRequest", (event) => {
 		if (this.agentEventHandler) {
 			this.agentEventHandler(event);
 		}
 	});
+
+	this.scalarReadCreateHandler = this.scalarReadCreateHandlerInternal;
+	this.tableRowStatusHandler = this.tableRowStatusHandlerInternal;
 };
 
 util.inherits (Agent, events.EventEmitter);
@@ -4361,6 +4378,7 @@ Agent.prototype.setTableRowStatusHandler = function (handler) {
 	this.tableRowStatusHandler = handler;
 };
 
+
 // The registered agentEventHandler will receive one or more event
 // messages for each operation requested of the agent. The reason
 // there may be more than one is that some operations, like RowStatus
@@ -4371,6 +4389,54 @@ Agent.prototype.setTableRowStatusHandler = function (handler) {
 // details the cause of the event.
 Agent.prototype.setAgentEventHandler = function (handler) {
 	this.agentEventHandler = handler;
+
+Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+};
+
+Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Replace the action with the appropriate state
+				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
+			} else if ( "defVal" in tc[index] ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
+>>>>>>> row-status
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -4416,7 +4482,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 };
 
-Agent.prototype.cast = function ( type, value ) {
+Agent.prototype.castSetValue = function ( type, value ) {
 	switch (type) {
 		case ObjectType.Boolean:
 			return !! value;
@@ -4480,7 +4546,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 		provider = providersByOid[subOid];
 		if (provider) {
 			// Yup. Figure out what to do with it.
-//			console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+			// console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
 
 			//
 			// Scalar
@@ -4499,7 +4565,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				// should not be auto-created. The handler may make
 				// use of the DEFVAL read either from the MIB or set
 				// through mib.setScalarDefaultValue.
-				if (! this.scalarReadCreateHandler) {
+				if ( ! this.scalarReadCreateHandler) {
 					return undefined;
 				}
 
@@ -4510,8 +4576,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				}
 
 				// Ensure the value is of the correct type, and save it
-				value = this.cast( provider.scalarType, value );
-				this.mib.setScalarValue ( provider.name,  value );
+				value = this.castSetValue ( provider.scalarType, value );
+				this.mib.setScalarValue ( provider.name, value );
 
 				this.emit ("agentRequest",	{
 					eventType: "autoCreateScalar",
@@ -4569,7 +4635,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					}
 
 					// Map each column's value to the appropriate type
-					value = value.map( (v, i) => this.cast( provider.tableColumns[i].type, v ) );
+					value = value.map( (v, i) => this.castSetValue ( provider.tableColumns[i].type, v ) );
 
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
@@ -4713,7 +4779,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				handlers[i] = function getRanaHandler (mibRequestForRana) {
 					mibRequestForRana.done ({
 						errorStatus: ErrorStatus.NoAccess,
-						errorIndex: i + 1,
 						type: ObjectType.Null,
 						value: null
 					});
@@ -4771,7 +4836,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						handlers[i] = function getIcsHandler (mibRequestForIcs) {
 							mibRequestForIcs.done ({
 								errorStatus: ErrorStatus.InconsistentValue,
-								errorIndex: i + 1,
 								type: ObjectType.Null,
 								value: null
 							});
@@ -4796,8 +4860,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				mibRequests[i].setType = requestPdu.varbinds[i].type;
-				mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				if ( requestPdu.type == PduType.SetRequest ) {
+					mibRequests[i].setType = requestPdu.varbinds[i].type;
+					mibRequests[i].setValue = requestPdu.varbinds[i].value;
+				}
 				handlers[i] = providerNode.provider.handler;
 			}
 		}
