@@ -294,6 +294,21 @@ Actions
 - `6 - destroy`
 
 
+# snmp.AgentEvent
+## Error event types
+- `-1 - ERRnoInstance`
+- `-2 - ERRnoProvider`
+- `-3 - ERRnoAccess`
+- `-4 - ERRbadRowStatusAction`
+
+## Successful action events
+- `0 - autoCreateScalar`
+- `1 - autoCreateTableRow`
+- `2 - tableRowDeleted`
+- `3 - getEndOfMibView`
+- `4 - get`
+- `5 - set`
+
 # OID Strings & Varbinds
 
 Some parts of this module accept simple OID strings, e.g.:
@@ -2247,6 +2262,111 @@ function tableRowStatusHandler(provider, action, row) {
 
 Automatic instance creation of table rows can be disabled entirely by
 setting `createHandler` to null.
+
+## Agent monitoring
+Requests from a manager to the agent can be monitored, by registering
+an event handler function. The event handler function is called with a
+single argument, a map. In all cases, the map has an `eventType`
+member which is one of the `snmp.AgentEvent` values. Members `oid` and
+`providerName` (when available) are also present. Depending on the
+`eventType`, other members vary. The complete set of members for each
+event type is shown here:
+
+- autoCreateScalar
+  - Issued when a scalar has `maxAccess` set to "read-create" and the
+  scalar does not exist when it is read
+  - eventType ("autoCreateScalar")
+  - oid
+  - providerName
+  - value
+
+- autoCreateTableRow
+  - Issued when a table row is created as a result of a RowStatus
+    column's value being set to "createAndGo" (4) or "createAndWait"
+    (5), and the row is found to not exist.
+  - eventType ("autoCreateTableRow")
+  - oid
+  - providerName
+  - values (array of values for the table row)
+
+- ERRnoInstance
+  - Issued when no instance node can be found or automatically
+    created, for the provided oid
+  - eventType ("ERRnoInstance")
+  - requestType
+  - oid
+  - errorStatus (ErrorStatus.NoError)
+  - errorType (ObjectType.NoSuchObject)
+
+- ERRnoProvider
+  - Issued when no provider node can be found for the ascertained
+    instance node.
+  - eventType ("ERRnoProvider")
+  - requestType
+  - oid
+  - errorStatus (ErrorStatus.NoError)
+  - errorType (ObjectType.NoSuchInstance)
+
+- ERRnoAccess
+  - Issued when an attempt at `maxAccess` violation is made
+  - eventType ("ERRnoAccess")
+  - requestType
+  - oid
+  - errorStatus (ErrorStatus.NoAccess)
+  - errorIndex
+
+- ERRbadRowStatusAction
+  - Issued when an illegal value is set in the RowStatus column. There
+    are six legal values of RowStatus (see snmp.RowStatus), of which
+    five may be set. The value "notReady" may not be set.
+  - eventType ("ERRbadRowStatusAction")
+  - requestType
+  - oid
+  - errorStatus (ErrorStatus.InconstentValue)
+  - errorIndex
+
+- tableRowDeleted
+  - Issued when a RowStatus column's value is set to "destroy" and the
+    row has been deleted.
+  - eventType ("tableRowDeleted"
+  - oid
+  - providerName
+  - row (array of row index values)
+
+- set
+  - Issued when a Set operation occurs
+  - eventType ("set")
+  - oid
+  - providerName
+  - value
+
+- getEndOfMibView
+  - Issued when a GetNext or GetBulk request is issued, and the end of
+    the mib view has been reached
+  - eventType ("getEndOfMibView")
+  - requestType
+  - oid
+  - providerName
+  - value
+
+- get
+  - Issued when a Get operation occurs
+  - eventType ("get")
+  - requestType
+  - oid
+  - providerName
+  - value
+
+Any single request can potentially result in multiple events, particularly in light of automatic creation of objects. For example, a request to create a new row by setting a RowStatus column to "createAndGo" (4) will result in three agent events:
+
+- autoCreateTableRow
+  - The automatically-ascertained column values, e.g., from `defVal`
+    settings, will be available in the `values` member
+- set
+  - Shows changing to the new value of the RowStatus column, "active" (1)
+- get
+  - Retrieving the value of the column, to be returned as the result
+    of the Set request
 
 ### Mapping from MIB files
 
