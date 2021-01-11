@@ -2305,6 +2305,42 @@ event type is shown here:
     - providerName
     - values (array of values for the table row)
 
+- tableRowDeleted
+  - Issued when a RowStatus column's value is set to "destroy" and the
+    row has been deleted.
+  - members:
+    - eventType ("tableRowDeleted"
+    - oid
+    - providerName
+    - row (array of row index values)
+
+- set
+  - Issued when a Set operation occurs
+  - members:
+    - eventType ("set")
+    - oid
+    - providerName
+    - value
+
+- getEndOfMibView
+  - Issued when a GetNext or GetBulk request is issued, and the end of
+    the mib view has been reached
+  - members:
+    - eventType ("getEndOfMibView")
+    - requestType
+    - oid
+    - providerName
+    - value
+
+- get
+  - Issued when a Get operation occurs
+  - members:
+    - eventType ("get")
+    - requestType
+    - oid
+    - providerName
+    - value
+
 - ERRnoInstance
   - Issued when no instance node can be found or automatically
     created, for the provided oid
@@ -2344,42 +2380,6 @@ event type is shown here:
     - oid
     - errorStatus (ErrorStatus.InconstentValue)
     - errorIndex
-
-- tableRowDeleted
-  - Issued when a RowStatus column's value is set to "destroy" and the
-    row has been deleted.
-  - members:
-    - eventType ("tableRowDeleted"
-    - oid
-    - providerName
-    - row (array of row index values)
-
-- set
-  - Issued when a Set operation occurs
-  - members:
-    - eventType ("set")
-    - oid
-    - providerName
-    - value
-
-- getEndOfMibView
-  - Issued when a GetNext or GetBulk request is issued, and the end of
-    the mib view has been reached
-  - members:
-    - eventType ("getEndOfMibView")
-    - requestType
-    - oid
-    - providerName
-    - value
-
-- get
-  - Issued when a Get operation occurs
-  - members:
-    - eventType ("get")
-    - requestType
-    - oid
-    - providerName
-    - value
 
 Any single request can potentially result in multiple events, particularly in light of automatic creation of objects. For example, a request to create a new row by setting a RowStatus column to "createAndGo" (4) will result in three agent events:
 
