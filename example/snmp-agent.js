@@ -196,8 +196,7 @@ agent.setAgentEventHandler(
 		var data;
 		var isChanged = false;
 
-		switch ( message.eventType )
-		{
+		switch ( message.eventType ) {
 			case "autoCreateScalar":
 			case "set":
 				if ( "row" in message ) {

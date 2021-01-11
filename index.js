@@ -4874,7 +4874,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
             var subAddr;
             var row;
             var column;
-		    var name;
+			var name;
             var provider;
             var tableInfo;
 			var responseVarbind;
@@ -4930,12 +4930,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 
-                            if ( provider.type == MibProviderType.Table ) {
-			                    subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[i].oid, provider.oid);
-			                    subAddr = subOid.split(".");
-                                column = parseInt(subAddr.shift(), 10);
-			                    column = provider.tableColumns.findIndex(entry => entry.number === column);
-			                    row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+							if ( provider.type == MibProviderType.Table ) {
+								subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[i].oid, provider.oid);
+								subAddr = subOid.split(".");
+								column = parseInt(subAddr.shift(), 10);
+								column = provider.tableColumns.findIndex(entry => entry.number === column);
+								row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
 
                                 tableInfo = {
                                     row: row,
