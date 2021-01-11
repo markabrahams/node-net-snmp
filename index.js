@@ -262,7 +262,7 @@ var AgentEvent = {
 
     // successful action events
     0: "autoCreateScalar",
-    1: "tableRowCreated",
+    1: "autoCreateTableRow",
     2: "tableRowDeleted",
     3: "getEndOfMibView",
     4: "get",
@@ -4306,7 +4306,7 @@ var Agent = function (options, callback, mib) {
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
 
-	this.on("agentAction", (event) => {
+	this.on("agentEvent", (event) => {
 		if (this.agentEventHandler) {
 			this.agentEventHandler(event);
 		}
@@ -4579,7 +4579,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				value = this.castSetValue ( provider.scalarType, value );
 				this.mib.setScalarValue ( provider.name, value );
 
-				this.emit ("agentAction",	{
+				this.emit ("agentEvent",	{
 					eventType: "autoCreateScalar",
 					oid: oid,
 					providerName: provider.name,
@@ -4640,7 +4640,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
 
-					this.emit ("agentAction",	{
+					this.emit ("agentEvent",	{
 						eventType: "autoCreateTableRow",
 						oid: oid,
 						providerName: provider.name,
@@ -4740,7 +4740,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					value: null
 				});
 
-				me.emit ("agentAction",  {
+				me.emit ("agentEvent",  {
 					eventType: "ERRnoInstance",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4763,7 +4763,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentAction",  {
+				me.emit ("agentEvent",  {
 					eventType: "ERRnoProvider",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4784,7 +4784,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentAction",  {
+				me.emit ("agentEvent",  {
 					eventType: "ERRnoAccess",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4841,7 +4841,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							});
 						};
 
-						me.emit ("agentAction",  {
+						me.emit ("agentEvent",  {
 							eventType: "ERRbadRowStatusAction",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
@@ -4904,9 +4904,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// Delete the table row
 							me.mib.deleteTableRow ( name, row );
 
-							me.emit ("agentAction",  {
+							me.emit ("agentEvent",  {
 								eventType: "tableRowDeleted",
-								requestType: PduType[requestPdu.type],
 								oid: requestPdu.varbinds[i].oid,
 								providerName: name,
 								row: row
@@ -4925,9 +4924,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 
-							me.emit ("agentAction",  {
+							me.emit ("agentEvent",  {
 								eventType: "set",
-								requestType: PduType[requestPdu.type],
 								oid: requestPdu.varbinds[i].oid,
 								providerName: providerNode.provider.name,
 								value: requestPdu.varbinds[savedIndex].value
@@ -4938,7 +4936,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbindType = ObjectType.EndOfMibView;
 
-						me.emit ("agentAction",  {
+						me.emit ("agentEvent",  {
 							eventType: "getEndOfMibView",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
@@ -4948,7 +4946,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					} else {
 						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
 
-						me.emit ("agentAction",  {
+						me.emit ("agentEvent",  {
 							eventType: "get",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
