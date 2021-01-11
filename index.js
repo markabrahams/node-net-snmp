@@ -4544,7 +4544,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 						eventType: "autoCreateTableRow",
 						oid: oid,
 						providerName: provider.name,
-						values: value
+						values: value,
+                        row: row
 					});
 
 					// Now there should be an instanceNode available.
@@ -4808,7 +4809,16 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		}
 
 		(function (savedIndex) {
+            var subOid;
+            var subAddr;
+            var row;
+            var column;
+		    var name;
+            var provider;
+            var tableInfo;
 			var responseVarbind;
+			var rowStatusColumn;
+
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
@@ -4822,9 +4832,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					};
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
-						var column = instanceNode.getTableColumnFromInstanceNode();
-						var provider = providerNode.provider;
-						var rowStatusColumn;
+						column = instanceNode.getTableColumnFromInstanceNode();
+						provider = providerNode.provider;
 
 						// Is this a RowStatus column with a value of 6 (delete)?
 						rowStatusColumn = provider.tableColumns.reduce(
@@ -4834,10 +4843,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							column === rowStatusColumn ) {
 
 							// Yup. Do the deletion.
-							var row;
-							var name;
-							var subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
-							var subAddr = subOid.split(".");
+							subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
+							subAddr = subOid.split(".");
 
 							subAddr.shift(); // shift off the column number, leaving the row index values
 							row = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
@@ -4866,12 +4873,27 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 
-							me.emit ("agentEvent",  {
+                            if ( provider.type == MibProviderType.Table ) {
+			                    subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[i].oid, provider.oid);
+			                    subAddr = subOid.split(".");
+                                column = parseInt(subAddr.shift(), 10);
+			                    column = provider.tableColumns.findIndex(entry => entry.number === column);
+			                    row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+
+                                tableInfo = {
+                                    row: row,
+                                    column: column
+                                };
+                            } else {
+                                tableInfo = {};
+                            }
+
+							me.emit ("agentEvent",  Object.assign({
 								eventType: "set",
 								oid: requestPdu.varbinds[i].oid,
 								providerName: providerNode.provider.name,
 								value: requestPdu.varbinds[savedIndex].value
-							});
+							}, tableInfo));
 						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
