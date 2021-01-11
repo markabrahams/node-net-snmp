@@ -2291,7 +2291,7 @@ event type is shown here:
 
 - autoCreateScalar
   - Issued when a scalar has `maxAccess` set to "read-create" and the
-  scalar does not exist when it is read
+  scalar does not exist when it is read or set
   - members:
     - eventType ("autoCreateScalar")
     - oid
@@ -2312,7 +2312,7 @@ event type is shown here:
   - Issued when a RowStatus column's value is set to "destroy" and the
     row has been deleted.
   - members:
-    - eventType ("tableRowDeleted"
+    - eventType ("tableRowDeleted")
     - oid
     - providerName
     - row (array of row index values)
