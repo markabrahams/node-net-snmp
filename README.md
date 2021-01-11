@@ -2307,6 +2307,7 @@ event type is shown here:
     - oid
     - providerName
     - values (array of values for the table row)
+    - row (array of row index values)
 
 - tableRowDeleted
   - Issued when a RowStatus column's value is set to "destroy" and the
@@ -2324,6 +2325,9 @@ event type is shown here:
     - oid
     - providerName
     - value
+  - additional members, if provider's type is Table
+    - row (array of row index values)
+    - column
 
 - getEndOfMibView
   - Issued when a GetNext or GetBulk request is issued, and the end of

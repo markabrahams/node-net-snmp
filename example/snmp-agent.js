@@ -1,5 +1,6 @@
 var snmp = require ("../");
 var getopts = require ("getopts");
+var fs = require("fs");
 
 var options = getopts(process.argv.slice(2));
 
@@ -138,6 +139,28 @@ mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 
 //console.log (JSON.stringify (providers, null, 2));
 
+var changes;
+
+// If there's a persistent store, make its specified changes
+try {
+	changes = JSON.parse(fs.readFileSync("persistent.json"));
+
+	for (var providerName in changes) {
+		var change = changes[providerName];
+		if (typeof change == "object") {
+			// table row
+			for (var rowIndex in change) {
+				mib.addTableRow(providerName, change[rowIndex]);
+			}
+		} else {
+			mib.setScalarValue(providerName, change);
+		}
+	}
+} catch (e) {
+	console.log("Could not parse persistent storage");
+	changes = {};
+}
+
 mib.dump ({
 	leavesOnly: true,
     showProviders: true,
@@ -164,7 +187,62 @@ acm.setUserAccess ("fred", snmp.AccessLevel.ReadWrite);
 console.log ("private = ", acm.getCommunityAccess ("private"));
 console.log (acm.getCommunitiesAccess ());
 
+// Demonstrate (a very poor, dangerous implementation of) persistence
 agent.setAgentEventHandler(
 	(message) => {
 		console.log("Agent event: ", message);
+
+		var index;
+		var data;
+		var isChanged = false;
+
+		switch ( message.eventType )
+		{
+			case "autoCreateScalar":
+			case "set":
+				if ( "row" in message ) {
+					index = JSON.stringify(message.row);
+					if (! changes[message.providerName]) {
+						changes[message.ProviderName] = {};
+					}
+					data = mib.getTableRowCells(message.providerName, message.row);
+					data = data.map((v) => v instanceof Buffer ? v.toString() : v);
+					changes[message.providerName][index] = data;
+				} else {
+					data = message.value;
+					data = data instanceof Buffer ? data.toString() : data;
+					changes[message.providerName] = data;
+				}
+				isChanged = true;
+				break;
+
+			case "autoCreateTableRow":
+				index = JSON.stringify(message.row);
+				if (! changes[message.providerName]) {
+					changes[message.providerName] = {};
+				}
+				data = message.values;
+				data = data.map((v) => v instanceof Buffer ? v.toString() : v);
+				changes[message.providerName][index] = data;
+				isChanged = true;
+				break;
+
+			case "tableRowDeleted":
+				index = JSON.stringify(message.row);
+				delete changes[message.providerName][index];
+				if (Object.keys(changes[message.providerName]).length === 0) {
+					delete changes[message.providerName];
+				}
+				isChanged = true;
+				break;
+
+			default:
+				break;
+		}
+
+		console.log("saving changes=", JSON.stringify(changes, null, "	"));
+
+		if (isChanged) {
+			fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "	 "));
+		}
 	});
