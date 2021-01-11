@@ -4299,7 +4299,8 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
-	this.on("agentRequest", (event) => {
+
+	this.on("agentAction", (event) => {
 		if (this.agentEventHandler) {
 			this.agentEventHandler(event);
 		}
@@ -4477,7 +4478,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				value = this.castSetValue ( provider.scalarType, value );
 				this.mib.setScalarValue ( provider.name, value );
 
-				this.emit ("agentRequest",	{
+				this.emit ("agentAction",	{
 					eventType: "autoCreateScalar",
 					oid: oid,
 					providerName: provider.name,
@@ -4539,8 +4540,8 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
 
-					this.emit ("agentRequest",	{
-						eventType: "tableRowCreated",
+					this.emit ("agentAction",	{
+						eventType: "autoCreateTableRow",
 						oid: oid,
 						providerName: provider.name,
 						values: value
@@ -4641,7 +4642,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					value: null
 				});
 
-				me.emit ("agentRequest",  {
+				me.emit ("agentAction",  {
 					eventType: "ERRnoInstance",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4664,7 +4665,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentRequest",  {
+				me.emit ("agentAction",  {
 					eventType: "ERRnoProvider",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4685,7 +4686,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentRequest",  {
+				me.emit ("agentAction",  {
 					eventType: "ERRnoAccess",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
@@ -4779,7 +4780,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						});
 						handlers[i] = getIcsHandler;
 
-						me.emit ("agentRequest",  {
+						me.emit ("agentAction",  {
 							eventType: "ERRbadRowStatusAction",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
@@ -4819,8 +4820,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						type: error.type || ObjectType.Null,
 						value: error.value || null
 					};
-
-					// appNotifies is already updated for errors; nothing more to do here
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
 						var column = instanceNode.getTableColumnFromInstanceNode();
@@ -4847,7 +4846,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// Delete the table row
 							me.mib.deleteTableRow ( name, row );
 
-							me.emit ("agentRequest",  {
+							me.emit ("agentAction",  {
 								eventType: "tableRowDeleted",
 								requestType: PduType[requestPdu.type],
 								oid: requestPdu.varbinds[i].oid,
@@ -4868,7 +4867,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// No special handling required. Just save the new value.
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 
-							me.emit ("agentRequest",  {
+							me.emit ("agentAction",  {
 								eventType: "set",
 								requestType: PduType[requestPdu.type],
 								oid: requestPdu.varbinds[i].oid,
@@ -4881,7 +4880,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbindType = ObjectType.EndOfMibView;
 
-						me.emit ("agentRequest",  {
+						me.emit ("agentAction",  {
 							eventType: "getEndOfMibView",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
@@ -4891,7 +4890,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					} else {
 						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
 
-						me.emit ("agentRequest",  {
+						me.emit ("agentAction",  {
 							eventType: "get",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
