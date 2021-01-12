@@ -4912,7 +4912,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 							me.emit ("agentEvent",  {
 								eventType: "tableRowDeleted",
-								oid: requestPdu.varbinds[i].oid,
+								oid: requestPdu.varbinds[savedIndex].oid,
 								providerName: name,
 								row: row
 							});
@@ -4931,7 +4931,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
 
 							if ( provider.type == MibProviderType.Table ) {
-								subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[i].oid, provider.oid);
+								subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[savedIndex].oid, provider.oid);
 								subAddr = subOid.split(".");
 								column = parseInt(subAddr.shift(), 10);
 								column = provider.tableColumns.findIndex(entry => entry.number === column);
@@ -4947,7 +4947,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 							me.emit ("agentEvent",  Object.assign({
 								eventType: "set",
-								oid: requestPdu.varbinds[i].oid,
+								oid: requestPdu.varbinds[savedIndex].oid,
 								providerName: providerNode.provider.name,
 								value: requestPdu.varbinds[savedIndex].value
 							}, tableInfo));
@@ -4960,7 +4960,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						me.emit ("agentEvent",  {
 							eventType: "getEndOfMibView",
 							requestType: PduType[requestPdu.type],
-							oid: requestPdu.varbinds[i].oid,
+							oid: requestPdu.varbinds[savedIndex].oid,
 							providerName: providerNode.provider.name,
 							value: mibRequests[savedIndex].instanceNode.value
 						});
@@ -4970,7 +4970,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						me.emit ("agentEvent",  {
 							eventType: "get",
 							requestType: PduType[requestPdu.type],
-							oid: requestPdu.varbinds[i].oid,
+							oid: requestPdu.varbinds[savedIndex].oid,
 							providerName: providerNode.provider.name,
 							value: mibRequests[savedIndex].instanceNode.value
 						});
