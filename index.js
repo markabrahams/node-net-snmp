@@ -3296,7 +3296,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 ModuleStore.prototype.loadBaseModules = function () {
 	for ( var mibModule of ModuleStore.BASE_MODULES ) {
-		this.parser.Import("mibs/" + mibModule + ".mib");
+		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
 };
