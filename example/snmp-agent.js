@@ -137,7 +137,7 @@ mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 // var providers = store.getProviders ("IF-MIB");
 // mib.registerProviders (providers);
 
-//console.log (JSON.stringify (providers, null, 2));
+// console.log (JSON.stringify (mib.providers, null, 2));
 
 var changes;
 
