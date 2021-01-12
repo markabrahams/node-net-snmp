@@ -3436,6 +3436,11 @@ MibNode.prototype.getConstraintsFromProvider = function () {
 };
 
 MibNode.prototype.setValue = function (newValue) {
+    var len;
+    var min;
+    var max;
+    var range;
+    var found = false;
 	var constraints = this.getConstraintsFromProvider ();
 	if ( ! constraints ) {
 		this.value = newValue;
@@ -3445,7 +3450,36 @@ MibNode.prototype.setValue = function (newValue) {
 		if ( ! constraints.enumeration[newValue] ) {
 			return false;
 		}
-	}
+	} else if ( constraints.ranges ) {
+        for ( range of constraints.ranges ) {
+            min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+            max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+            if ( newValue >= min && newValue <= max ) {
+                found = true;
+                break;
+            }
+        }
+        if ( ! found ) {
+            return false;
+        }
+    } else if ( constraints.sizes ) {
+        // if size is constrained, value must have a length property
+        if ( ! ( "length" in newValue ) ) {
+            return false;
+        }
+        len = newValue.length;
+        for ( range of constraints.sizes ) {
+            min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+            max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+            if ( len >= min && len <= max ) {
+                found = true;
+                break;
+            }
+        }
+        if ( ! found ) {
+            return false;
+        }
+    }
 	this.value = newValue;
 	return true;
 };
@@ -3821,6 +3855,28 @@ Mib.prototype.setTableRowDefaultValues = function (name, values) {
 			entry.defVal = values[i];
 		}
   });
+};
+
+Mib.prototype.setScalarRanges = function (name, ranges ) {
+    let provider = this.getProvider(name);
+    provider.constraints = { ranges };
+};
+
+Mib.prototype.setTableColumnRanges = function(name, column, ranges ) {
+    let provider = this.getProvider(name);
+    let tc = provider.tableColumns;
+    tc[column].constraints = { ranges };
+};
+
+Mib.prototype.setScalarSizes = function (name, sizes ) {
+    let provider = this.getProvider(name);
+    provider.constraints = { sizes };
+};
+
+Mib.prototype.setTableColumnSizes = function(name, column, sizes ) {
+    let provider = this.getProvider(name);
+    let tc = provider.tableColumns;
+    tc[column].constraints = { sizes };
 };
 
 Mib.prototype.registerProviders = function (providers) {

@@ -51,7 +51,13 @@ var scalarProvider = {
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.1.1",
     scalarType: snmp.ObjectType.OctetString,
-    maxAccess: snmp.MaxAccess['read-write']
+    maxAccess: snmp.MaxAccess['read-write'],
+    constraints: {
+        sizes: [
+            { min: 1, max: 3 },
+            { min: 5 }
+        ]
+    }
 };
 agent.registerProvider (scalarProvider);
 
@@ -61,6 +67,12 @@ scalarProvider = {
     oid: "1.3.6.1.2.1.11.30",
     scalarType: snmp.ObjectType.Integer,
     maxAccess: snmp.MaxAccess['read-create'],
+    constraints: {
+        ranges: [
+            { min: 1, max: 3 },
+            { min: 5 }
+        ]
+    },
 	defVal: 1
 };
 agent.registerProvider (scalarProvider);
