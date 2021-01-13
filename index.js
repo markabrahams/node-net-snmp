@@ -4859,6 +4859,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					errorIndex: i + 1
 				});
 			} else if ( requestPdu.type === PduType.SetRequest &&
+					providerNode.provider.type == MibProviderType.Table &&
 					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
 								(acc, current) => current.rowStatus ? current.number : acc, null )) == "number" &&
 					instanceNode.getTableColumnFromInstanceNode() === rowStatusColumn) {
@@ -4999,8 +5000,9 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						provider = providerNode.provider;
 
 						// Is this a RowStatus column with a value of 6 (delete)?
-						rowStatusColumn = provider.tableColumns.reduce(
-							(acc, current) => current.rowStatus ? current.number : acc, null );
+						rowStatusColumn = provider.type == MibProviderType.Table
+							? provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null )
+							: null;
 						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
 							typeof rowStatusColumn == "number" &&
 							column === rowStatusColumn ) {
