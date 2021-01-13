@@ -4378,9 +4378,9 @@ Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row)
 				// It's an index column. Use the next index value
 				values.push(rowIndexValues.shift());
 			} else if ( columnInfo.rowStatus ) {
-				// It's the RowStatus column. Replace the action with the appropriate state
-				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
-			} else if ( "defVal" in tc[index] ) {
+				// It's the RowStatus column. Retain the action value for now; replaced later
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo ) {
 				// Neither index nor RowStatus column, so use the default value
 				values.push( columnInfo.defVal );
 			} else {

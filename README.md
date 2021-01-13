@@ -2229,8 +2229,8 @@ function tableRowStatusHandler(provider, action, row) {
 				values.push(rowIndexValues.shift());
 			} else if ( columnInfo.rowStatus ) {
 				// It's the RowStatus column. Replace the action with the appropriate state
-				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
-			} else if ( "defVal" in tc[index] ) {
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo] ) {
 				// Neither index nor RowStatus column, so use the default value
 				values.push( columnInfo.defVal );
 			} else {
