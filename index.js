@@ -3978,7 +3978,7 @@ Mib.getRowIndexFromOid = function (oid, index) {
 		}
 	}
 	return values;
-}
+};
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	var rowIndexOid = [];
