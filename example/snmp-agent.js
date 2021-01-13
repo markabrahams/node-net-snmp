@@ -66,6 +66,7 @@ scalarProvider = {
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.11.30",
     scalarType: snmp.ObjectType.Integer,
+//	createHandler: (provider) => 42,
     maxAccess: snmp.MaxAccess['read-create'],
     constraints: {
         ranges: [
@@ -81,6 +82,7 @@ var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
+//	createHandler: (provider, action, row) => [ row[0], "Locally-created", 24, snmp.RowStatus[action] ],
     maxAccess: snmp.MaxAccess['not-accessible'],
 	rowStatusColumn: 99,
     tableColumns: [
@@ -150,6 +152,28 @@ mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 // mib.registerProviders (providers);
 
 // console.log (JSON.stringify (mib.providers, null, 2));
+
+var changes;
+
+// If there's a persistent store, make its specified changes
+try {
+	changes = JSON.parse(fs.readFileSync("persistent.json"));
+
+	for (var providerName in changes) {
+		var change = changes[providerName];
+		if (typeof change == "object") {
+			// table row
+			for (var rowIndex in change) {
+				mib.addTableRow(providerName, change[rowIndex]);
+			}
+		} else {
+			mib.setScalarValue(providerName, change);
+		}
+	}
+} catch (e) {
+	console.log("Could not parse persistent storage");
+	changes = {};
+}
 
 var changes;
 

@@ -3272,10 +3272,6 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 								// Mark this column as being rowStatus
 								columnDefinition.rowStatus = true;
-
-								// Also keep track of the rowStatus
-								// column on a provider basis.
-								currentTableProvider.rowStatusColumn = columnDefinition.number;
 							}
 							currentTableProvider.tableColumns.push (columnDefinition);
 						} else {
@@ -3316,7 +3312,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 ModuleStore.prototype.loadBaseModules = function () {
 	for ( var mibModule of ModuleStore.BASE_MODULES ) {
-		this.parser.Import("mibs/" + mibModule + ".mib");
+		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
 };
@@ -4022,7 +4018,7 @@ Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	return rowIndex;
 };
 
-function getRowIndexFromOid (oid, index) {
+Mib.getRowIndexFromOid = function (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
@@ -4058,9 +4054,7 @@ function getRowIndexFromOid (oid, index) {
 		}
 	}
 	return values;
-}
-
-Mib.prototype.getRowIndexFromOid = getRowIndexFromOid;
+};
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	var rowIndexOid = [];
@@ -4127,7 +4121,7 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstan
 
 	for ( var instanceNode of instanceNodes ) {
 		instanceOid = Mib.getSubOidFromBaseOid (instanceNode.oid, columnNode.oid);
-		indexValues.push (this.getRowIndexFromOid (instanceOid, providerIndex));
+		indexValues.push (Mib.getRowIndexFromOid (instanceOid, providerIndex));
 		columnValues.push (instanceNode.value);
 	}
 	if ( includeInstances ) {
@@ -4367,9 +4361,6 @@ var Agent = function (options, callback, mib) {
 			this.agentEventHandler(event);
 		}
 	});
-
-	this.scalarReadCreateHandler = this.scalarReadCreateHandlerInternal;
-	this.tableRowStatusHandler = this.tableRowStatusHandlerInternal;
 };
 
 util.inherits (Agent, events.EventEmitter);
@@ -4404,95 +4395,6 @@ Agent.prototype.getProvider = function (name) {
 
 Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
-};
-
-Agent.prototype.setScalarReadCreateHandler = function (handler) {
-	this.scalarReadCreateHandler = handler;
-};
-
-// The registered tableRowStatusHandler's responsibility is to
-// return an array containing all table column values for the
-// table row to be added. The handler may make use of any defVal
-// values in the elements of the provider.tableColumns array.
-//
-// The signature of the provided handler must be:
-//	 @param provider
-//		The provider for the table
-//	 @param action
-//		One of "createAndGo" or "createAndWait"
-//	 @param row
-//		The row index (array) of the row to be added
-//
-// For conformance with the state table on page 8 of RFC-2579, the
-// handler must set the value of the RowStatus column to
-// RowStatus["active"] if `action` is "createAndGo"; and to
-// RowStatus["notInService"] if `action` is "createAndWait".
-// (Because the handler is required to return values for all
-// columns in the row, this implementation never uses the
-// state RowStatus["notReady"].)
-Agent.prototype.setTableRowStatusHandler = function (handler) {
-	this.tableRowStatusHandler = handler;
-};
-
-
-// The registered agentEventHandler will receive one or more event
-// messages for each operation requested of the agent. The reason
-// there may be more than one is that some operations, like RowStatus
-// actions, cause an instance to be created, in addition to setting a
-// value.
-//
-// The handler will be called with a single argument, a map, which
-// details the cause of the event.
-Agent.prototype.setAgentEventHandler = function (handler) {
-	this.agentEventHandler = handler;
-};
-
-Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
-	// If there's a default value specified...
-	if ( typeof provider.defVal != "undefined" ) {
-		// ... then use it
-		return provider.defVal;
-	}
-
-	// We don't have enough information to auto-create the scalar
-	return undefined;
-};
-
-Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
-	let values = [];
-	let missingDefVal = false;
-	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
-	const tc = provider.tableColumns;
-
-	tc.forEach(
-		(columnInfo, index) => {
-			let entries;
-
-			// Index columns get successive values from the rowIndexValues array.
-			// RowStatus columns get either "active" or "notInService" values.
-			// Every other column requires a defVal.
-			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
-			if (entries.length > 0 ) {
-				// It's an index column. Use the next index value
-				values.push(rowIndexValues.shift());
-			} else if ( columnInfo.rowStatus ) {
-				// It's the RowStatus column. Replace the action with the appropriate state
-				values.push( action == "createAndGo" ? RowStatus["active"] : RowStatus["notInService"] );
-			} else if ( "defVal" in tc[index] ) {
-				// Neither index nor RowStatus column, so use the default value
-				values.push( columnInfo.defVal );
-			} else {
-				// Default value was required but not found
-				console.log("No defVal defined for column:", columnInfo);
-				missingDefVal = true;
-				values.push( undefined ); // just for debugging; never gets returned
-			}
-		}
-	);
-
-	// If a default value was missing, we can't auto-create the table row.
-	// Otherwise, we're good to go: give 'em the column values.
-	return missingDefVal ? undefined : values;
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -4589,6 +4491,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var subAddr;
 	var address;
 	var fullAddress;
+	var rowStatusColumn;
 	var provider;
 	var providersByOid = this.mib.providersByOid;
 	var oid = varbind.oid;
@@ -4615,17 +4518,13 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					return undefined;
 				}
 
-				// See if there is a registered handler for
-				// auto-creating scalars. The handler should return
-				// the value to be used, or undefined if the instance
-				// should not be auto-created. The handler may make
-				// use of the DEFVAL read either from the MIB or set
-				// through mib.setScalarDefaultValue.
-				if ( ! this.scalarReadCreateHandler) {
+				// See if the provider says not to auto-create this scalar
+				if ( provider.createHandler === null ) {
 					return undefined;
 				}
 
-				value = this.scalarReadCreateHandler ( provider );
+				// Call the provider-provided handler if available, or the default one if not
+				value = ( provider.createHandler || this.scalarReadCreateHandlerInternal ) ( provider );
 				if ( typeof value == "undefined" ) {
 					// Handler said do not create instance
 					return undefined;
@@ -4664,30 +4563,31 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			subOid = Mib.getSubOidFromBaseOid (oid, provider.oid);
 			subAddr = subOid.split(".");
 			column = parseInt(subAddr.shift(), 10);
-			row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+			row = Mib.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+			rowStatusColumn = provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null );
 
 			if ( requestType === PduType.SetRequest &&
-					typeof provider.rowStatusColumn == "number" &&
-					column === provider.rowStatusColumn ) {
+					typeof rowStatusColumn == "number" &&
+					column === rowStatusColumn ) {
 
 				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
-						this.tableRowStatusHandler ) {
+						provider.createHandler !== null ) {
 
-					// The registered tableRowStatusHandler will
-					// return an array containing all table column
-					// values for the table row to be added.
-					value = this.tableRowStatusHandler( provider, RowStatus[varbind.value], row );
+					// The create handler will return an array
+					// containing all table column values for the
+					// table row to be added.
+					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( provider, RowStatus[varbind.value], row );
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
 						return undefined;
 					}
 
 					if (! Array.isArray( value ) ) {
-						throw new Error("tableRowStatusHandler must return an array or undefined; got", value);
+						throw new Error("createHandler must return an array or undefined; got", value);
 					}
 
 					if ( value.length != provider.tableColumns.length ) {
-						throw new Error("tableRowStatusHandler's returned array must contain a value for for each column" );
+						throw new Error("createHandler's returned array must contain a value for for each column" );
 					}
 
 					// Map each column's value to the appropriate type
@@ -4771,6 +4671,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		var providerNode;
 		var responseVarbindType;
+		var rowStatusColumn;
+		var getIcsHandler;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
@@ -4849,8 +4751,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					errorIndex: i + 1
 				});
 			} else if ( requestPdu.type === PduType.SetRequest &&
-					typeof providerNode.provider.rowStatusColumn == "number" &&
-					instanceNode.getTableColumnFromInstanceNode() === providerNode.provider.rowStatusColumn) {
+					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
+								(acc, current) => current.rowStatus ? current.number : acc, null )) == "number" &&
+					instanceNode.getTableColumnFromInstanceNode() === rowStatusColumn) {
+
+				getIcsHandler = function (mibRequestForIcs) {
+					mibRequestForIcs.done ({
+						errorStatus: ErrorStatus.InconsistentValue,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
 
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
@@ -4864,13 +4775,47 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						break;
 
 					case RowStatus["createAndGo"]:
-						// Valid, but now set to active
-						requestPdu.varbinds[i].value = RowStatus["active"];
+						// Valid if this was a new row creation, but now set to active
+						if ( instanceNode.value === RowStatus["createAndGo"] ) {
+							requestPdu.varbinds[i].value = RowStatus["active"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+
+							me.emit ("agentRequest",  {
+								eventType: "ERRbadRowStatusAction",
+								requestType: PduType[requestPdu.type],
+								oid: requestPdu.varbinds[i].oid,
+								errorStatus: ErrorStatus.InconstentValue,
+								errorIndex: i + 1
+							});
+						}
 						break;
 
 					case RowStatus["createAndWait"]:
-						// Valid, but now set to notInService
-						requestPdu.varbinds[i].value = RowStatus["notInService"];
+						// Valid if this was a new row creation, but now set to notInService
+						if ( instanceNode.value === RowStatus["createAndWait"] ) {
+							requestPdu.varbinds[i].value = RowStatus["notInService"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+
+							me.emit ("agentRequest",  {
+								eventType: "ERRbadRowStatusAction",
+								requestType: PduType[requestPdu.type],
+								oid: requestPdu.varbinds[i].oid,
+								errorStatus: ErrorStatus.InconstentValue,
+								errorIndex: i + 1
+							});
+						}
 						break;
 
 					case RowStatus["notReady"]:
@@ -4890,14 +4835,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							operation: requestPdu.type,
 							oid: requestPdu.varbinds[i].oid
 						});
-						handlers[i] = function getIcsHandler (mibRequestForIcs) {
-							mibRequestForIcs.done ({
-								errorStatus: ErrorStatus.InconsistentValue,
-								type: ObjectType.Null,
-								value: null
-							});
-						};
-
+						handlers[i] = getIcsHandler;
 						me.emit ("agentEvent",  {
 							eventType: "ERRbadRowStatusAction",
 							requestType: PduType[requestPdu.type],
@@ -4934,6 +4872,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
             var provider;
             var tableInfo;
 			var responseVarbind;
+			var rowStatusColumn;
+
 			mibRequests[savedIndex].done = function (error) {
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
@@ -4951,16 +4891,18 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						provider = providerNode.provider;
 
 						// Is this a RowStatus column with a value of 6 (delete)?
+						rowStatusColumn = provider.tableColumns.reduce(
+							(acc, current) => current.rowStatus ? current.number : acc, null );
 						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
-							typeof provider.rowStatusColumn == "number" &&
-							column === provider.rowStatusColumn ) {
+							typeof rowStatusColumn == "number" &&
+							column === rowStatusColumn ) {
 
 							// Yup. Do the deletion.
 							subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
 							subAddr = subOid.split(".");
 
 							subAddr.shift(); // shift off the column number, leaving the row index values
-							row = getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
+							row = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
 							name = provider.name;
 
 							// Delete the table row
