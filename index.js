@@ -4341,6 +4341,114 @@ Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
 };
 
+Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+};
+
+Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Retain the action value for now; replaced later
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
+};
+
+Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+};
+
+Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Retain the action value for now; replaced later
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
+};
+
+// The registered agentEventHandler will receive one or more event
+// messages for each operation requested of the agent. The reason
+// there may be more than one is that some operations, like RowStatus
+// actions, cause an instance to be created, in addition to setting a
+// value.
+//
+// The handler will be called with a single argument, a map, which
+// details the cause of the event.
+Agent.prototype.setAgentEventHandler = function (handler) {
+	this.agentEventHandler = handler;
+};
+
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
 	var securityName;
@@ -4877,7 +4985,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 								subAddr = subOid.split(".");
 								column = parseInt(subAddr.shift(), 10);
 								column = provider.tableColumns.findIndex(entry => entry.number === column);
-								row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+								row = Mib.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
 
                                 tableInfo = {
                                     row: row,
