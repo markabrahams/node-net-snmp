@@ -4780,7 +4780,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							oid: requestPdu.varbinds[i].oid
 						});
 						handlers[i] = getIcsHandler;
-
 						me.emit ("agentEvent",  {
 							eventType: "ERRbadRowStatusAction",
 							requestType: PduType[requestPdu.type],

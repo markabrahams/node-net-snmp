@@ -163,6 +163,28 @@ try {
 	changes = {};
 }
 
+var changes;
+
+// If there's a persistent store, make its specified changes
+try {
+	changes = JSON.parse(fs.readFileSync("persistent.json"));
+
+	for (var providerName in changes) {
+		var change = changes[providerName];
+		if (typeof change == "object") {
+			// table row
+			for (var rowIndex in change) {
+				mib.addTableRow(providerName, change[rowIndex]);
+			}
+		} else {
+			mib.setScalarValue(providerName, change);
+		}
+	}
+} catch (e) {
+	console.log("Could not parse persistent storage");
+	changes = {};
+}
+
 mib.dump ({
 	leavesOnly: true,
     showProviders: true,
