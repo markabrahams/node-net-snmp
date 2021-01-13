@@ -3252,10 +3252,6 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 								// Mark this column as being rowStatus
 								columnDefinition.rowStatus = true;
-
-								// Also keep track of the rowStatus
-								// column on a provider basis.
-								currentTableProvider.rowStatusColumn = columnDefinition.number;
 							}
 							currentTableProvider.tableColumns.push (columnDefinition);
 						} else {
@@ -4491,6 +4487,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var subAddr;
 	var address;
 	var fullAddress;
+	var rowStatusColumn;
 	var provider;
 	var providersByOid = this.mib.providersByOid;
 	var oid = varbind.oid;
@@ -4560,10 +4557,11 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			subAddr = subOid.split(".");
 			column = parseInt(subAddr.shift(), 10);
 			row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+			rowStatusColumn = provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null );
 
 			if ( requestType === PduType.SetRequest &&
-					typeof provider.rowStatusColumn == "number" &&
-					column === provider.rowStatusColumn ) {
+					typeof rowStatusColumn == "number" &&
+					column === rowStatusColumn ) {
 
 				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
 						this.tableRowStatusHandler ) {
@@ -4658,6 +4656,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		var providerNode;
 		var responseVarbindType;
+		var rowStatusColumn;
+		var getIcsHandler;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
@@ -4712,8 +4712,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 			} else if ( requestPdu.type === PduType.SetRequest &&
-					typeof providerNode.provider.rowStatusColumn == "number" &&
-					instanceNode.getTableColumnFromInstanceNode() === providerNode.provider.rowStatusColumn) {
+					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
+								(acc, current) => current.rowStatus ? current.number : acc, null )) == "number" &&
+					instanceNode.getTableColumnFromInstanceNode() === rowStatusColumn) {
+
+				getIcsHandler = function (mibRequestForIcs) {
+					mibRequestForIcs.done ({
+						errorStatus: ErrorStatus.InconsistentValue,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
 
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
@@ -4727,13 +4736,31 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						break;
 
 					case RowStatus["createAndGo"]:
-						// Valid, but now set to active
-						requestPdu.varbinds[i].value = RowStatus["active"];
+						// Valid if this was a new row creation, but now set to active
+						if ( instanceNode.value === RowStatus["createAndGo"] ) {
+							requestPdu.varbinds[i].value = RowStatus["active"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+						}
 						break;
 
 					case RowStatus["createAndWait"]:
-						// Valid, but now set to notInService
-						requestPdu.varbinds[i].value = RowStatus["notInService"];
+						// Valid if this was a new row creation, but now set to notInService
+						if ( instanceNode.value === RowStatus["createAndWait"] ) {
+							requestPdu.varbinds[i].value = RowStatus["notInService"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+						}
 						break;
 
 					case RowStatus["notReady"]:
@@ -4753,13 +4780,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							operation: requestPdu.type,
 							oid: requestPdu.varbinds[i].oid
 						});
-						handlers[i] = function getIcsHandler (mibRequestForIcs) {
-							mibRequestForIcs.done ({
-								errorStatus: ErrorStatus.InconsistentValue,
-								type: ObjectType.Null,
-								value: null
-							});
-						};
+						handlers[i] = getIcsHandler;
 						break;
 				}
 			}
@@ -4797,11 +4818,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					if ( requestPdu.type == PduType.SetRequest ) {
 						var column = instanceNode.getTableColumnFromInstanceNode();
 						var provider = providerNode.provider;
+						var rowStatusColumn;
 
 						// Is this a RowStatus column with a value of 6 (delete)?
+						rowStatusColumn = provider.tableColumns.reduce(
+							(acc, current) => current.rowStatus ? current.number : acc, null );
 						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
-							typeof provider.rowStatusColumn == "number" &&
-							column === provider.rowStatusColumn ) {
+							typeof rowStatusColumn == "number" &&
+							column === rowStatusColumn ) {
 
 							// Yup. Do the deletion.
 							var row;
