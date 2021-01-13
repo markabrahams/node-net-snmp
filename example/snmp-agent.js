@@ -59,6 +59,7 @@ scalarProvider = {
     type: snmp.MibProviderType.Scalar,
     oid: "1.3.6.1.2.1.11.30",
     scalarType: snmp.ObjectType.Integer,
+//	createHandler: (provider) => 42,
     maxAccess: snmp.MaxAccess['read-create'],
 	defVal: 1
 };
@@ -68,6 +69,7 @@ var tableProvider = {
     name: "ifTable",
     type: snmp.MibProviderType.Table,
     oid: "1.3.6.1.2.1.2.2.1",
+//	createHandler: (provider, action, row) => [ row[0], "Locally-created", 24, snmp.RowStatus[action] ],
     maxAccess: snmp.MaxAccess['not-accessible'],
 	rowStatusColumn: 99,
     tableColumns: [

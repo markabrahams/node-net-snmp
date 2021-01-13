@@ -4281,8 +4281,6 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
-	this.scalarReadCreateHandler = this.scalarReadCreateHandlerInternal;
-	this.tableRowStatusHandler = this.tableRowStatusHandlerInternal;
 };
 
 Agent.prototype.getMib = function () {
@@ -4315,34 +4313,6 @@ Agent.prototype.getProvider = function (name) {
 
 Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
-};
-
-Agent.prototype.setScalarReadCreateHandler = function (handler) {
-	this.scalarReadCreateHandler = handler;
-};
-
-// The registered tableRowStatusHandler's responsibility is to
-// return an array containing all table column values for the
-// table row to be added. The handler may make use of any defVal
-// values in the elements of the provider.tableColumns array.
-//
-// The signature of the provided handler must be:
-//	 @param provider
-//		The provider for the table
-//	 @param action
-//		One of "createAndGo" or "createAndWait"
-//	 @param row
-//		The row index (array) of the row to be added
-//
-// For conformance with the state table on page 8 of RFC-2579, the
-// handler must set the value of the RowStatus column to
-// RowStatus["active"] if `action` is "createAndGo"; and to
-// RowStatus["notInService"] if `action` is "createAndWait".
-// (Because the handler is required to return values for all
-// columns in the row, this implementation never uses the
-// state RowStatus["notReady"].)
-Agent.prototype.setTableRowStatusHandler = function (handler) {
-	this.tableRowStatusHandler = handler;
 };
 
 Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
@@ -4514,17 +4484,13 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					return undefined;
 				}
 
-				// See if there is a registered handler for
-				// auto-creating scalars. The handler should return
-				// the value to be used, or undefined if the instance
-				// should not be auto-created. The handler may make
-				// use of the DEFVAL read either from the MIB or set
-				// through mib.setScalarDefaultValue.
-				if ( ! this.scalarReadCreateHandler) {
+				// See if the provider says not to auto-create this scalar
+				if ( provider.createHandler === null ) {
 					return undefined;
 				}
 
-				value = this.scalarReadCreateHandler ( provider );
+				// Call the provider-provided handler if available, or the default one if not
+				value = ( provider.createHandler || this.scalarReadCreateHandlerInternal ) ( provider );
 				if ( typeof value == "undefined" ) {
 					// Handler said do not create instance
 					return undefined;
@@ -4564,23 +4530,23 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					column === rowStatusColumn ) {
 
 				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
-						this.tableRowStatusHandler ) {
+						provider.createHandler !== null ) {
 
 					// The registered tableRowStatusHandler will
 					// return an array containing all table column
 					// values for the table row to be added.
-					value = this.tableRowStatusHandler( provider, RowStatus[varbind.value], row );
+					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( provider, RowStatus[varbind.value], row );
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
 						return undefined;
 					}
 
 					if (! Array.isArray( value ) ) {
-						throw new Error("tableRowStatusHandler must return an array or undefined; got", value);
+						throw new Error("createHandler must return an array or undefined; got", value);
 					}
 
 					if ( value.length != provider.tableColumns.length ) {
-						throw new Error("tableRowStatusHandler's returned array must contain a value for for each column" );
+						throw new Error("createHandler's returned array must contain a value for for each column" );
 					}
 
 					// Map each column's value to the appropriate type

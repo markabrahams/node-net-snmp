@@ -2146,12 +2146,11 @@ provider, then the instance will not, by default, be automatically
 created.
 
 The default handling of instance creation can be overridden by
-providing a handler to the method `setScalarReadCreateHandler`. This
-method takes one parameter, the handler to be used for generating the
-value of a scalar instance to be automatically created. The handler is
-passed a single argument, the provider for the scalar. The method must
-return either the value to be assigned to the newly-created instance;
-or `undefined` to indicate that the instance should not be created.
+providing a handler in a provider, called, `createHandler`. The
+handler is passed a single argument, the provider for the scalar. The
+method must return either the value to be assigned to the
+newly-created instance; or `undefined` to indicate that the instance
+should not be created.
 
 An example handler method, accomplishing the default behavior, looks
 like this:
@@ -2169,8 +2168,8 @@ function scalarReadCreateHandler (provider) {
 }
 ```
 
-Automatic instance creation of scalars can be disabled entirely by
-calling `setScalarReadCreateHandler(null);`.
+Automatic instance creation of table rows can be disabled entirely by
+setting `createHandler` to null.
 
 ### Table rows
 
@@ -2191,9 +2190,7 @@ specified in any column other than index or Status columns, the row
 will not be automatically created.
 
 The default handling of row creation can be overridden by providing a
-handler to the method, `setTableRowStatusHandler`. This method takes
-one parameter, the handler to be used for generating the values for
-each column of the row to be automatically created. The handler is
+handler in a provider, called, `createHandler`. The handler is
 passed three arguments:
 
 - the provider for the table
@@ -2249,7 +2246,7 @@ function tableRowStatusHandler(provider, action, row) {
 ```
 
 Automatic instance creation of table rows can be disabled entirely by
-calling `setTableRowStatusHandler(null);`.
+setting `createHandler` to null.
 
 ### Mapping from MIB files
 
