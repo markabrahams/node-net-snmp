@@ -4530,9 +4530,9 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
 						provider.createHandler !== null ) {
 
-					// The registered tableRowStatusHandler will
-					// return an array containing all table column
-					// values for the table row to be added.
+					// The create handler will return an array
+					// containing all table column values for the
+					// table row to be added.
 					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( provider, RowStatus[varbind.value], row );
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
