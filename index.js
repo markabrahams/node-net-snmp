@@ -3942,7 +3942,7 @@ Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	return rowIndex;
 };
 
-function getRowIndexFromOid (oid, index) {
+Mib.getRowIndexFromOid = function (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
@@ -3979,8 +3979,6 @@ function getRowIndexFromOid (oid, index) {
 	}
 	return values;
 }
-
-Mib.prototype.getRowIndexFromOid = getRowIndexFromOid;
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	var rowIndexOid = [];
@@ -4047,7 +4045,7 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstan
 
 	for ( var instanceNode of instanceNodes ) {
 		instanceOid = Mib.getSubOidFromBaseOid (instanceNode.oid, columnNode.oid);
-		indexValues.push (this.getRowIndexFromOid (instanceOid, providerIndex));
+		indexValues.push (Mib.getRowIndexFromOid (instanceOid, providerIndex));
 		columnValues.push (instanceNode.value);
 	}
 	if ( includeInstances ) {
@@ -4522,7 +4520,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 			subOid = Mib.getSubOidFromBaseOid (oid, provider.oid);
 			subAddr = subOid.split(".");
 			column = parseInt(subAddr.shift(), 10);
-			row = getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+			row = Mib.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
 			rowStatusColumn = provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null );
 
 			if ( requestType === PduType.SetRequest &&
@@ -4800,7 +4798,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							var subAddr = subOid.split(".");
 
 							subAddr.shift(); // shift off the column number, leaving the row index values
-							row = getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
+							row = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
 							name = provider.name;
 
 							// Delete the table row
