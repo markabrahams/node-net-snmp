@@ -175,8 +175,6 @@ try {
 	changes = {};
 }
 
-var changes;
-
 // If there's a persistent store, make its specified changes
 try {
 	changes = JSON.parse(fs.readFileSync("persistent.json"));
