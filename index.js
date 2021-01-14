@@ -4314,10 +4314,11 @@ Agent.prototype.getProviders = function () {
 };
 
 Agent.prototype.scalarReadCreateHandlerInternal = function (createRequest) {
+	let provider = createRequest.provider;
 	// If there's a default value specified...
-	if ( createRequest.provider && typeof provider.defVal != "undefined" ) {
+	if ( provider && typeof provider.defVal != "undefined" ) {
 		// ... then use it
-		return createRequest.provider.defVal;
+		return provider.defVal;
 	}
 
 	// We don't have enough information to auto-create the scalar

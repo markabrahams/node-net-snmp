@@ -2981,6 +2981,10 @@ Example programs are included under the module's `example` directory.
 
  * Add RowStatus support to agent tables
 
+## Version 3.1.1 - 14/01/2021
+
+ * Fix scalar default createHandler
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
