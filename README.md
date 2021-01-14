@@ -1964,7 +1964,7 @@ level provided by this provider. The allowable values are the
 numeric values from the MaxAccess export. If a `maxAccess` value is
 specified, a `get` request to the agent will return a `noAccess`
 error if `maxAccess` is not at least "read-only" (2). `maxAccess`
-must be at least "read-write" (3) for a `set` request to suceed.
+must be at least "read-write" (3) for a `set` request to succeed.
  * `defVal` *(optional)* - the default value to assign for scalar
 objects automatically created, when `maxAccess` is set to
 "read-create" (4). Note that table columns can specify such `defVal`
@@ -2147,7 +2147,8 @@ created.
 
 The default handling of instance creation can be overridden by
 providing a handler in a provider, called, `createHandler`. The
-handler is passed a single argument, the provider for the scalar. The
+handler is passed a `createRequest` object, containing a singe
+field `provider` - the provider for the scalar. The
 method must return either the value to be assigned to the
 newly-created instance; or `undefined` to indicate that the instance
 should not be created.
@@ -2156,7 +2157,8 @@ An example handler method, accomplishing the default behavior, looks
 like this:
 
 ```
-function scalarReadCreateHandler (provider) {
+function scalarReadCreateHandler (createRequest) {
+    let provider = createRequest.provider;
 	// If there's a default value specified...
 	if ( typeof provider.defVal != "undefined" ) {
 		// ... then use it
@@ -2174,10 +2176,9 @@ setting `createHandler` to null.
 ### Table rows
 
 Table rows may be added to a table, or deleted from it, if the table
-has a column defined with `rowStatus: true` in the provider, and that
-column's number referenced by the provider's `rowStatusColumn` member.
+has a column defined with `rowStatus: true` in the provider.
 The semantics of adding and deleting rows is described beginning on
-page 5 of RFC-2579, and in
+page 5 of RFC 2579, and in
 [SNMPv2-TC.mib](https://github.com/markabrahams/node-net-snmp/blob/master/lib/mibs/SNMPv2-TC.mib#L186).
 The row status column is typically referred to, simply, as the Status
 column.
@@ -2191,11 +2192,11 @@ will not be automatically created.
 
 The default handling of row creation can be overridden by providing a
 handler in a provider, called, `createHandler`. The handler is
-passed three arguments:
+passed a `createRequest` object with three fields:
 
-- the provider for the table
-- the action invoking the row creation: one of "createAndGo" or "createAndWait"
-- an array of columns forming the table index, where each element of
+- `provider` - the provider for the table
+- `action` - the action invoking the row creation: one of "createAndGo" or "createAndWait"
+- `row` - an array of columns forming the table index, where each element of
   the array is an index into the `tableColumns` array of the provider
 
 The handler must return either an array of column values for the new
@@ -2207,7 +2208,10 @@ An example handler method, accomplishing the default behavior, looks
 like this:
 
 ```
-function tableRowStatusHandler(provider, action, row) {
+function tableRowStatusHandler(createRequest) {
+    let provider = createRequest.provider;
+    let action = createRequest.action;
+    let row = createRequest.row;
 	let values = [];
 	let missingDefVal = false;
 	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
@@ -2972,6 +2976,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.0.7 - 10/01/2021
 
  * Fix MIB parsing of quoted unmatched brackets
+
+## Version 3.1.0 - 14/01/2021
+
+ * Add RowStatus support to agent tables
 
 # License
 
