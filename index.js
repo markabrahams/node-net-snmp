@@ -3816,7 +3816,7 @@ Mib.prototype.setTableRowDefaultValues = function (name, values) {
 		if (typeof values[i] != "undefined") {
 			entry.defVal = values[i];
 		}
-  });
+	});
 };
 
 Mib.prototype.registerProviders = function (providers) {
@@ -4341,9 +4341,10 @@ Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
 };
 
-Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
+Agent.prototype.scalarReadCreateHandlerInternal = function (createRequest) {
+	let provider = createRequest.provider;
 	// If there's a default value specified...
-	if ( typeof provider.defVal != "undefined" ) {
+	if ( provider && typeof provider.defVal != "undefined" ) {
 		// ... then use it
 		return provider.defVal;
 	}
@@ -4352,14 +4353,17 @@ Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
 	return undefined;
 };
 
-Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
+Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
+	let provider = createRequest.provider;
+	let action = createRequest.action;
+	let row = createRequest.row;
 	let values = [];
 	let missingDefVal = false;
 	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
 	const tc = provider.tableColumns;
 
 	tc.forEach(
-		(columnInfo, index) => {
+		(columnInfo) => {
 			let entries;
 
 			// Index columns get successive values from the rowIndexValues array.
@@ -4547,6 +4551,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var provider;
 	var providersByOid = this.mib.providersByOid;
 	var oid = varbind.oid;
+	var createRequest;
 
 	// Look for the provider.
 	fullAddress = Mib.convertOidToAddress (oid);
@@ -4576,7 +4581,10 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				}
 
 				// Call the provider-provided handler if available, or the default one if not
-				value = ( provider.createHandler || this.scalarReadCreateHandlerInternal ) ( provider );
+				createRequest = {
+					provider: provider
+				};
+				value = ( provider.createHandler || this.scalarReadCreateHandlerInternal ) ( createRequest );
 				if ( typeof value == "undefined" ) {
 					// Handler said do not create instance
 					return undefined;
@@ -4628,7 +4636,12 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					// The create handler will return an array
 					// containing all table column values for the
 					// table row to be added.
-					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( provider, RowStatus[varbind.value], row );
+					createRequest = {
+						provider: provider,
+						action: RowStatus[varbind.value],
+						row: row
+					};
+					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( createRequest );
 					if ( typeof value == "undefined") {
 						// Handler said do not create instance
 						return undefined;
