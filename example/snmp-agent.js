@@ -10,14 +10,25 @@ var snmpOptions = {
     engineID: options.e,
     debug: options.d,
     address: null,
-    accessControlModelType: snmp.AccessControlModelType.Simple
+    accessControlModelType: snmp.AccessControlModelType.Simple,
+    agentEventMethod:           // comment out ones not wanted
+        snmp.AgentEventMethod.event |
+        snmp.AgentEventMethod.mainCallback  |
+        snmp.AgentEventMethod.separateCallback  |
+        snmp.AgentEventMethod.individual  |
+        snmp.AgentEventMethod.coalesced  |
+        0
 };
 
 var callback = function (error, data) {
     if ( error ) {
         console.error (error);
     } else {
-        console.log ("callback: " + JSON.stringify(data.pdu.varbinds, null, 2));
+		if (typeof data == "object" && "pdu" in data) {
+            console.log ("callback: " + JSON.stringify(data.pdu.varbinds, null, 2));
+        } else {
+			console.log("Agent event at callback: ", data);
+        }
     }
 };
 
@@ -190,60 +201,83 @@ console.log ("private = ", acm.getCommunityAccess ("private"));
 console.log (acm.getCommunitiesAccess ());
 
 // Demonstrate (a very poor, dangerous implementation of) persistence
-agent.setAgentEventHandler(
-	(message) => {
-		console.log("Agent event: ", message);
+function agentHandler(message) {
+	var index;
+	var data;
+	var messages;
+	var isChanged = false;
 
-		var index;
-		var data;
-		var isChanged = false;
+	// Did we get coalesced messages?
+	if ( Array.isArray(message) ) {
+		// Yup.
+		console.log("Received coalesced messages");
+		messages = message;
+	} else {
+		// Pretend we received coalesced messages, for common processing
+		messages = [ message ];
+	}
 
-		switch ( message.eventType ) {
-			case "autoCreateScalar":
-			case "set":
-				if ( "row" in message ) {
+	messages.forEach(
+		(message) => {
+			switch ( message.eventType ) {
+				case "autoCreateScalar":
+				case "set":
+					if ( "row" in message ) {
+						index = JSON.stringify(message.row);
+						if (! changes[message.providerName]) {
+							changes[message.ProviderName] = {};
+						}
+						data = mib.getTableRowCells(message.providerName, message.row);
+						data = data.map((v) => v instanceof Buffer ? v.toString() : v);
+						changes[message.providerName][index] = data;
+					} else {
+						data = message.value;
+						data = data instanceof Buffer ? data.toString() : data;
+						changes[message.providerName] = data;
+					}
+					isChanged = true;
+					break;
+
+				case "autoCreateTableRow":
 					index = JSON.stringify(message.row);
 					if (! changes[message.providerName]) {
-						changes[message.ProviderName] = {};
+						changes[message.providerName] = {};
 					}
-					data = mib.getTableRowCells(message.providerName, message.row);
+					data = message.values;
 					data = data.map((v) => v instanceof Buffer ? v.toString() : v);
 					changes[message.providerName][index] = data;
-				} else {
-					data = message.value;
-					data = data instanceof Buffer ? data.toString() : data;
-					changes[message.providerName] = data;
-				}
-				isChanged = true;
-				break;
+					isChanged = true;
+					break;
 
-			case "autoCreateTableRow":
-				index = JSON.stringify(message.row);
-				if (! changes[message.providerName]) {
-					changes[message.providerName] = {};
-				}
-				data = message.values;
-				data = data.map((v) => v instanceof Buffer ? v.toString() : v);
-				changes[message.providerName][index] = data;
-				isChanged = true;
-				break;
+				case "tableRowDeleted":
+					index = JSON.stringify(message.row);
+					delete changes[message.providerName][index];
+					if (Object.keys(changes[message.providerName]).length === 0) {
+						delete changes[message.providerName];
+					}
+					isChanged = true;
+					break;
 
-			case "tableRowDeleted":
-				index = JSON.stringify(message.row);
-				delete changes[message.providerName][index];
-				if (Object.keys(changes[message.providerName]).length === 0) {
-					delete changes[message.providerName];
-				}
-				isChanged = true;
-				break;
+				default:
+					break;
+			}
+	});
 
-			default:
-				break;
-		}
+	console.log("saving changes=", JSON.stringify(changes, null, "	"));
 
-		console.log("saving changes=", JSON.stringify(changes, null, "	"));
+	if (isChanged) {
+		fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "	 "));
+	}
+}
+agent.setAgentEventHandler(
+	(message) => {
+		console.log("Agent event at handler: ", message);
+		agentHandler(message);
+	});
 
-		if (isChanged) {
-			fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "	 "));
-		}
+agent.on(
+	"agentEvent",
+	(message) => {
+		console.log("Agent event at event listener: ", message);
+		agentHandler(message);
 	});

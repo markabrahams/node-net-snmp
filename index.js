@@ -10,6 +10,7 @@ var util = require ("util");
 var crypto = require ("crypto");
 var mibparser = require ("./lib/mib");
 var DEBUG = false;
+var AGENT_EVENT_METHOD;
 
 var MAX_INT32 = 2147483647;
 
@@ -271,6 +272,20 @@ var AgentEvent = {
 
 _expandConstantObject (AgentEvent);
 
+
+// Bitmap. Set one or more in options.agentEventMethod for Agent constructor
+var AgentEventMethod = {
+	// Means of passing the events to the user
+	1: "event",
+	2: "mainCallback",
+	4: "separateCallback",
+
+	// When to pass the event to the user
+	16: "individual",
+	32: "coalesced"
+};
+
+_expandConstantObject (AgentEventMethod);
 
 /*****************************************************************************
  ** Exception class definitions
@@ -4299,10 +4314,26 @@ var Agent = function (options, callback, mib) {
 	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
+	this.agentEventEmitter = new events.EventEmitter(); // local emitter
+	AGENT_EVENT_METHOD =
+		options.agentEventMethod
+			? options.agentEventMethod
+			: AgentEventMethod.separateCallback | AgentEventMethod.individual;
 
-	this.on("agentEvent", (event) => {
-		if (this.agentEventHandler) {
-			this.agentEventHandler(event);
+	this.agentEventEmitter.on("agentEvent", (event) => {
+		// Only handle events here if "individual" is requested.
+		if ( (AGENT_EVENT_METHOD & AgentEventMethod.individual) && this.agentEventHandler ) {
+			if ( (AGENT_EVENT_METHOD & AgentEventMethod.separateCallback) && this.agentEventHandler ) {
+				this.agentEventHandler( event );
+			}
+
+			if ( AGENT_EVENT_METHOD & AgentEventMethod.mainCallback ) {
+				this.callback( null, event );
+			}
+
+			if ( AGENT_EVENT_METHOD & AgentEventMethod.event ) {
+				this.emit ( "agentEvent", event ); // Re-emit on the Agent's public event emitter
+			}
 		}
 	});
 };
@@ -4450,6 +4481,9 @@ Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row)
 // The handler will be called with a single argument, a map, which
 // details the cause of the event.
 Agent.prototype.setAgentEventHandler = function (handler) {
+	if ( ! AGENT_EVENT_METHOD & AgentEventMethod.separateCallback ) {
+		throw new Error("options.agentEventMethod does hot include AgentEventMethod.separateCallback");
+	}
 	this.agentEventHandler = handler;
 };
 
@@ -4539,12 +4573,13 @@ Agent.prototype.castSetValue = function ( type, value ) {
 };
 
 
-Agent.prototype.tryCreateInstance = function (varbind, requestType) {
+Agent.prototype.tryCreateInstance = function (varbind, requestType, agentEvents) {
 	var row;
 	var column;
 	var value;
 	var subOid;
 	var subAddr;
+	var eventData;
 	var address;
 	var fullAddress;
 	var rowStatusColumn;
@@ -4594,12 +4629,14 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				value = this.castSetValue ( provider.scalarType, value );
 				this.mib.setScalarValue ( provider.name, value );
 
-				this.emit ("agentEvent",	{
+				eventData = {
 					eventType: "autoCreateScalar",
 					oid: oid,
 					providerName: provider.name,
 					value: value
-				});
+				};
+				agentEvents.push(eventData);
+				this.agentEventEmitter.emit ("agentEvent",	eventData);
 
 				// Now there should be an instanceNode available.
 				return this.mib.lookup (oid);
@@ -4661,13 +4698,15 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
 
-					this.emit ("agentEvent",	{
+					eventData = {
 						eventType: "autoCreateTableRow",
 						oid: oid,
 						providerName: provider.name,
 						values: value,
-                        row: row
-					});
+						row: row
+					};
+					agentEvents.push(eventData);
+					this.agentEventEmitter.emit ("agentEvent",	eventData);
 
 					// Now there should be an instanceNode available.
 					return this.mib.lookup (oid);
@@ -4725,12 +4764,14 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 
 Agent.prototype.request = function (requestMessage, rinfo) {
 	var me = this;
+	var eventData;
 	var varbindsCompleted = 0;
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
 	var responsePdu = requestPdu.getResponsePduForRequest ();
 	var mibRequests = [];
 	var handlers = [];
+	var agentEvents = [];
 
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
@@ -4744,7 +4785,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		// "read-create" MAX-ACCESS, or because it's a RowStatus SET
 		// indicating create.
 		if (! instanceNode) {
-			instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+			instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type, agentEvents);
 		}
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
@@ -4764,13 +4805,15 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					value: null
 				});
 
-				me.emit ("agentEvent",  {
+				eventData = {
 					eventType: "ERRnoInstance",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
 					errorStatus: ErrorStatus.NoError,
 					errorType: ObjectType.NoSuchObject
-				});
+				};
+				agentEvents.push(eventData);
+				me.agentEventEmitter.emit ("agentEvent",  eventData);
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
@@ -4787,13 +4830,15 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentEvent",  {
+				eventData = {
 					eventType: "ERRnoProvider",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
 					errorStatus: ErrorStatus.NoError,
 					errorType: ObjectType.NoSuchInstance
-				});
+				};
+				agentEvents.push(eventData);
+				me.agentEventEmitter.emit ("agentEvent",  eventData);
 			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
 				// requested access not allowed (by MAX-ACCESS)
 				mibRequests[i] = new MibRequest ({
@@ -4808,13 +4853,15 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				me.emit ("agentEvent",  {
+				eventData = {
 					eventType: "ERRnoAccess",
 					requestType: PduType[requestPdu.type],
 					oid: requestPdu.varbinds[i].oid,
 					errorStatus: ErrorStatus.NoAccess,
 					errorIndex: i + 1
-				});
+				};
+				agentEvents.push(eventData);
+				me.agentEventEmitter.emit ("agentEvent",  eventData);
 			} else if ( requestPdu.type === PduType.SetRequest &&
 					providerNode.provider.type == MibProviderType.Table &&
 					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
@@ -4902,13 +4949,15 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							oid: requestPdu.varbinds[i].oid
 						});
 						handlers[i] = getIcsHandler;
-						me.emit ("agentEvent",  {
+						eventData = {
 							eventType: "ERRbadRowStatusAction",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[i].oid,
 							errorStatus: ErrorStatus.InconstentValue,
 							errorIndex: i + 1
-						});
+						};
+						agentEvents.push(eventData);
+						me.agentEventEmitter.emit ("agentEvent",  eventData);
 						break;
 				}
 			}
@@ -4975,12 +5024,14 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							// Delete the table row
 							me.mib.deleteTableRow ( name, row );
 
-							me.emit ("agentEvent",  {
+							eventData = {
 								eventType: "tableRowDeleted",
 								oid: requestPdu.varbinds[savedIndex].oid,
 								providerName: name,
 								row: row
-							});
+							};
+							agentEvents.push(eventData);
+							me.agentEventEmitter.emit ("agentEvent",  eventData);
 
 							// This is going to return the prior state of the RowStatus column,
 							// i.e., either "active" or "notInService". That feels wrong, but there
@@ -5010,35 +5061,41 @@ Agent.prototype.request = function (requestMessage, rinfo) {
                                 tableInfo = {};
                             }
 
-							me.emit ("agentEvent",  Object.assign({
+							eventData = Object.assign({
 								eventType: "set",
 								oid: requestPdu.varbinds[savedIndex].oid,
 								providerName: providerNode.provider.name,
 								value: requestPdu.varbinds[savedIndex].value
-							}, tableInfo));
+							}, tableInfo);
+							agentEvents.push(eventData);
+							me.agentEventEmitter.emit ("agentEvent",  eventData);
 						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbindType = ObjectType.EndOfMibView;
 
-						me.emit ("agentEvent",  {
+						eventData = {
 							eventType: "getEndOfMibView",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[savedIndex].oid,
 							providerName: providerNode.provider.name,
 							value: mibRequests[savedIndex].instanceNode.value
-						});
+						};
+						agentEvents.push(eventData);
+						me.agentEventEmitter.emit ("agentEvent",  eventData);
 					} else {
 						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
 
-						me.emit ("agentEvent",  {
+						eventData = {
 							eventType: "get",
 							requestType: PduType[requestPdu.type],
 							oid: requestPdu.varbinds[savedIndex].oid,
 							providerName: providerNode.provider.name,
 							value: mibRequests[savedIndex].instanceNode.value
-						});
+						};
+						agentEvents.push(eventData);
+						me.agentEventEmitter.emit ("agentEvent",  eventData);
 					}
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
@@ -5056,6 +5113,20 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			handlers[i] (mibRequests[i]);
 		} else {
 			mibRequests[i].done ();
+		}
+
+		if ( AGENT_EVENT_METHOD & AgentEventMethod.coalesced ) {
+			if ( (AGENT_EVENT_METHOD & AgentEventMethod.separateCallback) && this.agentEventHandler ) {
+				this.agentEventHandler( agentEvents );
+			}
+
+			if ( AGENT_EVENT_METHOD & AgentEventMethod.mainCallback ) {
+				this.callback( agentEvents );
+			}
+
+			if ( AGENT_EVENT_METHOD & AgentEventMethod.event ) {
+				this.emit ( "agentEvent", agentEvents );
+			}
 		}
 	}
 };
@@ -6163,6 +6234,7 @@ exports.AccessControlModelType = AccessControlModelType;
 exports.AccessLevel = AccessLevel;
 exports.MaxAccess = MaxAccess;
 exports.RowStatus = RowStatus;
+exports.AgentEventMethod = AgentEventMethod;
 
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
