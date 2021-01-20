@@ -197,11 +197,45 @@ mib.setTableRowDefaultValues(
     undefined          // rsuWsaStatus           RowStatus
   ]);
 
+console.log("before first add");
+mib.dump ({
+	leavesOnly: false,
+    showProviders: true,
+    showValues: true,
+    showTypes: true
+});
+
 mib.addTableRow("rsuWsaServiceEntry", [ 1, 4, 1 ]);
 console.log("Row: ", JSON.stringify(mib.getTableRowCells("rsuWsaServiceEntry", [1])));
+
+console.log("after first add");
+mib.dump ({
+	leavesOnly: false,
+    showProviders: true,
+    showValues: true,
+    showTypes: true
+});
+
 mib.deleteTableRow("rsuWsaServiceEntry", [ 1 ] );
+
+console.log("after delete");
+mib.dump ({
+	leavesOnly: false,
+    showProviders: true,
+    showValues: true,
+    showTypes: true
+});
+
 mib.addTableRow("rsuWsaServiceEntry", [ 1, 4, 1 ]);
 console.log("Row: ", JSON.stringify(mib.getTableRowCells("rsuWsaServiceEntry", [1])));
+
+console.log("after second add");
+mib.dump ({
+	leavesOnly: false,
+    showProviders: true,
+    showValues: true,
+    showTypes: true
+});
 
 var changes;
 
@@ -226,13 +260,6 @@ try {
 	changes = {};
 }
 */
-
-mib.dump ({
-	leavesOnly: true,
-    showProviders: true,
-    showValues: true,
-    showTypes: true
-});
 
 // var data = mib.getTableColumnDefinitions ("ifTable");
 // var data = mib.getTableCells ("ifTable", true);
