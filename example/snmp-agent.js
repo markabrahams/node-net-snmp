@@ -12,11 +12,11 @@ var snmpOptions = {
     address: null,
     accessControlModelType: snmp.AccessControlModelType.Simple,
     agentEventMethod:           // comment out ones not wanted
-        snmp.AgentEventMethod.event |
-        snmp.AgentEventMethod.mainCallback  |
-        snmp.AgentEventMethod.separateCallback  |
-        snmp.AgentEventMethod.individual  |
-        snmp.AgentEventMethod.coalesced  |
+//        snmp.AgentEventMethod.event |
+//        snmp.AgentEventMethod.mainCallback  |
+//        snmp.AgentEventMethod.separateCallback  |
+//        snmp.AgentEventMethod.individual  |
+//        snmp.AgentEventMethod.coalesced  |
         0
 };
 
@@ -150,10 +150,56 @@ mib.addTableRow ("ifTable", [2, "eth0", 6, 2]);
 // var providers = store.getProviders ("IF-MIB");
 // mib.registerProviders (providers);
 
-// console.log (JSON.stringify (mib.providers, null, 2));
+mib.registerProviders(
+[
+  {
+    "tableName": "rsuWsaServiceTable",
+    "type": 2,
+    "tableColumns": [
+      {
+        "number": 1,
+        "name": "rsuWsaIndex",
+        "type": 2,
+        "maxAccess": 0
+      },
+      {
+        "number": 3,
+        "name": "rsuWsaPriority",
+        "type": 2,
+        "maxAccess": 4
+      },
+      {
+        "number": 8,
+        "name": "rsuWsaStatus",
+        "type": 2,
+        "maxAccess": 4,
+        "rowStatus": true
+      }
+    ],
+    "tableIndex": [
+      {
+        "columnName": "rsuWsaIndex",
+        "columnNumber": 1,
+        "type": 2
+      }
+    ],
+    "maxAccess": 0,
+    "name": "rsuWsaServiceEntry",
+    "oid": "1.0.15628.4.1.13.1"
+  }
+]);
+
+mib.setTableRowDefaultValues(
+  "rsuWsaServiceEntry",
+  [
+    undefined,         // rsuWsaIndex            RsuTableIndex,
+    4,                 // rsuWsaPriority         Integer32,
+    undefined          // rsuWsaStatus           RowStatus
+  ]);
 
 var changes;
 
+/*
 // If there's a persistent store, make its specified changes
 try {
 	changes = JSON.parse(fs.readFileSync("persistent.json"));
@@ -173,6 +219,7 @@ try {
 	console.log("Could not parse persistent storage");
 	changes = {};
 }
+*/
 
 mib.dump ({
 	leavesOnly: true,

@@ -4317,7 +4317,7 @@ var Agent = function (options, callback, mib) {
 	this.forwarder = new Forwarder (this.listener, this.callback);
 	this.agentEventEmitter = new events.EventEmitter(); // local emitter
 	AGENT_EVENT_METHOD =
-		options.agentEventMethod
+		"agentEventMethod" in options
 			? options.agentEventMethod
 			: AgentEventMethod.separateCallback | AgentEventMethod.individual;
 
