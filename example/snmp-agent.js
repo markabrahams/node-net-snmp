@@ -197,6 +197,12 @@ mib.setTableRowDefaultValues(
     undefined          // rsuWsaStatus           RowStatus
   ]);
 
+mib.addTableRow("rsuWsaServiceEntry", [ 1, 4, 1 ]);
+console.log("Row: ", JSON.stringify(mib.getTableRowCells("rsuWsaServiceEntry", [1])));
+mib.deleteTableRow("rsuWsaServiceEntry", [ 1 ] );
+mib.addTableRow("rsuWsaServiceEntry", [ 1, 4, 1 ]);
+console.log("Row: ", JSON.stringify(mib.getTableRowCells("rsuWsaServiceEntry", [1])));
+
 var changes;
 
 /*
