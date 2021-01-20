@@ -267,7 +267,8 @@ var AgentEvent = {
     2: "tableRowDeleted",
     3: "getEndOfMibView",
     4: "get",
-    5: "set"
+    5: "set",
+    6: "autoSet"
 };
 
 _expandConstantObject (AgentEvent);
@@ -4424,54 +4425,6 @@ Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
 	return missingDefVal ? undefined : values;
 };
 
-Agent.prototype.scalarReadCreateHandlerInternal = function (provider) {
-	// If there's a default value specified...
-	if ( typeof provider.defVal != "undefined" ) {
-		// ... then use it
-		return provider.defVal;
-	}
-
-	// We don't have enough information to auto-create the scalar
-	return undefined;
-};
-
-Agent.prototype.tableRowStatusHandlerInternal = function (provider, action, row) {
-	let values = [];
-	let missingDefVal = false;
-	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
-	const tc = provider.tableColumns;
-
-	tc.forEach(
-		(columnInfo, index) => {
-			let entries;
-
-			// Index columns get successive values from the rowIndexValues array.
-			// RowStatus columns get either "active" or "notInService" values.
-			// Every other column requires a defVal.
-			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
-			if (entries.length > 0 ) {
-				// It's an index column. Use the next index value
-				values.push(rowIndexValues.shift());
-			} else if ( columnInfo.rowStatus ) {
-				// It's the RowStatus column. Retain the action value for now; replaced later
-				values.push( RowStatus[action] );
-			} else if ( "defVal" in columnInfo ) {
-				// Neither index nor RowStatus column, so use the default value
-				values.push( columnInfo.defVal );
-			} else {
-				// Default value was required but not found
-				console.log("No defVal defined for column:", columnInfo);
-				missingDefVal = true;
-				values.push( undefined ); // just for debugging; never gets returned
-			}
-		}
-	);
-
-	// If a default value was missing, we can't auto-create the table row.
-	// Otherwise, we're good to go: give 'em the column values.
-	return missingDefVal ? undefined : values;
-};
-
 // The registered agentEventHandler will receive one or more event
 // messages for each operation requested of the agent. The reason
 // there may be more than one is that some operations, like RowStatus
@@ -4779,6 +4732,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var responseVarbindType;
 		var rowStatusColumn;
 		var getIcsHandler;
+		var subOid;
+		var subAddr;
+		var column;
+		var row;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
@@ -4876,6 +4833,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
+                subOid = Mib.getSubOidFromBaseOid (requestPdu.varbinds[i].oid, providerNode.provider.oid);
+                subAddr = subOid.split(".");
+                column = parseInt(subAddr.shift(), 10);
+                column = providerNode.provider.tableColumns.findIndex(entry => entry.number === column);
+                row = Mib.getRowIndexFromOid(subAddr.join("."), providerNode.provider.tableIndex);
+
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
 					case RowStatus["notInService"]:
@@ -4891,6 +4854,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						// Valid if this was a new row creation, but now set to active
 						if ( instanceNode.value === RowStatus["createAndGo"] ) {
 							requestPdu.varbinds[i].value = RowStatus["active"];
+
+							eventData = {
+								eventType: "autoSet",
+								oid: requestPdu.varbinds[i].oid,
+								providerName: providerNode.provider.name,
+								value: requestPdu.varbinds[i].value,
+								row: row,
+								column: column
+							};
+							agentEvents.push(eventData);
+							me.agentEventEmitter.emit ("agentEvent",  eventData);
 						} else {
 							// Row already existed
 							mibRequests[i] = new MibRequest ({
@@ -4913,6 +4887,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						// Valid if this was a new row creation, but now set to notInService
 						if ( instanceNode.value === RowStatus["createAndWait"] ) {
 							requestPdu.varbinds[i].value = RowStatus["notInService"];
+
+							eventData = {
+								eventType: "autoSet",
+								oid: requestPdu.varbinds[i].oid,
+								providerName: providerNode.provider.name,
+								value: requestPdu.varbinds[i].value,
+								row: row,
+								column: column
+							};
+							agentEvents.push(eventData);
+							me.agentEventEmitter.emit ("agentEvent",  eventData);
 						} else {
 							// Row already existed
 							mibRequests[i] = new MibRequest ({

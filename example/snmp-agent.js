@@ -221,6 +221,7 @@ function agentHandler(message) {
 		(message) => {
 			switch ( message.eventType ) {
 				case "autoCreateScalar":
+				case "autoSet":
 				case "set":
 					if ( "row" in message ) {
 						index = JSON.stringify(message.row);
