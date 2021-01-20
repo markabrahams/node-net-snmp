@@ -252,11 +252,13 @@ function agentHandler(message) {
 
 				case "tableRowDeleted":
 					index = JSON.stringify(message.row);
-					delete changes[message.providerName][index];
-					if (Object.keys(changes[message.providerName]).length === 0) {
-						delete changes[message.providerName];
+					if (changes && changes[message.providerName] && changes[message.providerName][index]) {
+						delete changes[message.providerName][index];
+						if (Object.keys(changes[message.providerName]).length === 0) {
+							delete changes[message.providerName];
+						}
+						isChanged = true;
 					}
-					isChanged = true;
 					break;
 
 				default:
