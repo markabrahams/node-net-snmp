@@ -4382,14 +4382,6 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 		return;
 	}
 
-	// Access control check
-	securityName = message.version == Version3 ? message.user.name : message.community;
-	if ( this.authorizer.getAccessControlModelType () == AccessControlModelType.Simple &&
-			! this.authorizer.getAccessControlModel ().isAccessAllowed (message.version, securityName, message.pdu.type) ) {
-		this.callback (new RequestFailedError ("Access denied for " + securityName + " to PDU type " + PduType[message.pdu.type] ) );
-		return;
-	}
-
 	// Request processing
 	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
@@ -4507,9 +4499,11 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				this.mib.setScalarValue ( provider.name, value );
 
 				// Now there should be an instanceNode available.
-				return this.mib.lookup (oid);
+				return {
+					instanceNode: this.mib.lookup (oid),
+					providerType: MibProviderType.Scalar
+				};
 			}
-
 
 			//
 			// Table
@@ -4567,7 +4561,13 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					this.mib.addTableRow ( provider.name, value );
 
 					// Now there should be an instanceNode available.
-					return this.mib.lookup (oid);
+					return {
+						instanceNode: this.mib.lookup (oid),
+						providerType: MibProviderType.Table,
+						action: RowStatus[varbind.value],
+						rowIndex: row,
+						row: value
+					};
 
 				}
 			}
@@ -4628,6 +4628,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var responsePdu = requestPdu.getResponsePduForRequest ();
 	var mibRequests = [];
 	var handlers = [];
+	var createResult = [];
 
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
@@ -4635,13 +4636,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var responseVarbindType;
 		var rowStatusColumn;
 		var getIcsHandler;
+		var createResult;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
 		// "read-create" MAX-ACCESS, or because it's a RowStatus SET
 		// indicating create.
-		if (! instanceNode) {
-			instanceNode = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+		if ( ! instanceNode ) {
+			createResult[i] = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+			if ( createResult[i] ) {
+				instanceNode = createResult[i].instanceNode;
+			}
 		}
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
@@ -4663,6 +4668,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
+			securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 			if ( ! providerNode ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
@@ -4688,6 +4694,20 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: null
 					});
 				};
+			} else if ( this.authorizer.getAccessControlModelType () == AccessControlModelType.Simple &&
+					! this.authorizer.getAccessControlModel ().isAccessAllowed (requestMessage.version, securityName, requestMessage.pdu.type) ) {
+				// Access control check
+				mibRequests[i] = new MibRequest ({
+					operation: requestPdu.type,
+					oid: requestPdu.varbinds[i].oid
+				});
+				handlers[i] = function getAccessDeniedHandler (mibRequestForAccessDenied) {
+					mibRequestForAccessDenied.done ({
+						errorStatus: ErrorStatus.NoAccess,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
 			} else if ( requestPdu.type === PduType.SetRequest &&
 					providerNode.provider.type == MibProviderType.Table &&
 					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
@@ -4702,6 +4722,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
+				requestPdu.varbinds[i].oldValue = requestPdu.varbinds[i].value;
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
 					case RowStatus["notInService"]:
@@ -4773,7 +4794,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 				if ( requestPdu.type == PduType.SetRequest ) {
 					mibRequests[i].setType = requestPdu.varbinds[i].type;
-					mibRequests[i].setValue = requestPdu.varbinds[i].value;
+					mibRequests[i].setValue = requestPdu.varbinds[i].oldValue || requestPdu.varbinds[i].value;
 				}
 				handlers[i] = providerNode.provider.handler;
 			}
@@ -4782,6 +4803,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		(function (savedIndex) {
 			var responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
+				let deletedRowIndex = null;
+				let deletedRow = null;
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
@@ -4790,7 +4813,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
 						type: error.type || ObjectType.Null,
-						value: error.value || null
+						value: error.value || null,
+						errorStatus: error.errorStatus
 					};
 				} else {
 					if ( requestPdu.type == PduType.SetRequest ) {
@@ -4807,17 +4831,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							column === rowStatusColumn ) {
 
 							// Yup. Do the deletion.
-							var row;
 							var name;
 							var subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
 							var subAddr = subOid.split(".");
 
 							subAddr.shift(); // shift off the column number, leaving the row index values
-							row = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
+							deletedRowIndex = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
 							name = provider.name;
+							deletedRow = me.mib.getTableRowCells ( name, deletedRowIndex );
 
 							// Delete the table row
-							me.mib.deleteTableRow ( name, row );
+							me.mib.deleteTableRow ( name, deletedRowIndex );
 
 							// This is going to return the prior state of the RowStatus column,
 							// i.e., either "active" or "notInService". That feels wrong, but there
@@ -4844,6 +4868,31 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						type: responseVarbindType,
 						value: mibRequests[savedIndex].instanceNode.value
 					};
+				}
+				if ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetNextRequest ) {
+					responseVarbind.previousOid = requestPdu.varbinds[savedIndex].previousOid;
+				}
+				if ( requestPdu.type == PduType.SetRequest ) {
+					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
+					responseVarbind.requestValue = requestPdu.varbinds[savedIndex].oldValue || requestPdu.varbinds[savedIndex].value;
+				}
+				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
+					responseVarbind.providerName = providerNode.provider.name;
+				}
+				if ( createResult[savedIndex] ) {
+					if ( createResult[savedIndex].providerType == MibProviderType.Scalar ) {
+						responseVarbind.autoCreated = true;
+					} else if ( createResult[savedIndex].providerType == MibProviderType.Table ) {
+						responseVarbind.autoCreated = true;
+						responseVarbind.autoCreatedRowIndex = createResult[savedIndex].rowIndex;
+						//responseVarbind.autoCreatedRow = createResult[savedIndex].row;
+						responseVarbind.autoCreatedRow = me.mib.getTableRowCells (providerNode.provider.name, createResult[savedIndex].row);
+					}
+				}
+				if ( deletedRowIndex ) {
+					responseVarbind.deleted = true;
+					responseVarbind.deletedRowIndex = deletedRowIndex;
+					responseVarbind.deletedRow = deletedRow;
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
 				if ( ++varbindsCompleted == varbindsLength) {
@@ -4886,6 +4935,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	if ( ! getNextNode ) {
 		// End of MIB
 		targetVarbinds.push ({
+			previousOid: startOid,
 			oid: startOid,
 			type: ObjectType.EndOfMibView,
 			value: null
@@ -4893,6 +4943,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	} else {
 		// Normal response
 		targetVarbinds.push ({
+			previousOid: startOid,
 			oid: getNextNode.oid,
 			type: getNextNode.valueType,
 			value: getNextNode.value
