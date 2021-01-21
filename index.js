@@ -4367,7 +4367,6 @@ Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
 	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
-	var securityName;
 	var reportMessage;
 
 	if ( ! message ) {
@@ -4629,6 +4628,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var mibRequests = [];
 	var handlers = [];
 	var createResult = [];
+	var securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 
 	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
 		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
@@ -4636,7 +4636,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 		var responseVarbindType;
 		var rowStatusColumn;
 		var getIcsHandler;
-		var createResult;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
@@ -4668,7 +4667,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 			if ( ! providerNode ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
