@@ -2985,6 +2985,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix scalar default createHandler
 
+## Version 3.2.0 - 22/01/2021
+
+ * Add row index, row and column to agent table callback info
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
