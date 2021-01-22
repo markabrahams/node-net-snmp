@@ -4630,12 +4630,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var createResult = [];
 	var securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 
-	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
-		var instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
-		var providerNode;
-		var responseVarbindType;
-		var rowStatusColumn;
-		var getIcsHandler;
+	for ( let i = 0; i < requestPdu.varbinds.length; i++ ) {
+		let instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
+		let providerNode;
+		let responseVarbindType;
+		let rowStatusColumn;
+		let getIcsHandler;
 
 		// If we didn't find an instance node, see if we can
 		// automatically create it, either because it has
@@ -4720,7 +4720,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				requestPdu.varbinds[i].oldValue = requestPdu.varbinds[i].value;
+				requestPdu.varbinds[i].requestValue = requestPdu.varbinds[i].value;
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
 					case RowStatus["notInService"]:
@@ -4792,17 +4792,19 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 				if ( requestPdu.type == PduType.SetRequest ) {
 					mibRequests[i].setType = requestPdu.varbinds[i].type;
-					mibRequests[i].setValue = requestPdu.varbinds[i].oldValue || requestPdu.varbinds[i].value;
+					mibRequests[i].setValue = requestPdu.varbinds[i].requestValue || requestPdu.varbinds[i].value;
 				}
 				handlers[i] = providerNode.provider.handler;
 			}
 		}
 
 		(function (savedIndex) {
-			var responseVarbind;
+			let responseVarbind;
 			mibRequests[savedIndex].done = function (error) {
-				let deletedRowIndex = null;
-				let deletedRow = null;
+				let rowIndex = null;
+				let row = null;
+				let deleted = false;
+				let column = -1;
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
@@ -4811,17 +4813,30 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					responseVarbind = {
 						oid: mibRequests[savedIndex].oid,
 						type: error.type || ObjectType.Null,
-						value: error.value || null,
-						errorStatus: error.errorStatus
+						value: error.value || null
+						//errorStatus: error.errorStatus
 					};
+					if ( error.errorStatus != ErrorStatus.NoError ) {
+						responseVarbind.errorStatus = error.errorStatus;
+					}
 				} else {
+					let providerName;
+					let subOid;
+					let subAddr;
+					let provider;
+					if ( providerNode && providerNode.provider && providerNode.provider.type == MibProviderType.Table ) {
+						column = instanceNode.getTableColumnFromInstanceNode();
+						provider = providerNode.provider;
+						providerName = provider.name;
+						subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
+						subAddr = subOid.split(".");
+						subAddr.shift(); // shift off the column number, leaving the row index values
+						rowIndex = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
+						row = me.mib.getTableRowCells ( providerName, rowIndex );
+					}
 					if ( requestPdu.type == PduType.SetRequest ) {
-						var column = instanceNode.getTableColumnFromInstanceNode();
-						var provider = providerNode.provider;
-						var rowStatusColumn;
-
 						// Is this a RowStatus column with a value of 6 (delete)?
-						rowStatusColumn = provider.type == MibProviderType.Table
+						let rowStatusColumn = provider.type == MibProviderType.Table
 							? provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null )
 							: null;
 						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
@@ -4829,17 +4844,8 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 							column === rowStatusColumn ) {
 
 							// Yup. Do the deletion.
-							var name;
-							var subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
-							var subAddr = subOid.split(".");
-
-							subAddr.shift(); // shift off the column number, leaving the row index values
-							deletedRowIndex = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
-							name = provider.name;
-							deletedRow = me.mib.getTableRowCells ( name, deletedRowIndex );
-
-							// Delete the table row
-							me.mib.deleteTableRow ( name, deletedRowIndex );
+							me.mib.deleteTableRow ( providerName, rowIndex );
+							deleted = true;
 
 							// This is going to return the prior state of the RowStatus column,
 							// i.e., either "active" or "notInService". That feels wrong, but there
@@ -4867,30 +4873,26 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						value: mibRequests[savedIndex].instanceNode.value
 					};
 				}
+				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
+					responseVarbind.providerName = providerNode.provider.name;
+				}
 				if ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetNextRequest ) {
 					responseVarbind.previousOid = requestPdu.varbinds[savedIndex].previousOid;
 				}
 				if ( requestPdu.type == PduType.SetRequest ) {
 					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
-					responseVarbind.requestValue = requestPdu.varbinds[savedIndex].oldValue || requestPdu.varbinds[savedIndex].value;
-				}
-				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
-					responseVarbind.providerName = providerNode.provider.name;
+					responseVarbind.requestValue = requestPdu.varbinds[savedIndex].requestValue || requestPdu.varbinds[savedIndex].value;
 				}
 				if ( createResult[savedIndex] ) {
-					if ( createResult[savedIndex].providerType == MibProviderType.Scalar ) {
-						responseVarbind.autoCreated = true;
-					} else if ( createResult[savedIndex].providerType == MibProviderType.Table ) {
-						responseVarbind.autoCreated = true;
-						responseVarbind.autoCreatedRowIndex = createResult[savedIndex].rowIndex;
-						//responseVarbind.autoCreatedRow = createResult[savedIndex].row;
-						responseVarbind.autoCreatedRow = me.mib.getTableRowCells (providerNode.provider.name, createResult[savedIndex].row);
-					}
-				}
-				if ( deletedRowIndex ) {
+					responseVarbind.autoCreated = true;
+					row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
+				} else if ( deleted ) {
 					responseVarbind.deleted = true;
-					responseVarbind.deletedRowIndex = deletedRowIndex;
-					responseVarbind.deletedRow = deletedRow;
+				}
+				if ( providerNode && providerNode.provider.type == MibProviderType.Table ) {
+					responseVarbind.column = column;
+					responseVarbind.rowIndex = rowIndex;
+					responseVarbind.row = row;
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
 				if ( ++varbindsCompleted == varbindsLength) {
