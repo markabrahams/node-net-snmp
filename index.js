@@ -4667,7 +4667,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			if ( ! providerNode ) {
+			if ( ! providerNode || instanceNode.value === undefined ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
 					oid: requestPdu.varbinds[i].oid
@@ -4820,14 +4820,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						responseVarbind.errorStatus = error.errorStatus;
 					}
 				} else {
-					let providerName;
+					let provider = providerNode ? providerNode.provider : null;
+					let providerName = provider ? provider.name : null;
 					let subOid;
 					let subAddr;
-					let provider;
 					if ( providerNode && providerNode.provider && providerNode.provider.type == MibProviderType.Table ) {
 						column = instanceNode.getTableColumnFromInstanceNode();
-						provider = providerNode.provider;
-						providerName = provider.name;
 						subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
 						subAddr = subOid.split(".");
 						subAddr.shift(); // shift off the column number, leaving the row index values
@@ -4885,7 +4883,9 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				}
 				if ( createResult[savedIndex] ) {
 					responseVarbind.autoCreated = true;
-					row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
+					if ( providerNode && providerNode.provider.type == MibProviderType.Table ) {
+						row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
+					}
 				} else if ( deleted ) {
 					responseVarbind.deleted = true;
 				}

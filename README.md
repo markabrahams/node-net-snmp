@@ -2989,6 +2989,10 @@ Example programs are included under the module's `example` directory.
 
  * Add row index, row and column to agent table callback info
 
+## Version 3.2.1 - 23/01/2021
+
+ * Fix agent scalar read-create and set
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
