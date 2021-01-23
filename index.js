@@ -4636,7 +4636,6 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	for ( let i = 0; i < requestPdu.varbinds.length; i++ ) {
 		let instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
 		let providerNode;
-		let responseVarbindType;
 		let rowStatusColumn;
 		let getIcsHandler;
 
@@ -4808,17 +4807,17 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				let row = null;
 				let deleted = false;
 				let column = -1;
+				responseVarbind = {
+					oid: mibRequests[savedIndex].oid
+				};
 				if ( error ) {
 					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
 						responsePdu.errorIndex = savedIndex + 1;
 					}
-					responseVarbind = {
-						oid: mibRequests[savedIndex].oid,
-						type: error.type || ObjectType.Null,
-						value: error.value || null
-						//errorStatus: error.errorStatus
-					};
+					responseVarbind.type = error.type || ObjectType.Null;
+					responseVarbind.value = error.value || null;
+					//responseVarbind.errorStatus: error.errorStatus
 					if ( error.errorStatus != ErrorStatus.NoError ) {
 						responseVarbind.errorStatus = error.errorStatus;
 					}
@@ -4859,20 +4858,23 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 						} else {
 							// No special handling required. Just save the new value.
-							mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+							let setResult = mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+							if ( ! setResult ) {
+								if ( typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError ) {
+									responsePdu.errorStatus = ErrorStatus.WrongValue;
+									responsePdu.errorIndex = savedIndex + 1;
+								}
+								responseVarbind.errorStatus = ErrorStatus.WrongValue;
+							}
 						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
-						responseVarbindType = ObjectType.EndOfMibView;
+						responseVarbind.type = ObjectType.EndOfMibView;
 					} else {
-						responseVarbindType = mibRequests[savedIndex].instanceNode.valueType;
+						responseVarbind.type = mibRequests[savedIndex].instanceNode.valueType;
 					}
-					responseVarbind = {
-						oid: mibRequests[savedIndex].oid,
-						type: responseVarbindType,
-						value: mibRequests[savedIndex].instanceNode.value
-					};
+					responseVarbind.value = mibRequests[savedIndex].instanceNode.value;
 				}
 				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
 					responseVarbind.providerName = providerNode.provider.name;

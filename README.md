@@ -2997,6 +2997,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix agent state for row deletion to empty table
 
+## Version 3.2.3 - 23/01/2021
+
+ * Fix return from agent set outside of constraints to WrongValue
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
