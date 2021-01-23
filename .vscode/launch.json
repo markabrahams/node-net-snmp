@@ -257,7 +257,10 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}/example/test.js"
+            "program": "${workspaceFolder}/example/test.js",
+            "args": [
+                "-p", "1161"
+            ]
         },
         {
             "type": "node",

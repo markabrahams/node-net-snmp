@@ -4167,6 +4167,9 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 			throw new ReferenceError ("Cannot find row for index " + rowIndex + " at registered provider " + table);
 		}
 	}
+	if ( Object.keys (this.providerNodes[table].children).length === 0 ) {
+		delete this.providerNodes[table];
+	}
 	return true;
 };
 
@@ -4175,10 +4178,10 @@ Mib.prototype.dump = function (options) {
 		options = {};
 	}
 	var completedOptions = {
-		leavesOnly: options.leavesOnly || true,
-		showProviders: options.leavesOnly || true,
-		showValues: options.leavesOnly || true,
-		showTypes: options.leavesOnly || true
+		leavesOnly: options.leavesOnly === undefined ? true : options.leavesOnly,
+		showProviders: options.showProviders === undefined ? true : options.showProviders,
+		showValues: options.showValues === undefined ? true : options.showValues,
+		showTypes: options.showTypes === undefined ? true : options.showTypes
 	};
 	this.root.dump (completedOptions);
 };

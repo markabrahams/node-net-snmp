@@ -2993,6 +2993,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix agent scalar read-create and set
 
+## Version 3.2.2 - 23/01/2021
+
+ * Fix agent state for row deletion to empty table
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
