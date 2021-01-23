@@ -3001,6 +3001,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix return from agent set outside of constraints to WrongValue
 
+## Version 3.3.0 - 24/01/2021
+
+ * Add range and size constraints support to MIB variables
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
