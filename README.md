@@ -1916,12 +1916,75 @@ The `oid` must be that of the "table entry" node, not its parent "table" node e.
 Note that there is no `handler` callback function in this particular example, so any interaction
 is directly between SNMP requests and MIB values with no other intervention.
 
+## Constraints
+Three types of constraints are supported: enumerations, integer
+ranges, and string sizes. These can be specified in a handler's
+`constraints` map, with keys `enumeration`, `ranges`, or `sizes`.
 
+The MIB parser converts definitions such as this to `enumeration` constraints:
+```
+SYNTAX       INTEGER { cont(0), alt(1) }
+```
+
+It converts definitions such as these to `ranges` constraints:
+```
+SYNTAX       Integer32 (172..184)
+```
+
+And it converts definitions like these to `sizes` constraints:
+```
+SYNTAX       OCTET STRING (SIZE (0..31))
+```
+
+### enumerations
+Enumerations identify each of the valid values of an object of type Integer, like this:
+```js
+constraints: {
+    enumeration: {
+        "1": "goodif",
+        "2": "averageif",
+        "3": "badif"
+    }
+```
+
+### ranges
+Ranges are used in Integer types, to limit the object's allowable
+values. They are specified using an array of maps. Each map optionally
+contains `min` and/or `max` values, specifying a single range.
+Mutliple ranges allow the union of values specified by those ranges.
+Specifying only `min` in a range allows all values greater than or
+equal to the specified one to be valid. Specifying only `max` in a
+range allows all values less than or equal to the specified one to be
+valid. This example shows that any value between 1 and 3 (inclusive)
+or 5 or greater is allowed, i.e., all integers greater than or equal
+to 1, except 4:
+```js
+constraints: {
+    ranges: [
+        { min: 1, max: 3 },
+        { min: 5 }
+    ]
+},
+```
+
+### sizes
+Sizes are used to limit the lengths of strings. The syntax is similar
+to `ranges`, allowing multiple ranges of sizes each potentially
+providing `min` and`max` values. A constraint that allows a string to
+be any length 1 or greater, except length 4, would look like this:
+```js
+constraints: {
+    sizes: [
+        { min: 1, max: 3 },
+        { min: 5 }
+    ]
+}
+```
 ## snmp.createMib ()
 
-The `createMib()` function instantiates and returns an instance of the `Mib` class.  The new
-Mib does not have any nodes (except for a single root node) and does not have any registered
-providers.
+The `createMib()` function instantiates and returns an instance of the
+`Mib` class. The new Mib does not have any nodes (except for a single
+root node) and does not have any registered providers.
 
 Note that this is only usable for an agent, not an AgentX subagent.  Since an agent instanciates
 a `Mib` instance on creation, this call is not needed in many scenarios.  Two scenarios where it
