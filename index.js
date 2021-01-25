@@ -3131,7 +3131,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	var entryArray;
 	var currentTableProvider;
 	var parentOid;
-	var integerEnumeration;
+	var constraintsResults;
+	var constraints;
 
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
@@ -3146,13 +3147,10 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 		var defVal = mibEntry["DEFVAL"];
 
 		if ( syntax ) {
-			// detect INTEGER enumerations
-			if ( typeof syntax == "object" ) {
-				integerEnumeration = syntax.INTEGER;
-				syntax = "INTEGER";
-			} else {
-				integerEnumeration = null;
-			}
+			constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+			syntax = constraintsResults.syntax;
+			constraints = constraintsResults.constraints;
+
 			if ( syntax.startsWith ("SEQUENCE OF") ) {
 				// start of table
 				currentTableProvider = {
@@ -3179,13 +3177,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 					defVal = mibEntry["DEFVAL"];
 
-					// detect INTEGER enumerations
-					if ( typeof syntax == "object" ) {
-						integerEnumeration = syntax.INTEGER;
-						syntax = "INTEGER";
-					} else {
-						integerEnumeration = null;
-					}
+					constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+					syntax = constraintsResults.syntax;
+					constraints = constraintsResults.constraints;
 
 					if ( mibEntry.MACRO == "SEQUENCE" ) {
 						// table entry sequence - ignore
@@ -3232,10 +3226,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 								type: syntaxTypes[syntax],
 								maxAccess: MaxAccess[maxAccess]
 							};
-							if ( integerEnumeration ) {
-								columnDefinition.constraints = {
-									enumeration: integerEnumeration
-								};
+							if ( constraints ) {
+								columnDefinition.constraints = constraints;
 							}
 							if (defVal) {
 								columnDefinition.defVal = defVal;
@@ -3277,10 +3269,8 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					scalarDefinition.defVal = defVal;
 				}
 
-				if ( integerEnumeration ) {
-					scalarDefinition.constraints = {
-						enumeration: integerEnumeration
-					};
+				if ( constraints ) {
+					scalarDefinition.constraints = constraints;
 				}
 				scalars.push (scalarDefinition);
 				// console.log ("Scalar: " + mibEntry.ObjectName);
@@ -3295,6 +3285,37 @@ ModuleStore.prototype.loadBaseModules = function () {
 		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
+};
+
+ModuleStore.getConstraintsFromSyntax = function (syntax) {
+	let constraints;
+
+	// detect INTEGER ranges, OCTET STRING sizes, and INTEGER enumerations
+	if ( typeof syntax == "object" ) {
+		let firstSyntaxKey = syntax[Object.keys(syntax)[0]];
+		if ( firstSyntaxKey.ranges ) {
+			constraints = {
+				ranges: firstSyntaxKey.ranges
+			};
+			syntax = Object.keys(syntax)[0];
+		} else if ( firstSyntaxKey.sizes ) {
+			constraints = {
+				size: firstSyntaxKey.sizes
+			};
+			syntax = Object.keys(syntax)[0];
+		} else {
+			constraints = {
+				enumeration: syntax.INTEGER
+			};
+			syntax = "INTEGER";
+		}
+	} else {
+		constraints = null;
+	}
+	return {
+		constraints: constraints,
+		syntax: syntax
+	};
 };
 
 ModuleStore.create = function () {

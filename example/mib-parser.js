@@ -37,7 +37,7 @@ authorizer.addCommunity ("public");
 
 // IF-MIB load and providers registration
 store.loadFromFile (mibDir + "IANAifType-MIB.mib");
-store.loadFromFile (mibDir + "IF-MIB.wrong");
+store.loadFromFile (mibDir + "IF-MIB.mib");
 providers = store.getProvidersForModule ("IF-MIB");
 mib.registerProviders (providers);
 
@@ -79,7 +79,7 @@ var ifStackEntryData2 = mib.getTableCells ("ifStackEntry", true, false);
 var ifStackEntryData3 = mib.getTableCells ("ifStackEntry", false, true);
 var ifStackEntryData4 = mib.getTableCells ("ifStackEntry", true, true);
 var ifStackEntryRow1 = mib.getTableRowCells ("ifStackEntry", [3, 4]);
-var ifStackEntryCell1 = mib.getTableSingleCell ("ifStackEntry", 1, [1, 2]);
+var ifStackEntryCell1 = mib.getTableSingleCell ("ifStackEntry", 3, [1, 2]);
 
 // ifRcvAddressEntry
 // Composite index - one foreign integer column, one local string column

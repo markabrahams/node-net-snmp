@@ -80,6 +80,8 @@ for each shown in this table:
  * MIB parsing and MIB module store
  * SNMP agent with MIB management for both scalar and tabular data
  * Agent table index support for non-integer keys, foreign keys, composite keys and table augmentation
+ * Agent support for "RowStatus" protocol-based creation and deletion of table rows
+ * Agent support for these MIB constraints: MAX-ACCESS, integer ranges, string sizes, integer enumerations
  * SNMP proxy forwarder for agent
  * AgentX subagent
  * IPv4 and IPv6
@@ -3004,6 +3006,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.3.0 - 24/01/2021
 
  * Add range and size constraints support to MIB variables
+
+## Version 3.3.1 - 25/01/2021
+
+ * Add range and size constraints to MIB parsing and provider generation
 
 # License
 
