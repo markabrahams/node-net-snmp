@@ -56,8 +56,7 @@ var callback = function (error, data) {
     needSave = false;
 
 	data.pdu.varbinds.forEach(
-		(varbind) =>
-		{
+		(varbind) => {
             let index;
 			let value;
 
@@ -66,8 +65,7 @@ var callback = function (error, data) {
               return;
             }
 
-			if (varbind.autoCreated && "rowIndex" in varbind)
-			{
+			if (varbind.autoCreated && "rowIndex" in varbind) {
 				// Auto-create table row
 				index = JSON.stringify(varbind.rowIndex);
 				if ( ! changes[varbind.providerName] ) {
@@ -112,10 +110,10 @@ var callback = function (error, data) {
 		});
 
     // Did we make any changes?
-    if (needSave) {
-        // Yup. Save 'em.
-	    fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "  "));
-    }
+	if (needSave) {
+		// Yup. Save 'em.
+		fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "	 "));
+	}
 };
 
 var agent = snmp.createAgent(snmpOptions, callback);
