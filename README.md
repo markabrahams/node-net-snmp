@@ -1921,17 +1921,21 @@ Three types of constraints are supported: enumerations, integer
 ranges, and string sizes. These can be specified in a handler's
 `constraints` map, with keys `enumeration`, `ranges`, or `sizes`.
 
-The MIB parser converts definitions such as this to `enumeration` constraints:
+Any SetRequest protocol operations are checked against the defined constraints, and are not
+actioned if the value in the SetRequest would violate the constraints e.g. the value is not
+a member of the defined enumeration.
+
+The MIB parser converts definitions such as this to `enumeration` constraints (see RFC 2578 Section 7.1.1):
 ```
 SYNTAX       INTEGER { cont(0), alt(1) }
 ```
 
-It converts definitions such as these to `ranges` constraints:
+It converts definitions such as these to `ranges` constraints (see RFC 2578 Appendix A):
 ```
 SYNTAX       Integer32 (172..184)
 ```
 
-And it converts definitions like these to `sizes` constraints:
+And it converts definitions like these to `sizes` constraints (see RFC 2578 Appendix A):
 ```
 SYNTAX       OCTET STRING (SIZE (0..31))
 ```
@@ -2013,7 +2017,7 @@ A provider definition has these fields:
  table.  Each column object must have a unique `number`, a `name`, a `type` from `snmp.ObjectType`, and
  a `maxAccess` value from `snmp.MaxAccess`. A column object with type `ObjectType.Integer` can optionally
  contain a `constraints` object, the format and meaning of which is identical to that defined on a single
- scalar provider (see `constraints` below for the details on this).
+ scalar provider (see the "Constraints" section above for further details on this).
  * `tableIndex` *(optional for table types)* - gives an array of index entry objects used for row indexes.
  Use a single-element array for a single-column index, and multiple values for a composite index.
  An index entry object has a `columnName` field, and if the entry is in another provider's table, then
@@ -2048,13 +2052,9 @@ objects`, below, for details.
  `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
  `setType` contain the value and type received in the `SetRequest` varbind.
  * `constraints` *(optional for scalar types)* - an optional object to specify constraints for
- integer-based enumerated types.  The only supported constraint at the moment is an `enumeration`
- object, which maps integers to their named types to capture "named-number enumerations" as described
- in RFC 2578 Section 7.1.1.  Any SetRequest protocol operations are checked against the defined
- constraints, and are not actioned if the value in the SetRequest would violate the constraints e.g.
- the value is not a member of the defined enumeration.  Note that table columns can specify such
- `constraints` in an identical way, except that these are stored under the column object definition
- for each column.
+ integer-based enumerated types, integer range restrictions and string size restrictions.  Note that
+ table columns can specify such `constraints` in an identical way, except that these are stored under
+ the column object definition for each column.  See the "Constraints" section above for further details.
 
 After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
 
@@ -2778,7 +2778,7 @@ Example programs are included under the module's `example` directory.
  * Correct reference to non-existant `req` variable in the `Session` objects
    constructor (should be `this`)
 
-## Version 1.1.18 - 15/05/2015
+## Version 1.1.18 - 15/05/2016
 
  * Correct argument number and names to the `snmp.createSession()` function
  * Add missing braces to an example in the README.md file
@@ -3073,6 +3073,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.3.1 - 25/01/2021
 
  * Add range and size constraints to MIB parsing and provider generation
+
+## Version 3.3.2 - 26/01/2021
+
+ * Add range and size constraints documentation
 
 # License
 
