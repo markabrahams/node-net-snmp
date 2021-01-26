@@ -4973,6 +4973,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				}
 				if ( providerNode && providerNode.provider.type == MibProviderType.Table ) {
 					responseVarbind.column = column;
+					responseVarbind.columnIndex = providerNode.provider.tableColumns.findIndex(tc => tc.number == column);
 					responseVarbind.rowIndex = rowIndex;
 					responseVarbind.row = row;
 				}

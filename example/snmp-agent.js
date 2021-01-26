@@ -1,4 +1,5 @@
 var snmp = require ("../");
+var fs = require("fs");
 var getopts = require ("getopts");
 
 var options = getopts(process.argv.slice(2));
@@ -12,12 +13,107 @@ var snmpOptions = {
     accessControlModelType: snmp.AccessControlModelType.Simple
 };
 
+if (options.s) {
+	var changes;
+
+	// If there's a persistent store, make its specified changes
+	try {
+		changes = JSON.parse(fs.readFileSync("persistent.json"));
+
+		for (var providerName in changes) {
+			var change = changes[providerName];
+			if (typeof change == "object") {
+				// table row
+				for (var rowIndex in change) {
+					mib.addTableRow(providerName, change[rowIndex]);
+				}
+			} else {
+				mib.setScalarValue(providerName, change);
+			}
+		}
+	} catch (e) {
+		console.log("Could not parse persistent storage");
+		changes = {};
+	}
+}
+
 var callback = function (error, data) {
-    if ( error ) {
-        console.error (error);
-    } else {
-        console.log (JSON.stringify(data.pdu.varbinds, null, 2));
+    var needSave;
+
+	if ( error ) {
+		console.error (error);
+		return;
+	}
+
+	console.log (JSON.stringify(data.pdu.varbinds, null, 2));
+
+    // If the user didn't request testing persistent storage, we're done here
+    if (! options.s) {
+        return;
     }
+
+    // Keep note of whether we need to save
+    needSave = false;
+
+	data.pdu.varbinds.forEach(
+		(varbind) => {
+            let index;
+			let value;
+
+            // If there was a request error, we don't need to do anything
+            if ("errorStatus" in varbind || ! ("providerName" in varbind) ) {
+              return;
+            }
+
+			if (varbind.autoCreated && "rowIndex" in varbind) {
+				// Auto-create table row
+				index = JSON.stringify(varbind.rowIndex);
+				if ( ! changes[varbind.providerName] ) {
+					changes[varbind.providerName] = {};
+				}
+				value = varbind.row;
+				value = value.map((v) => v instanceof Buffer ? v.toString() : v);
+				changes[varbind.providerName][index] = value;
+                needSave = true;
+			} else if (varbind.autoCreated) {
+				// Auto-created scalar
+				value = varbind.value;
+				value = value instanceof Buffer ? value.toString() : value;
+				changes[varbind.providerName] = value;
+                needSave = true;
+			} else if (varbind.deleted && "rowIndex" in varbind) {
+				// Delete table row
+				index = JSON.stringify(varbind.rowIndex);
+				if (changes && changes[varbind.providerName] && changes[varbind.providerName][index]) {
+					delete changes[varbind.providerName][index];
+					if (Object.keys(changes[varbind.providerName]).length === 0) {
+						delete changes[varbind.providerName];
+					}
+				}
+                needSave = true;
+			} else if ("requestValue" in varbind && "rowIndex" in varbind && "column" in varbind) {
+				// Set a column value
+				value = varbind.value;
+				index = JSON.stringify(varbind.rowIndex);
+				changes[varbind.providerName][index][varbind.columnIndex] =
+					value instanceof Buffer ? value.toString() : value;
+                needSave = true;
+			} else if ("requestValue" in varbind) {
+				// Set a scalar
+				value = varbind.value;
+				changes[varbind.providerName] =
+					value instanceof Buffer ? value.toString() : value;
+                needSave = true;
+			} else {
+              console.log("Ignoring varbind:" + JSON.stringify(varbind, null, "  "));
+            }
+		});
+
+    // Did we make any changes?
+	if (needSave) {
+		// Yup. Save 'em.
+		fs.writeFileSync("persistent.json", JSON.stringify(changes, null, "	 "));
+	}
 };
 
 var agent = snmp.createAgent(snmpOptions, callback);
@@ -83,7 +179,6 @@ var tableProvider = {
     oid: "1.3.6.1.2.1.2.2.1",
 //	createHandler: (provider, action, row) => [ row[0], "Locally-created", 24, snmp.RowStatus[action] ],
     maxAccess: snmp.MaxAccess['not-accessible'],
-	rowStatusColumn: 99,
     tableColumns: [
         {
             number: 1,
