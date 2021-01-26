@@ -95,7 +95,7 @@ var callback = function (error, data) {
 				// Set a column value
 				value = varbind.value;
 				index = JSON.stringify(varbind.rowIndex);
-				changes[varbind.providerName][index][varbind.columnIndex] =
+				changes[varbind.providerName][index][varbind.columnPosition] =
 					value instanceof Buffer ? value.toString() : value;
                 needSave = true;
 			} else if ("requestValue" in varbind) {

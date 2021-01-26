@@ -2130,12 +2130,12 @@ are the details of the conversions from index values to row instance OID sequenc
 - **ObjectType.OID** - the exact sequence of integers in the OID
 - **ObjectType.IpAddress** - a sequence of the four integers in the IP address
 
-## mib.getTableSingleCell (tableProviderName, columnIndex, rowIndex)
+## mib.getTableSingleCell (tableProviderName, columnNumber, rowIndex)
 
 Returns a single cell value from the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.
 
-## mib.setTableSingleCell (tableProviderName, columnIndex, rowIndex, value)
+## mib.setTableSingleCell (tableProviderName, columnNumber, rowIndex, value)
 
 Sets a single cell value at the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.
@@ -3077,6 +3077,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.3.2 - 26/01/2021
 
  * Add range and size constraints documentation
+
+## Version 3.3.3 - 27/01/2021
+
+ * Add column position to agent varbind callback
 
 # License
 
