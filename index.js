@@ -4565,10 +4565,13 @@ Agent.prototype.castSetValue = function ( type, value ) {
 			return typeof value == "number" ? value : parseInt(value, 10);
 
 		case ObjectType.OctetString:
-			if ( typeof value != "string" ) {
+			if ( value instanceof Buffer) {
+				return value.toString();
+			} else if ( typeof value != "string" ) {
 				throw new Error("Invalid OctetString", value);
+			} else {
+				return value;
 			}
-			return value;
 
 		case ObjectType.OID:
 			if ( typeof value != "string" || ! value.match(/[0-9]+\([.][0-9]+\)+/) ) {
@@ -4782,6 +4785,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var mibRequests = [];
 	var handlers = [];
 	var createResult = [];
+	var oldValues = [];
 	var securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 
 	for ( let i = 0; i < requestPdu.varbinds.length; i++ ) {
@@ -4873,7 +4877,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					});
 				};
 
-				requestPdu.varbinds[i].requestValue = requestPdu.varbinds[i].value;
+				requestPdu.varbinds[i].requestValue = this.castSetValue (requestPdu.varbinds[i].type, requestPdu.varbinds[i].value);
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
 					case RowStatus["notInService"]:
@@ -4933,6 +4937,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 						handlers[i] = getIcsHandler;
 						break;
 				}
+			}
+
+			if ( requestPdu.type === PduType.SetRequest && ! createResult[i] ) {
+				oldValues[i] = instanceNode.value;
 			}
 
 			if ( ! handlers[i] ) {
@@ -5009,7 +5017,10 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 
 						} else {
 							// No special handling required. Just save the new value.
-							let setResult = mibRequests[savedIndex].instanceNode.setValue (requestPdu.varbinds[savedIndex].value);
+							let setResult = mibRequests[savedIndex].instanceNode.setValue (me.castSetValue (
+								requestPdu.varbinds[savedIndex].type,
+								requestPdu.varbinds[savedIndex].value
+							));
 							if ( ! setResult ) {
 								if ( typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError ) {
 									responsePdu.errorStatus = ErrorStatus.WrongValue;
@@ -5034,14 +5045,18 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					responseVarbind.previousOid = requestPdu.varbinds[savedIndex].previousOid;
 				}
 				if ( requestPdu.type == PduType.SetRequest ) {
+					if ( oldValues[savedIndex] !== undefined ) {
+						responseVarbind.oldValue = oldValues[savedIndex];
+					}
 					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
-					responseVarbind.requestValue = requestPdu.varbinds[savedIndex].requestValue || requestPdu.varbinds[savedIndex].value;
+					if ( requestPdu.varbinds[savedIndex].requestValue ) {
+						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].requestValue);
+					} else {
+						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].value);
+					}
 				}
 				if ( createResult[savedIndex] ) {
 					responseVarbind.autoCreated = true;
-					if ( providerNode && providerNode.provider.type == MibProviderType.Table ) {
-						row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
-					}
 				} else if ( deleted ) {
 					responseVarbind.deleted = true;
 				}
@@ -5049,6 +5064,9 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 					responseVarbind.column = column;
 					responseVarbind.columnPosition = providerNode.provider.tableColumns.findIndex(tc => tc.number == column);
 					responseVarbind.rowIndex = rowIndex;
+					if ( ! deleted && rowIndex ) {
+						row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
+					}
 					responseVarbind.row = row;
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);

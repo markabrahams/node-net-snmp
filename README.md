@@ -3090,6 +3090,10 @@ Example programs are included under the module's `example` directory.
 
  * Add 256-bit AES encryption
 
+## Version 3.4.1 - 28/01/2021
+
+ * Add oldValue to agent callback info and convert buffers to strings
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
