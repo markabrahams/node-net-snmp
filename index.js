@@ -146,7 +146,9 @@ _expandConstantObject (AuthProtocols);
 var PrivProtocols = {
 	"1": "none",
 	"2": "des",
-	"4": "aes"
+	"4": "aes",
+	"6": "aes256b",
+	"8": "aes256r"
 };
 
 _expandConstantObject (PrivProtocols);
@@ -901,12 +903,12 @@ Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b
 Authentication.algorithms = {};
 
 Authentication.algorithms[AuthProtocols.md5] = {
-	// KEY_LENGTH: 16,
+	KEY_LENGTH: 16,
 	CRYPTO_ALGORITHM: 'md5'
 };
 
 Authentication.algorithms[AuthProtocols.sha] = {
-	// KEY_LENGTH: 20,
+	KEY_LENGTH: 20,
 	CRYPTO_ALGORITHM: 'sha1'
 };
 
@@ -1025,12 +1027,12 @@ Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex')
 
 Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authProtocol, engine) {
 	var encryptFunction = Encryption.algorithms[privProtocol].encryptPdu;
-	return encryptFunction (scopedPdu, privPassword, authProtocol, engine);
+	return encryptFunction (scopedPdu, privProtocol, privPassword, authProtocol, engine);
 };
 
 Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
 	var decryptFunction = Encryption.algorithms[privProtocol].decryptPdu;
-	return decryptFunction (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
+	return decryptFunction (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
 };
 
 Encryption.debugEncrypt = function (encryptionKey, iv, plainPdu, encryptedPdu) {
@@ -1058,7 +1060,57 @@ Encryption.generateLocalizedKey = function (algorithm, authProtocol, privPasswor
 	return encryptionKey;
 };
 
-Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engine) {
+Encryption.generateLocalizedKeyBlumenthal = function (algorithm, authProtocol, privPassword, engineID) {
+	let authKeyLength;
+	let privLocalizedKey;
+	let encryptionKey;
+	let rounds;
+	let hashInput;
+	let nextHash;
+	let hashAlgorithm;
+
+	authKeyLength = Authentication.algorithms[authProtocol].KEY_LENGTH;
+	rounds = Math.ceil (algorithm.KEY_LENGTH / authKeyLength );
+	encryptionKey = Buffer.alloc (algorithm.KEY_LENGTH);
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
+	nextHash = privLocalizedKey;
+
+	for ( let round = 0 ; round < rounds ; round++ ) {
+		nextHash.copy (encryptionKey, round * authKeyLength, 0, authKeyLength);
+		if ( round < rounds - 1 ) {
+			hashAlgorithm = crypto.createHash (Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM);
+			hashInput = Buffer.alloc ( (round + 1) * authKeyLength);
+			encryptionKey.copy (hashInput, round * authKeyLength, 0, (round + 1) * authKeyLength);
+			hashAlgorithm.update (hashInput);
+			nextHash = hashAlgorithm.digest ();
+		}
+	}
+
+	return encryptionKey;
+};
+
+Encryption.generateLocalizedKeyReeder = function (algorithm, authProtocol, privPassword, engineID) {
+	let authKeyLength;
+	let privLocalizedKey;
+	let encryptionKey;
+	let rounds;
+	let nextPasswordInput;
+
+	authKeyLength = Authentication.algorithms[authProtocol].KEY_LENGTH;
+	rounds = Math.ceil (algorithm.KEY_LENGTH / authKeyLength );
+	encryptionKey = Buffer.alloc (algorithm.KEY_LENGTH);
+	nextPasswordInput = privPassword;
+
+	for ( let round = 0 ; round < rounds ; round++ ) {
+		privLocalizedKey = Authentication.passwordToKey (authProtocol, nextPasswordInput, engineID);
+		privLocalizedKey.copy (encryptionKey, round * authKeyLength, 0, authKeyLength);
+		nextPasswordInput = privLocalizedKey;
+	}
+
+	return encryptionKey;
+};
+
+Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, authProtocol, engine) {
 	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var encryptionKey;
@@ -1106,7 +1158,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	};
 };
 
-Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
+Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
 	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var decryptionKey;
@@ -1170,15 +1222,16 @@ Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	return iv;
 };
 
-Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
-	var aes = Encryption.algorithms[PrivProtocols.aes];
+Encryption.encryptPduAes = function (scopedPdu, privProtocol, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[privProtocol];
+	var localizationAlgorithm = aes.localizationAlgorithm;
 	var encryptionKey;
 	var salt;
 	var iv;
 	var cipher;
 	var encryptedPdu;
 
-	encryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	encryptionKey = localizationAlgorithm (aes, authProtocol, privPassword, engine.engineID);
 	salt = Buffer.alloc (8).fill (crypto.randomBytes (8), 0, 8);
 	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, salt);
 	cipher = crypto.createCipheriv (aes.CRYPTO_ALGORITHM, encryptionKey, iv);
@@ -1192,14 +1245,15 @@ Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engi
 	};
 };
 
-Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine) {
-	var aes = Encryption.algorithms[PrivProtocols.aes];
+Encryption.decryptPduAes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[privProtocol];
+	var localizationAlgorithm = aes.localizationAlgorithm;
 	var decryptionKey;
 	var iv;
 	var decipher;
 	var decryptedPdu;
 
-	decryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	decryptionKey = localizationAlgorithm (aes, authProtocol, privPassword, engine.engineID);
 	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, privParameters);
 	decipher = crypto.createDecipheriv (aes.CRYPTO_ALGORITHM, decryptionKey, iv);
 	decryptedPdu = decipher.update (encryptedPdu);
@@ -1223,7 +1277,8 @@ Encryption.algorithms[PrivProtocols.des] = {
 	KEY_LENGTH: 8,
 	BLOCK_LENGTH: 8,
 	encryptPdu: Encryption.encryptPduDes,
-	decryptPdu: Encryption.decryptPduDes
+	decryptPdu: Encryption.decryptPduDes,
+	localizationAlgorithm: Encryption.generateLocalizedKey
 };
 
 Encryption.algorithms[PrivProtocols.aes] = {
@@ -1231,7 +1286,26 @@ Encryption.algorithms[PrivProtocols.aes] = {
 	KEY_LENGTH: 16,
 	BLOCK_LENGTH: 16,
 	encryptPdu: Encryption.encryptPduAes,
-	decryptPdu: Encryption.decryptPduAes
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKey
+};
+
+Encryption.algorithms[PrivProtocols.aes256b] = {
+	CRYPTO_ALGORITHM: 'aes-256-cfb',
+	KEY_LENGTH: 32,
+	BLOCK_LENGTH: 16,
+	encryptPdu: Encryption.encryptPduAes,
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKeyBlumenthal
+};
+
+Encryption.algorithms[PrivProtocols.aes256r] = {
+	CRYPTO_ALGORITHM: 'aes-256-cfb',
+	KEY_LENGTH: 32,
+	BLOCK_LENGTH: 16,
+	encryptPdu: Encryption.encryptPduAes,
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKeyReeder
 };
 
 /*****************************************************************************

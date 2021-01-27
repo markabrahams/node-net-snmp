@@ -237,11 +237,15 @@ are not supported.
 This object contains constants to select a supported encryption algorithm for
 SNMPv3 messages that require privacy:
  * `des` - for DES encryption (CBC-DES)
- * `aes` - for AES encryption (CFB-AES-128)
+ * `aes` - for 128-bit AES encryption (CFB-AES-128)
+ * `aes256b` - for 256-bit AES encryption (CFB-AES-256) with "Blumenthal" key localiztaion
+ * `aes256r` - for 256-bit AES encryption (CFB-AES-256) with "Reeder" key localiztaion
 
 DES is the sole encryption algorithm specified in the original SNMPv3 User-Based
-Security Model RFC (RFC 3414); AES for SNMPv3 was added later in RFC 3826.  Other
-encryption algorithms are not supported.
+Security Model RFC (RFC 3414); 128-bit AES for SNMPv3 was added later in RFC 3826.
+256-bit AES has *not* been standardized, and as such comes with two varieties of key
+localization.  Cisco and a number of other vendors commonly use the "Reeder" key
+localization variant.  Other encryption algorithms are not supported.
 
 ## snmp.AgentXPduType
 
@@ -3081,6 +3085,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.3.3 - 27/01/2021
 
  * Add column position to agent varbind callback
+
+## Version 3.4.0 - 27/01/2021
+
+ * Add 256-bit AES encryption
 
 # License
 
