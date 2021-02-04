@@ -276,10 +276,11 @@ _expandConstantObject (ResponseInvalidCode);
  ** Exception class definitions
  **/
 
-function ResponseInvalidError (message, code) {
+function ResponseInvalidError (message, code, info) {
 	this.name = "ResponseInvalidError";
 	this.message = message;
 	this.code = code;
+	this.info = info;
 	Error.captureStackTrace(this, ResponseInvalidError);
 }
 util.inherits (ResponseInvalidError, Error);
@@ -1525,7 +1526,7 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 				+ " received in message does not match digest "
 				+ Authentication.calculateDigest (this.buffer, user.authProtocol, user.authKey,
 					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
-				+ " calculated for message"), ResponseInvalidCode.EAuthFailure );
+				+ " calculated for message", ResponseInvalidCode.EAuthFailure, { user }));
 		return false;
 	}
 
