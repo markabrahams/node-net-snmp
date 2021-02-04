@@ -17,6 +17,8 @@ It is loaded using the `require()` function:
 var snmp = require ("net-snmp");
 ```
 
+# Quick Start
+
 Sessions to remote hosts can then be created and used to perform SNMP requests
 and send SNMP traps or informs:
 
@@ -29,18 +31,21 @@ session.get (oids, function (error, varbinds) {
     if (error) {
         console.error (error);
     } else {
-        for (var i = 0; i < varbinds.length; i++)
-            if (snmp.isVarbindError (varbinds[i]))
-                console.error (snmp.varbindError (varbinds[i]))
-            else
+        for (var i = 0; i < varbinds.length; i++) {
+            if (snmp.isVarbindError (varbinds[i])) {
+                console.error (snmp.varbindError (varbinds[i]));
+            } else {
                 console.log (varbinds[i].oid + " = " + varbinds[i].value);
+            }
+        }
     }
     session.close ();
 });
 
 session.trap (snmp.TrapType.LinkDown, function (error) {
-    if (error)
+    if (error) {
         console.error (error);
+    }
 });
 ```
 
@@ -286,7 +291,6 @@ The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
 - `2 - read-only`
 - `3 - read-write`
 - `4 - read-create`
-};
 
 # snmp.RowStatus
 Status values
@@ -298,7 +302,6 @@ Actions
 - `4 - createAndGo`
 - `5 - createAndWait`
 - `6 - destroy`
-
 
 # OID Strings & Varbinds
 
@@ -3093,6 +3096,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.4.1 - 28/01/2021
 
  * Add oldValue to agent callback info and convert buffers to strings
+
+## Version 3.4.2 - 05/02/2021
+
+ * Add error codes to ResponseInvalidError
 
 # License
 
