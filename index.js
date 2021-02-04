@@ -254,13 +254,32 @@ var RowStatus = {
 
 _expandConstantObject (RowStatus);
 
+var ResponseInvalidCode = {
+	1: "EIp4AddressSize",
+	2: "EUnknownObjectType",
+	3: "EUnknownPduType",
+	4: "ECouldNotDecrypt",
+	5: "EAuthFailure",
+	6: "EReqResOidNoMatch",
+	7: "ENonRepeaterCountMismatch",
+	8: "EOutOfOrder",
+	9: "EVersionNoMatch",
+	10: "ECommunityNoMatch",
+	11: "EUnexpectedReport",
+	12: "EResponseNotHandled",
+	13: "EUnexpectedResponse"
+};
+
+_expandConstantObject (ResponseInvalidCode);
+
 /*****************************************************************************
  ** Exception class definitions
  **/
 
-function ResponseInvalidError (message) {
+function ResponseInvalidError (message, code) {
 	this.name = "ResponseInvalidError";
 	this.message = message;
+	this.code = code;
 	Error.captureStackTrace(this, ResponseInvalidError);
 }
 util.inherits (ResponseInvalidError, Error);
@@ -374,7 +393,7 @@ function readIpAddress (buffer) {
 	if (bytes.length != 4)
 		throw new ResponseInvalidError ("Length '" + bytes.length
 				+ "' of IP address '" + bytes.toString ("hex")
-				+ "' is not 4");
+				+ "' is not 4", ResponseInvalidCode.EIp4AddressSize);
 	var value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
 	return value;
 }
@@ -465,7 +484,7 @@ function readVarbindValue (buffer, type) {
 		value = null;
 	} else {
 		throw new ResponseInvalidError ("Unknown type '" + type
-				+ "' in response");
+				+ "' in response", ResponseInvalidCode.EUnknownObjectType);
 	}
 	return value;
 }
@@ -879,7 +898,7 @@ var readPdu = function (reader, scoped) {
 		pdu = GetBulkRequestPdu.createFromBuffer (reader);
 	} else {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
-				+ "' in response");
+				+ "' in response", ResponseInvalidCode.EUnknownPduType);
 	}
 	if ( scoped ) {
 		pdu.contextEngineID = contextEngineID;
@@ -1488,7 +1507,8 @@ Message.prototype.decryptPdu = function (user, responseCb) {
 			this.pdu = readPdu(decryptedPduReader, true);
 			return true;
 		} catch (error) {
-			responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error));
+			responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error,
+					ResponseInvalidCode.ECouldNotDecrypt));
 			return false;
 		}
 	}
@@ -1505,7 +1525,7 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 				+ " received in message does not match digest "
 				+ Authentication.calculateDigest (this.buffer, user.authProtocol, user.authKey,
 					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
-				+ " calculated for message") );
+				+ " calculated for message"), ResponseInvalidCode.EAuthFailure );
 		return false;
 	}
 
@@ -1837,7 +1857,7 @@ Session.prototype.get = function (oids, responseCb) {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
@@ -1845,7 +1865,7 @@ Session.prototype.get = function (oids, responseCb) {
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in request at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -1900,7 +1920,8 @@ Session.prototype.getBulk = function () {
 		if (pdu.varbinds.length < nonRepeaters) {
 			req.responseCb (new ResponseInvalidError ("Varbind count in "
 					+ "response '" + pdu.varbinds.length + "' is less than "
-					+ "non-repeaters '" + nonRepeaters + "' in request"));
+					+ "non-repeaters '" + nonRepeaters + "' in request",
+					ResponseInvalidCode.ENonRepeaterCountMismatch));
 		} else {
 			for ( ; i < nonRepeaters; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
@@ -1911,7 +1932,7 @@ Session.prototype.getBulk = function () {
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
 							+ "positiion '" + i + "' does not precede "
 							+ "OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EOutOfOrder));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -1926,7 +1947,8 @@ Session.prototype.getBulk = function () {
 			req.responseCb (new ResponseInvalidError ("Varbind count in "
 					+ "response '" + pdu.varbinds.length + "' is not a "
 					+ "multiple of repeaters '" + repeaters
-					+ "' plus non-repeaters '" + nonRepeaters + "' in request"));
+					+ "' plus non-repeaters '" + nonRepeaters + "' in request",
+					ResponseInvalidCode.ENonRepeaterCountMismatch));
 		} else {
 			while (i < pdu.varbinds.length) {
 				for (var j = 0; j < repeaters; j++, i++) {
@@ -1945,7 +1967,8 @@ Session.prototype.getBulk = function () {
 								+ "' in request at positiion '" + (reqIndex)
 								+ "' does not precede OID '"
 								+ pdu.varbinds[respIndex].oid
-								+ "' in response at position '" + (respIndex) + "'"));
+								+ "' in response at position '" + (respIndex) + "'",
+								ResponseInvalidCode.EOutOfOrder));
 						return;
 					} else {
 						if (! varbinds[reqIndex])
@@ -1988,7 +2011,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
@@ -1999,7 +2022,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
 							+ "positiion '" + i + "' does not precede "
 							+ "OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.OutOfOrder));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -2065,7 +2088,7 @@ Session.prototype.inform = function () {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Inform OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
@@ -2073,7 +2096,7 @@ Session.prototype.inform = function () {
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in inform at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -2143,11 +2166,11 @@ Session.prototype.onMsg = function (buffer) {
 	if (message.version != req.message.version) {
 		req.responseCb (new ResponseInvalidError ("Version in request '"
 				+ req.message.version + "' does not match version in "
-				+ "response '" + message.version + "'"));
+				+ "response '" + message.version + "'", ResponseInvalidCode.EVersionNoMatch));
 	} else if (message.community != req.message.community) {
 		req.responseCb (new ResponseInvalidError ("Community '"
 				+ req.message.community + "' in request does not match "
-				+ "community '" + message.community + "' in response"));
+				+ "community '" + message.community + "' in response", ResponseInvalidCode.ECommunityNoMatch));
 	} else if (message.pdu.type == PduType.Report) {
 		this.msgSecurityParameters = {
 			msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
@@ -2164,7 +2187,7 @@ Session.prototype.onMsg = function (buffer) {
 					this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
 					return;
 				}
-				req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
+				req.responseCb (new ResponseInvalidError ("Unexpected Report PDU", ResponseInvalidCode.EUnexpectedReport) );
 				return;
 			}
 			req.originalPdu.contextName = this.context;
@@ -2177,7 +2200,7 @@ Session.prototype.onMsg = function (buffer) {
 		req.onResponse (req, message);
 	} else {
 		req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
-				+ message.pdu.type + "' in response"));
+				+ message.pdu.type + "' in response", ResponseInvalidCode.EUnknownPduType));
 	}
 };
 
@@ -2257,7 +2280,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
@@ -2265,7 +2288,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in request at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -2697,7 +2720,7 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 Session.prototype.userSecurityModelError = function (req, oid) {
 	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
 	var errorType = UsmStats[oidSuffix] || "Unexpected Report PDU";
-	req.responseCb (new ResponseInvalidError (errorType) );
+	req.responseCb (new ResponseInvalidError (errorType, ResponseInvalidCode.EAuthFailure) );
 };
 
 Session.prototype.onProxyResponse = function (req, message) {
@@ -2728,7 +2751,8 @@ Session.create = function (target, community, options) {
 	// Ensure that options may be optional
 	var version = (options && options.version) ? options.version : Version1;
 	if (version != Version1 && version != Version2c) {
-		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
+		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid",
+				ResponseInvalidCode.EVersionNoMatch);
 	} else {
 		if (!options)
 			options = {};
@@ -2740,7 +2764,8 @@ Session.create = function (target, community, options) {
 Session.createV3 = function (target, user, options) {
 	// Ensure that options may be optional
 	if ( options && options.version && options.version != Version3 ) {
-		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
+		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options",
+				ResponseInvalidCode.EVersionNoMatch);
 	} else {
 		if (!options)
 			options = {};
@@ -5883,14 +5908,16 @@ Subagent.prototype.response = function (pdu) {
 				break;
 			default:
 				// Response PDU for request type not handled
-				throw new ResponseInvalidError ("Response PDU for type '" + requestPdu.pduType + "' not handled");
+				throw new ResponseInvalidError ("Response PDU for type '" + requestPdu.pduType + "' not handled",
+						ResponseInvalidCode.EResponseNotHandled);
 		}
 		if (requestPdu.callback) {
 			requestPdu.callback(null, pdu);
 		}
 	} else {
 		// unexpected Response PDU - has no matching request
-		throw new ResponseInvalidError ("Unexpected Response PDU with packetID " + pdu.packetID);
+		throw new ResponseInvalidError ("Unexpected Response PDU with packetID " + pdu.packetID,
+				ResponseInvalidCode.EUnexpectedResponse);
 	}
 };
 
@@ -6189,6 +6216,7 @@ exports.AccessLevel = AccessLevel;
 exports.MaxAccess = MaxAccess;
 exports.RowStatus = RowStatus;
 
+exports.ResponseInvalidCode = ResponseInvalidCode;
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
 exports.RequestFailedError = RequestFailedError;
