@@ -292,7 +292,7 @@ The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
 - `3 - read-write`
 - `4 - read-create`
 
-# snmp.RowStatus
+## snmp.RowStatus
 Status values
 - `1 - active`
 - `2 - notInService`
@@ -302,6 +302,21 @@ Actions
 - `4 - createAndGo`
 - `5 - createAndWait`
 - `6 - destroy`
+
+## snmp.ResponseInvalidCode
+- `1 -  EIp4AddressSize`
+- `2 -  EUnknownObjectType`
+- `3 -  EUnknownPduType`
+- `4 -  ECouldNotDecrypt`
+- `5 -  EAuthFailure`
+- `6 -  EReqResOidNoMatch`
+- `7 -  ENonRepeaterCountMismatch`
+- `8 -  EOutOfOrder`
+- `9 -  EVersionNoMatch`
+- `10 -  ECommunityNoMatch`
+- `11 -  EUnexpectedReport`
+- `12 -  EResponseNotHandled`
+- `13 -  EUnexpectedResponse`
 
 # OID Strings & Varbinds
 
