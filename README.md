@@ -3125,6 +3125,10 @@ Example programs are included under the module's `example` directory.
 
  * Add error codes to ResponseInvalidError
 
+## Version 3.4.3 - 06/02/2021
+
+ * Add documentation for ResponseInvalidError error codes
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

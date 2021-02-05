@@ -25,7 +25,7 @@ var cb = function(error, trap) {
                 console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.enterprise);
 			} else {
 				for (var i = 0; i < trap.pdu.varbinds.length; i++) {
-				  console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[i].oid + " -> " + trap.pdu.varbinds[i].value);
+                    console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[i].oid + " -> " + trap.pdu.varbinds[i].value);
 				}
             }
         }
