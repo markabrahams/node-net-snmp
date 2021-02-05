@@ -376,7 +376,7 @@ function responseCb (error, varbinds) {
 }
 ```
 
-When defined, the error parameter is always an instance of the `Error` class,
+When defined, the `error` parameter is always an instance of the `Error` class,
 or a sub-class described in one of the sub-sections contained in this section.
 
 The semantics of error handling is slightly different between SNMP version
@@ -485,8 +485,17 @@ exposed `message` attribute will contain the value `Request timed out`.
 
 ## snmp.ResponseInvalidError
 
-This error indicates a failure to parse a response message.  The exposed
-`message` attribute will contain a detailed error message.
+This error indicates a failure to parse a response message. The
+exposed `message` attribute will contain a detailed error message, and
+as a sub-class of Error, its `toString()` method will yield that
+`message` attribute.
+
+An error of this class will always additionally include a `code`
+attribute (one of the values in `ResponseInvalidCode`); and in some
+cases, also have an `info` attribute which provides `code`-specific
+supplemental information. An authentication error, for example -- code
+`ResponseInvalidCode.EAuthFailure` -- will contain a map in `info`
+with the attempted authentication data which failed to authenticate.
 
 # Using This Module: Command & Notification Generator
 
