@@ -6,6 +6,7 @@ var verbose = options.v;
 var snmpOptions = {
     disableAuthorization: options.n,
     port: options.p,
+	transport: options.t,
     engineID: options.e
 };
 
@@ -22,8 +23,10 @@ var cb = function(error, trap) {
         } else {
             if (trap.pdu.type == snmp.PduType.Trap ) {
                 console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.enterprise);
-            } else {
-                console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[1].value);
+			} else {
+				for (var i = 0; i < trap.pdu.varbinds.length; i++) {
+				  console.log (now + ": " + trapType + ": " + trap.rinfo.address + " : " + trap.pdu.varbinds[i].oid + " -> " + trap.pdu.varbinds[i].value);
+				}
             }
         }
     }
