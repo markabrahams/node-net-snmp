@@ -3228,7 +3228,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 			if ( syntax.startsWith ("SEQUENCE OF") ) {
 				// start of table
 				currentTableProvider = {
-					tableName: mibEntry.ObjectName,
+					name: mibEntry.ObjectName,
 					type: MibProviderType.Table,
 					//oid: mibEntry.OID,
 					tableColumns: [],
@@ -3261,9 +3261,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 						// unexpected
 					} else {
 						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
-						if ( parentOid == currentTableProvider.tableName ) {
+						if ( parentOid == currentTableProvider.name ) {
 							// table entry
-							currentTableProvider.name = mibEntry.ObjectName;
+							currentTableProvider.entryName = mibEntry.ObjectName;
 							currentTableProvider.oid = mibEntry.OID;
 							if ( mibEntry.INDEX ) {
 								currentTableProvider.tableIndex = [];
@@ -3292,7 +3292,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 								currentTableProvider.tableAugments = mibEntry.AUGMENTS[0].trim();
 								currentTableProvider.tableIndex = null;
 							}
-						} else if ( parentOid == currentTableProvider.name ) {
+						} else if ( parentOid == currentTableProvider.entryName ) {
 							// table column
 							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
