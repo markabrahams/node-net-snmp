@@ -3134,6 +3134,10 @@ Example programs are included under the module's `example` directory.
 
  * Add engineID option to v3 session
 
+## Version 3.5.1 - 28/02/2021
+
+ * Fix MIB parsing of sized integers without whitespace
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
