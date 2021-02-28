@@ -22,7 +22,6 @@ snmpOptions.version = snmp.Version[options.v];
 snmpOptions.debug = options.d;
 snmpOptions.transport = options.t;
 if ( snmpOptions.version == snmp.Version3 ) {
-    var engineID;
     if ( options.e ) {
         snmpOptions.engineID = options.e.toString();
     }
