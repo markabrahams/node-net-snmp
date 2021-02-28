@@ -1,7 +1,9 @@
 var snmp = require ("../");
 var getopts = require ("getopts");
 
-var options = getopts(process.argv.slice(2));
+var options = getopts(process.argv.slice(2), {
+    string: ["e"]
+});
 var community;
 var user;
 var session;
@@ -22,12 +24,11 @@ snmpOptions.transport = options.t;
 if ( snmpOptions.version == snmp.Version3 ) {
     var engineID;
     if ( options.e ) {
-        engineID = Buffer.from((options.e.toString().length % 2 == 1 ? '0' : '') + options.e.toString(), 'hex');
+        snmpOptions.engineID = options.e.toString();
     }
 	user = {
 		name: options.u,
-		level: snmp.SecurityLevel[options.l],
-        engineID: engineID
+		level: snmp.SecurityLevel[options.l]
     };
     if ( options.a ) {
         user.authProtocol = snmp.AuthProtocols[options.a.toLowerCase()];

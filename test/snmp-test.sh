@@ -8,7 +8,7 @@ HOME_DIR=.
 HOST=localhost
 LEVEL=authpriv
 PRINT_ONLY=0
-TRAP_ENGINEID="0102030409"
+TRAP_ENGINEID="010203040a"
 IPV6=0
 CMDS=/var/tmp/snmp-test.$$
 
@@ -20,7 +20,7 @@ USER_AUTH=betty
 USER_PRIV=barney
 USER_TRAP_NONE=fred
 USER_TRAP_AUTH=betty
-USER_TRAP_PRIV=barney
+USER_TRAP_PRIV=wilma
 USER_SET_NONE=trapnone
 USER_SET_AUTH=trapshaonly
 USER_SET_PRIV=trapshades
@@ -99,7 +99,7 @@ node ${HOME_DIR}/example/snmp-subtree.js ${PARAMS} ${HOST} 1.3.6.1.6.3.16.1.5.2.
 node ${HOME_DIR}/example/snmp-table.js ${PARAMS} ${HOST} 1.3.6.1.2.1.1.9
 node ${HOME_DIR}/example/snmp-table-columns.js ${PARAMS} ${HOST} 1.3.6.1.2.1.2.2 2
 node ${HOME_DIR}/example/snmp-set.js ${SET_PARAMS} ${HOST} 1.3.6.1.2.1.1.6.0 OctetString Auckland
-node ${HOME_DIR}/example/snmp-trap.js -e ${TRAP_ENGINE_ID} ${TRAP_PARAMS} ${HOST} 1.3.6.1.6.3.1.1.5.2
+node ${HOME_DIR}/example/snmp-trap.js -e ${TRAP_ENGINEID} ${TRAP_PARAMS} ${HOST} 1.3.6.1.6.3.1.1.5.2
 node ${HOME_DIR}/example/snmp-inform.js ${PARAMS} ${HOST} 1.3.6.1.6.3.1.1.5.2
 ENDOFCMDS
 

@@ -1812,7 +1812,7 @@ var Session = function (target, authenticator, options) {
 
 	DEBUG = options.debug;
 
-	this.engine = new Engine ();
+	this.engine = new Engine (options.engineID);
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -2586,7 +2586,7 @@ Session.prototype.trap = function () {
 
 	if ( this.version == Version3 ) {
 		var msgSecurityParameters = {
-			msgAuthoritativeEngineID: this.user.engineID,
+			msgAuthoritativeEngineID: this.engine.engineID,
 			msgAuthoritativeEngineBoots: 0,
 			msgAuthoritativeEngineTime: 0
 		};
@@ -2777,7 +2777,12 @@ Session.createV3 = function (target, user, options) {
 
 var Engine = function (engineID, engineBoots, engineTime) {
 	if ( engineID ) {
-		this.engineID = Buffer.from (engineID, 'hex');
+		if ( ! (engineID instanceof Buffer) ) {
+			engineID = engineID.replace('0x', '');
+			this.engineID = Buffer.from((engineID.toString().length % 2 == 1 ? '0' : '') + engineID.toString(), 'hex');
+		} else {
+			this.engineID = engineID;
+		}
 	} else {
 		this.generateEngineID ();
 	}
@@ -2787,7 +2792,7 @@ var Engine = function (engineID, engineBoots, engineTime) {
 
 Engine.prototype.generateEngineID = function() {
 	// generate a 17-byte engine ID in the following format:
-	// 0x80 + 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
+	// 0x80 | 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
 	this.engineID = Buffer.alloc (17);
 	this.engineID.fill ('8000B98380', 'hex', 0, 5);
 	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');

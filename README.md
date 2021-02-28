@@ -591,6 +591,7 @@ var options = {
     transport: "udp4",
     trapPort: 162,
     version: snmp.Version3,
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
     idBitsSize: 32,
     context: ""
 };
@@ -1452,7 +1453,7 @@ var options = {
     port: 162,
     disableAuthorization: false,
     accessControlModelType: snmp.AccessControlModelType.None,
-    engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
     address: null,
     transport: "udp4"
 };
@@ -1562,7 +1563,7 @@ var options = {
     port: 161,
     disableAuthorization: false,
     accessControlModelType: snmp.AccessControlModelType.None,
-    engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
     address: null,
     transport: "udp4"
 };
@@ -3128,6 +3129,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.4.3 - 06/02/2021
 
  * Add documentation for ResponseInvalidError error codes
+
+## Version 3.5.0 - 28/02/2021
+
+ * Add engineID option to v3 session
 
 # License
 
