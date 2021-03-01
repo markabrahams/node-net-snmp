@@ -3138,6 +3138,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix MIB parsing of sized integers without whitespace
 
+## Version 3.5.2 - 02/03/2021
+
+ * Fix MIB table index handling of Buffer type
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
