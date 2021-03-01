@@ -4081,7 +4081,13 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 			oidComponents = value.split (".");
 			break;
 		case ObjectType.OctetString:
-			oidComponents = [...value].map (c => c.charCodeAt());
+			if ( value instanceof Buffer ) {
+				// Buffer
+				oidComponents = Array.prototype.slice.call (value);
+			} else {
+				// string
+				oidComponents = [...value].map (c => c.charCodeAt());
+			}
 			break;
 		case ObjectType.IpAddress:
 			return value.split (".");
