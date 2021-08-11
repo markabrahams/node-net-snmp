@@ -2641,7 +2641,12 @@ function walkCb (req, error, varbinds) {
 		}
 	}
 
-	if (this.version == Version2c || this.version == Version3 ) {
+	if (!varbinds.length) {
+		req.doneCb(null);
+		return;
+	}
+
+	if (this.version == Version2c || this.version == Version3) {
 		for (var i = varbinds[0].length; i > 0; i--) {
 			if (varbinds[0][i - 1].type == ObjectType.EndOfMibView) {
 				varbinds[0].pop ();
