@@ -3142,6 +3142,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix MIB table index handling of Buffer type
 
+## Version 3.5.3 - 22/08/2021
+
+ * Fix error with empty varbind array in walk
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
