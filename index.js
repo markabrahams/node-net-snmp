@@ -4203,8 +4203,8 @@ Mib.prototype.addTableRow = function (table, row) {
 	for ( var i = 0; i < provider.tableColumns.length ; i++ ) {
 		var column = provider.tableColumns[i];
 		var isColumnIndex = provider.tableIndex.some ( indexPart => indexPart.columnNumber == column.number );
-		// prevent not-accessible index entries from being added as columns in the row
-		if ( ! isColumnIndex || column.maxAccess !== MaxAccess['not-accessible'] ) {
+		// prevent not-accessible and accessible-for-notify index entries from being added as columns in the row
+		if ( ! isColumnIndex || ! (column.maxAccess === MaxAccess['not-accessible'] || column.maxAccess === MaxAccess['accessible-for-notify']) ) {
 			instanceAddress = providerNode.address.concat (column.number).concat (instance);
 			this.addNodesForAddress (instanceAddress);
 			instanceNode = this.lookup (instanceAddress);

@@ -3146,6 +3146,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix error with empty varbind array in walk
 
+## Version 3.5.4 - 24/08/2021
+
+ * Align accessible-for-notify row cell behaviour with not-accessible behaviour
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
