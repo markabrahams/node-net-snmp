@@ -1923,6 +1923,7 @@ Session.prototype.getBulk = function () {
 					+ "response '" + pdu.varbinds.length + "' is less than "
 					+ "non-repeaters '" + nonRepeaters + "' in request",
 					ResponseInvalidCode.ENonRepeaterCountMismatch));
+			return;
 		} else {
 			for ( ; i < nonRepeaters; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
