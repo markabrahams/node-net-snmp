@@ -3150,6 +3150,10 @@ Example programs are included under the module's `example` directory.
 
  * Align accessible-for-notify row cell behaviour with not-accessible behaviour
 
+## Version 3.5.5 - 29/09/2021
+
+ * Add missing return in getbulk feedCb callback non-repeaters error condition
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
