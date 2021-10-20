@@ -3154,6 +3154,10 @@ Example programs are included under the module's `example` directory.
 
  * Add missing return in getbulk feedCb callback non-repeaters error condition
 
+## Version 3.5.6 - 20/10/2021
+
+ * Fix GetNext OID calculation for off-tree OIDs
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
