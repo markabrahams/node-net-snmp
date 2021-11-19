@@ -2642,7 +2642,7 @@ function walkCb (req, error, varbinds) {
 		}
 	}
 
-	if ( ! varbinds.length ) {
+	if ( ! varbinds || ! varbinds.length ) {
 		req.doneCb(null);
 		return;
 	}

@@ -3158,6 +3158,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix GetNext OID calculation for off-tree OIDs
 
+## Version 3.5.7 - 20/11/2021
+
+ * Fix handing of null varbinds in walk
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
