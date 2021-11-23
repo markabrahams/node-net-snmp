@@ -3162,6 +3162,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix handing of null varbinds in walk
 
+## Version 3.5.8 - 24/11/2021
+
+ * Fix processing of negative integers larger than 32 bits
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

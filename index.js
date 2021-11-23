@@ -427,14 +427,16 @@ function readUint (buffer, isSigned) {
 		value *= 256;
 		value += buffer.readByte ();
 
-		if (isSigned && i <= 0) {
-			if ((value & 0x80) == 0x80)
-				signedBitSet = true;
-		}
+        if (isSigned && i <= 0) {
+            if ((value & 0x80) == 0x80) {
+                signedBitSet = true;
+            }
+        }
 	}
 	
-	if (signedBitSet)
-		value -= (1 << (i * 8));
+    if (signedBitSet) {
+        value -= 2 ** (i * 8);
+    }
 
 	return value;
 }
