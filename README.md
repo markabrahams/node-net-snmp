@@ -3166,6 +3166,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix processing of negative integers larger than 32 bits
 
+## Version 3.6.0 - 18/02/2022
+
+ * Add calculated key cache to remove authNoPriv and authPriv performance bottleneck
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

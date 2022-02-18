@@ -427,16 +427,16 @@ function readUint (buffer, isSigned) {
 		value *= 256;
 		value += buffer.readByte ();
 
-        if (isSigned && i <= 0) {
-            if ((value & 0x80) == 0x80) {
-                signedBitSet = true;
-            }
-        }
+		if (isSigned && i <= 0) {
+			if ((value & 0x80) == 0x80) {
+				signedBitSet = true;
+			}
+		}
 	}
 	
-    if (signedBitSet) {
-        value -= 2 ** (i * 8);
-    }
+	if (signedBitSet) {
+		value -= 2 ** (i * 8);
+	}
 
 	return value;
 }
@@ -934,17 +934,32 @@ Authentication.algorithms[AuthProtocols.sha] = {
 	CRYPTO_ALGORITHM: 'sha1'
 };
 
+Authentication.authToKeyCache = {};
+
+Authentication.computeCacheKey = function (authProtocol, authPasswordString, engineID) {
+	var engineIDString = engineID.toString('base64');
+	return authProtocol + authPasswordString + engineIDString;
+};
+
 // Adapted from RFC3414 Appendix A.2.1. Password to Key Sample Code for MD5
 Authentication.passwordToKey = function (authProtocol, authPasswordString, engineID) {
 	var hashAlgorithm;
 	var firstDigest;
 	var finalDigest;
-	var buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE);
+	var buf;
 	var bufOffset = 0;
 	var passwordIndex = 0;
 	var count = 0;
-	var password = Buffer.from (authPasswordString);
+	var password;
 	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
+
+	var cacheKey = Authentication.computeCacheKey(authProtocol, authPasswordString, engineID);
+	if (Authentication.authToKeyCache[cacheKey] !== undefined) {
+		return Authentication.authToKeyCache[cacheKey];
+	}
+
+	buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE);
+	password = Buffer.from (authPasswordString);
 	
 	while (count < Authentication.HMAC_BUFFER_SIZE) {
 		for (var i = 0; i < Authentication.HMAC_BLOCK_SIZE; i++) {
@@ -964,6 +979,7 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	finalDigest = hashAlgorithm.digest();
 	// debug ("Localized key: " + finalDigest.toString('hex'));
 
+	Authentication.authToKeyCache[cacheKey] = finalDigest;
 	return finalDigest;
 };
 
@@ -3546,11 +3562,11 @@ MibNode.prototype.getConstraintsFromProvider = function () {
 };
 
 MibNode.prototype.setValue = function (newValue) {
-    var len;
-    var min;
-    var max;
-    var range;
-    var found = false;
+	var len;
+	var min;
+	var max;
+	var range;
+	var found = false;
 	var constraints = this.getConstraintsFromProvider ();
 	if ( ! constraints ) {
 		this.value = newValue;
@@ -3561,35 +3577,35 @@ MibNode.prototype.setValue = function (newValue) {
 			return false;
 		}
 	} else if ( constraints.ranges ) {
-        for ( range of constraints.ranges ) {
-            min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
-            max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
-            if ( newValue >= min && newValue <= max ) {
-                found = true;
-                break;
-            }
-        }
-        if ( ! found ) {
-            return false;
-        }
-    } else if ( constraints.sizes ) {
-        // if size is constrained, value must have a length property
-        if ( ! ( "length" in newValue ) ) {
-            return false;
-        }
-        len = newValue.length;
-        for ( range of constraints.sizes ) {
-            min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
-            max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
-            if ( len >= min && len <= max ) {
-                found = true;
-                break;
-            }
-        }
-        if ( ! found ) {
-            return false;
-        }
-    }
+		for ( range of constraints.ranges ) {
+			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( newValue >= min && newValue <= max ) {
+				found = true;
+				break;
+			}
+		}
+		if ( ! found ) {
+			return false;
+		}
+	} else if ( constraints.sizes ) {
+		// if size is constrained, value must have a length property
+		if ( ! ( "length" in newValue ) ) {
+			return false;
+		}
+		len = newValue.length;
+		for ( range of constraints.sizes ) {
+			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( len >= min && len <= max ) {
+				found = true;
+				break;
+			}
+		}
+		if ( ! found ) {
+			return false;
+		}
+	}
 	this.value = newValue;
 	return true;
 };
@@ -3977,25 +3993,25 @@ Mib.prototype.setTableRowDefaultValues = function (name, values) {
 };
 
 Mib.prototype.setScalarRanges = function (name, ranges ) {
-    let provider = this.getProvider(name);
-    provider.constraints = { ranges };
+	let provider = this.getProvider(name);
+	provider.constraints = { ranges };
 };
 
 Mib.prototype.setTableColumnRanges = function(name, column, ranges ) {
-    let provider = this.getProvider(name);
-    let tc = provider.tableColumns;
-    tc[column].constraints = { ranges };
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+	tc[column].constraints = { ranges };
 };
 
 Mib.prototype.setScalarSizes = function (name, sizes ) {
-    let provider = this.getProvider(name);
-    provider.constraints = { sizes };
+	let provider = this.getProvider(name);
+	provider.constraints = { sizes };
 };
 
 Mib.prototype.setTableColumnSizes = function(name, column, sizes ) {
-    let provider = this.getProvider(name);
-    let tc = provider.tableColumns;
-    tc[column].constraints = { sizes };
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+	tc[column].constraints = { sizes };
 };
 
 Mib.prototype.registerProviders = function (providers) {
