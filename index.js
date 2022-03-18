@@ -2338,6 +2338,7 @@ Session.prototype.set = function (varbinds, responseCb) {
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
 	var id = _generateId (this.idBitsSize);
+	options = Object.assign({}, options, { context: this.context });
 	var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
 	var message;
 	var req;
