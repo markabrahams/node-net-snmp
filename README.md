@@ -243,8 +243,8 @@ This object contains constants to select a supported encryption algorithm for
 SNMPv3 messages that require privacy:
  * `des` - for DES encryption (CBC-DES)
  * `aes` - for 128-bit AES encryption (CFB-AES-128)
- * `aes256b` - for 256-bit AES encryption (CFB-AES-256) with "Blumenthal" key localiztaion
- * `aes256r` - for 256-bit AES encryption (CFB-AES-256) with "Reeder" key localiztaion
+ * `aes256b` - for 256-bit AES encryption (CFB-AES-256) with "Blumenthal" key localization
+ * `aes256r` - for 256-bit AES encryption (CFB-AES-256) with "Reeder" key localization
 
 DES is the sole encryption algorithm specified in the original SNMPv3 User-Based
 Security Model RFC (RFC 3414); 128-bit AES for SNMPv3 was added later in RFC 3826.
@@ -1062,7 +1062,7 @@ The `table()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
 their base, much like the `subtree()` method.
 
-This method is designed to fetch conceptial tables, for example the ifTable
+This method is designed to fetch conceptual tables, for example the ifTable
 (`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will be structured
 into objects to represent conceptual rows.  Each row is then placed into an
 object with the rows index being the key, e.g.:
@@ -1171,7 +1171,7 @@ be in the resulting table.
 
 This method should be used when only selected columns are required, and
 will be many times faster than the `table()` method since a much smaller
-amount of data will be fected.
+amount of data will be fetched.
 
 The following example fetches the ifTable (`1.3.6.1.2.1.2.2`) table, and
 specifies that only the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifPhysAddress
@@ -1259,7 +1259,7 @@ returned by the `process.uptime ()` function multiplied by `100`.
 SNMP version 2c messages are quite different in comparison with version 1.
 The version 2c trap has a much simpler format, simply a sequence of varbinds.
 The first varbind to be placed in the trap message will be for the
-`sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
+`sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`).  The value for this varbind will
 be the value returned by the `process.uptime ()` function multiplied by 100
 (this can be overridden by providing `upTime` in the optional `options`
 parameter, as documented below).
@@ -1280,7 +1280,7 @@ following items:
 
  * `agentAddr` - IP address used to populate the agent-addr field for SNMP
    version 1 type traps, and defaults to `127.0.0.1`
- * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`) in the
+ * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`) in the
    trap, defaults to the value returned by the `process.uptime ()` function
    multiplied by 100
 
@@ -3169,6 +3169,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.6.0 - 18/02/2022
 
  * Add calculated key cache to remove authNoPriv and authPriv performance bottleneck
+
+## Version 3.6.1 - 21/03/2022
+
+ * Add v3 context to non-initial PDUs
 
 # License
 
