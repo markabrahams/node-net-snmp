@@ -1483,6 +1483,8 @@ an object, possibly empty, and can contain the following fields:
  * `transport` - the transport family to use - defaults to `udp4`
  * `address` - the IP address to bind to - default to `null`, which means bind to all IP
  addresses
+ * `showAuthInCallback` - this enables to include the community (v1/2c) or user (v3) information
+ in the notification callback - default to `false`
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
