@@ -3126,6 +3126,7 @@ var Receiver = function (options, callback) {
 	this.port = options.port || 162;
 	options.port = this.port;
 	this.disableAuthorization = options.disableAuthorization || false;
+	this.showAuthInCallback = options.showAuthInCallback || false;
 	this.context = (options && options.context) ? options.context : "";
 	this.listener = new Listener (options, this);
 };
@@ -3162,29 +3163,42 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 	// Inform/trap processing
 	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
-		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+		this.callback (null, this.formatCallbackData (message, rinfo) );
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
 		message.setReportable (false);
 		this.listener.send (message, rinfo);
 		message.pdu.type = PduType.InformRequest;
-		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+		this.callback (null, this.formatCallbackData (message, rinfo) );
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
 };
 
-Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
-	if ( pdu.contextEngineID ) {
-		pdu.contextEngineID = pdu.contextEngineID.toString('hex');
+Receiver.prototype.formatCallbackData = function (message, rinfo) {
+	if ( message.pdu.contextEngineID ) {
+		message.pdu.contextEngineID = message.pdu.contextEngineID.toString('hex');
 	}
-	delete pdu.nonRepeaters;
-	delete pdu.maxRepetitions;
-	return {
-		pdu: pdu,
-		rinfo: rinfo 
+	delete message.pdu.nonRepeaters;
+	delete message.pdu.maxRepetitions;
+	const formattedData = {
+		pdu: message.pdu,
+		rinfo: rinfo
 	};
+	if (this.showAuthInCallback) {
+		if (message.community) {
+			formattedData.auth = {
+				community: message.community
+			};
+		} else if (message.user) {
+			formattedData.auth = {
+				user: message.user
+			};
+		}
+	}
+
+	return formattedData;
 };
 
 Receiver.prototype.close  = function() {
