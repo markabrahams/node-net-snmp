@@ -1452,6 +1452,7 @@ class:
 var options = {
     port: 162,
     disableAuthorization: false,
+    includeAuthentication: false,
     accessControlModelType: snmp.AccessControlModelType.None,
     engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
     address: null,
@@ -1483,8 +1484,8 @@ an object, possibly empty, and can contain the following fields:
  * `transport` - the transport family to use - defaults to `udp4`
  * `address` - the IP address to bind to - default to `null`, which means bind to all IP
  addresses
- * `showAuthInCallback` - this enables to include the community (v1/2c) or user (v3) information
- in the notification callback - default to `false`
+ * `includeAuthentication` - adds the community (v1/2c) or user name (v3) information
+ to the notification callback - defaults to `false`
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
@@ -3175,6 +3176,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.6.1 - 21/03/2022
 
  * Add v3 context to non-initial PDUs
+
+## Version 3.6.2 - 07/04/2022
+
+ * Add option for receiver to receive client authentication identity
 
 # License
 

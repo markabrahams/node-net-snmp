@@ -61,8 +61,8 @@ node ${HOME_DIR}/example/snmp-trap.js -v 3 -l authNoPriv -u ${USER_AUTH} -a ${AU
 node ${HOME_DIR}/example/snmp-trap.js -v 3 -l authPriv -u ${USER_PRIV} -a ${AUTH_PROTOCOL} -A ${AUTH_KEY} -x ${PRIV_PROTOCOL} -X ${PRIV_KEY} ${PARAMS} ${HOST} ${TRAP_OID}
 node ${HOME_DIR}/example/snmp-inform.js -v 2c -c ${COMMUNITY} ${PARAMS} ${HOST} ${TRAP_OID}
 node ${HOME_DIR}/example/snmp-inform.js -v 3 -l noAuthNoPriv -u ${USER_NONE} ${PARAMS} ${HOST} ${TRAP_OID}
-node ${HOME_DIR}/example/snmp-inform.js -v 3 -u ${USER_AUTH} -a ${AUTH_PROTOCOL} -A ${AUTH_KEY} ${PARAMS} ${HOST} ${TRAP_OID}
-node ${HOME_DIR}/example/snmp-inform.js -v 3 -u ${USER_PRIV} -a ${AUTH_PROTOCOL} -A ${AUTH_KEY} -x ${PRIV_PROTOCOL} -X ${PRIV_KEY} ${PARAMS} ${HOST} ${TRAP_OID}
+node ${HOME_DIR}/example/snmp-inform.js -v 3 -l authNoPriv -u ${USER_AUTH} -a ${AUTH_PROTOCOL} -A ${AUTH_KEY} ${PARAMS} ${HOST} ${TRAP_OID}
+node ${HOME_DIR}/example/snmp-inform.js -v 3 -l authPriv -u ${USER_PRIV} -a ${AUTH_PROTOCOL} -A ${AUTH_KEY} -x ${PRIV_PROTOCOL} -X ${PRIV_KEY} ${PARAMS} ${HOST} ${TRAP_OID}
 ENDOFCMDS
 
 COUNT=1
@@ -81,4 +81,3 @@ while read CMD ; do
 done <${CMDS}
 
 rm -f ${CMDS}
-

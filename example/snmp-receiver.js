@@ -7,7 +7,8 @@ var snmpOptions = {
     disableAuthorization: options.n,
     port: options.p,
 	transport: options.t,
-    engineID: options.e
+    engineID: options.e,
+    includeAuthentication: options.a
 };
 
 var cb = function(error, trap) {

@@ -3126,7 +3126,7 @@ var Receiver = function (options, callback) {
 	this.port = options.port || 162;
 	options.port = this.port;
 	this.disableAuthorization = options.disableAuthorization || false;
-	this.showAuthInCallback = options.showAuthInCallback || false;
+	this.includeAuthentication = options.includeAuthentication || false;
 	this.context = (options && options.context) ? options.context : "";
 	this.listener = new Listener (options, this);
 };
@@ -3186,11 +3186,11 @@ Receiver.prototype.formatCallbackData = function (message, rinfo) {
 		pdu: message.pdu,
 		rinfo: rinfo
 	};
-	if (this.showAuthInCallback) {
+	if (this.includeAuthentication) {
 		if (message.community) {
 			formattedData.pdu.community = message.community;
 		} else if (message.user) {
-			formattedData.pdu.user = message.user;
+			formattedData.pdu.user = message.user.name;
 		}
 	}
 
