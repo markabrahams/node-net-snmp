@@ -3188,13 +3188,9 @@ Receiver.prototype.formatCallbackData = function (message, rinfo) {
 	};
 	if (this.showAuthInCallback) {
 		if (message.community) {
-			formattedData.auth = {
-				community: message.community
-			};
+			formattedData.pdu.community = message.community;
 		} else if (message.user) {
-			formattedData.auth = {
-				user: message.user
-			};
+			formattedData.pdu.user = message.user;
 		}
 	}
 
