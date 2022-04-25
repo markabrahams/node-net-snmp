@@ -3181,6 +3181,10 @@ Example programs are included under the module's `example` directory.
 
  * Add option for receiver to receive client authentication identity
 
+## Version 3.6.3 - 26/04/2022
+
+ * Fix logic for v3 time syncronization requirement
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
