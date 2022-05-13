@@ -1828,6 +1828,10 @@ var Session = function (target, authenticator, options) {
 			? options.backwardsGetNexts
 			: true;
 
+	this.reportOidMismatchErrors = (typeof options.reportOidMismatchErrors !== 'undefined')
+            ? options.reportOidMismatchErrors
+            : false;
+
 	DEBUG = options.debug;
 
 	this.engine = new Engine (options.engineID);
@@ -1870,6 +1874,8 @@ function _generateId (bitSize) {
 }
 
 Session.prototype.get = function (oids, responseCb) {
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
@@ -1879,10 +1885,10 @@ Session.prototype.get = function (oids, responseCb) {
 					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+				if ( reportOidMismatchErrors && req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid ) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid
-							+ "' in request at positiion '" + i + "' does not "
+							+ "' in request at position '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
 							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
@@ -1984,7 +1990,7 @@ Session.prototype.getBulk = function () {
 							pdu.varbinds[respIndex].oid)) {
 						req.responseCb (new ResponseInvalidError ("OID '"
 								+ req.message.pdu.varbinds[reqIndex].oid
-								+ "' in request at positiion '" + (reqIndex)
+								+ "' in request at position '" + (reqIndex)
 								+ "' does not precede OID '"
 								+ pdu.varbinds[respIndex].oid
 								+ "' in response at position '" + (respIndex) + "'",
@@ -2294,6 +2300,8 @@ Session.prototype.send = function (req, noWait) {
 };
 
 Session.prototype.set = function (varbinds, responseCb) {
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
@@ -2303,10 +2311,10 @@ Session.prototype.set = function (varbinds, responseCb) {
 					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+				if ( reportOidMismatchErrors && req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid ) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid
-							+ "' in request at positiion '" + i + "' does not "
+							+ "' in request at position '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
 							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;

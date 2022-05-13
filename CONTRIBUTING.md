@@ -11,7 +11,9 @@ the developers managing and developing this open source project.
 
 The issue tracker is the preferred channel for [bug reports](#bugs),
 [features requests](#features) and [submitting pull
-requests](#pull-requests).
+requests](#pull-requests).  Please prefer the issue tracker over
+emailing individual project contributors as your first engagement
+with the project.
 
 ## What to always do
 

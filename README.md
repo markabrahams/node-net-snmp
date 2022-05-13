@@ -540,6 +540,7 @@ var options = {
     trapPort: 162,
     version: snmp.Version1,
     backwardsGetNexts: true,
+    reportOidMismatchErrors: false,
     idBitsSize: 32
 };
 
@@ -567,7 +568,9 @@ is an object, and can contain the following items:
  * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
    `snmp.Version1`
  * `backwardsGetNexts` - boolean to allow GetNext operations to retrieve lexicographically
-   preceeding OIDs
+   preceding OIDs, defaults to `true`
+ * `reportOidMismatchErrors` - boolean to allow error reporting of OID mismatches between
+   requests and responses, defaults to `false`
  * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
     of the generated id for compatibility with some older devices.
 
@@ -592,6 +595,8 @@ var options = {
     trapPort: 162,
     version: snmp.Version3,
     engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
+    backwardsGetNexts: true,
+    reportOidMismatchErrors: false,
     idBitsSize: 32,
     context: ""
 };
@@ -3183,7 +3188,11 @@ Example programs are included under the module's `example` directory.
 
 ## Version 3.6.3 - 26/04/2022
 
- * Fix logic for v3 time syncronization requirement
+ * Fix logic for v3 time synchronization requirement
+
+## Version 3.6.4 - 14/05/2022
+
+ * Ignore mismatched returned OIDs by default
 
 # License
 
