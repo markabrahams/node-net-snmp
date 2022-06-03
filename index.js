@@ -138,7 +138,11 @@ _expandConstantObject (SecurityLevel);
 var AuthProtocols = {
 	"1": "none",
 	"2": "md5",
-	"3": "sha"
+	"3": "sha",
+	"4": "sha224",
+	"5": "sha256",
+	"6": "sha384",
+	"7": "sha512"
 };
 
 _expandConstantObject (AuthProtocols);
@@ -931,6 +935,30 @@ Authentication.algorithms[AuthProtocols.sha] = {
 	KEY_LENGTH: 20,
 	AUTHENTICATION_CODE_LENGTH: 12,
 	CRYPTO_ALGORITHM: 'sha1'
+};
+
+Authentication.algorithms[AuthProtocols.sha224] = {
+	KEY_LENGTH: 28,
+	AUTHENTICATION_CODE_LENGTH: 16,
+	CRYPTO_ALGORITHM: 'sha224'
+};
+
+Authentication.algorithms[AuthProtocols.sha256] = {
+	KEY_LENGTH: 32,
+	AUTHENTICATION_CODE_LENGTH: 24,
+	CRYPTO_ALGORITHM: 'sha256'
+};
+
+Authentication.algorithms[AuthProtocols.sha384] = {
+	KEY_LENGTH: 48,
+	AUTHENTICATION_CODE_LENGTH: 32,
+	CRYPTO_ALGORITHM: 'sha384'
+};
+
+Authentication.algorithms[AuthProtocols.sha512] = {
+	KEY_LENGTH: 64,
+	AUTHENTICATION_CODE_LENGTH: 48,
+	CRYPTO_ALGORITHM: 'sha512'
 };
 
 Authentication.authToKeyCache = {};
