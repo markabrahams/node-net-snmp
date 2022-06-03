@@ -918,7 +918,6 @@ var createDiscoveryPdu = function (context) {
 var Authentication = {};
 
 Authentication.HMAC_BUFFER_SIZE = 1024*1024;
-Authentication.HMAC_BLOCK_SIZE = 64;
 Authentication.AUTHENTICATION_CODE_LENGTH = 12;
 Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
 
@@ -947,10 +946,6 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	var firstDigest;
 	var finalDigest;
 	var buf;
-	var bufOffset = 0;
-	var passwordIndex = 0;
-	var count = 0;
-	var password;
 	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
 
 	var cacheKey = Authentication.computeCacheKey(authProtocol, authPasswordString, engineID);
@@ -958,15 +953,8 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 		return Authentication.authToKeyCache[cacheKey];
 	}
 
-	buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE);
-	password = Buffer.from (authPasswordString);
-	
-	while (count < Authentication.HMAC_BUFFER_SIZE) {
-		for (var i = 0; i < Authentication.HMAC_BLOCK_SIZE; i++) {
-			buf.writeUInt8(password[passwordIndex++ % password.length], bufOffset++);
-		}
-		count += Authentication.HMAC_BLOCK_SIZE;
-	}
+	buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE, authPasswordString);
+
 	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(buf);
 	firstDigest = hashAlgorithm.digest();
@@ -1017,46 +1005,11 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 Authentication.calculateDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
 	var authKey = Authentication.passwordToKey (authProtocol, authPassword, engineID);
 
-	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
-	var hashAlgorithm;
-	var kIpad;
-	var kOpad;
-	var firstDigest;
-	var finalDigest;
-	var truncatedDigest;
-	var i;
 	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
-
-	if (authKey.length > Authentication.HMAC_BLOCK_SIZE) {
-		hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-		hashAlgorithm.update (authKey);
-		authKey = hashAlgorithm.digest ();
-	}
-
-	// MD(K XOR opad, MD(K XOR ipad, msg))
-	kIpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
-	kOpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
-	for (i = 0; i < authKey.length; i++) {
-		kIpad[i] = authKey[i] ^ 0x36;
-		kOpad[i] = authKey[i] ^ 0x5c;
-	}
-	kIpad.fill (0x36, authKey.length);
-	kOpad.fill (0x5c, authKey.length);
-
-	// inner MD
-	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-	hashAlgorithm.update (kIpad);
-	hashAlgorithm.update (messageBuffer);
-	firstDigest = hashAlgorithm.digest ();
-	// outer MD
-	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-	hashAlgorithm.update (kOpad);
-	hashAlgorithm.update (firstDigest);
-	finalDigest = hashAlgorithm.digest ();
-
-	truncatedDigest = Buffer.alloc (Authentication.AUTHENTICATION_CODE_LENGTH);
-	finalDigest.copy (truncatedDigest, 0, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
-	return truncatedDigest;
+	var hmacAlgorithm = crypto.createHmac (cryptoAlgorithm, authKey);
+	hmacAlgorithm.update (messageBuffer);
+	var digest = hmacAlgorithm.digest ();
+	return digest.subarray (0, Authentication.AUTHENTICATION_CODE_LENGTH);
 };
 
 var Encryption = {};
