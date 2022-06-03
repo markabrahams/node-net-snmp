@@ -261,7 +261,7 @@ var ResponseInvalidCode = {
 	4: "ECouldNotDecrypt",
 	5: "EAuthFailure",
 	6: "EReqResOidNoMatch",
-	7: "ENonRepeaterCountMismatch",
+//	7: "ENonRepeaterCountMismatch",  // no longer used
 	8: "EOutOfOrder",
 	9: "EVersionNoMatch",
 	10: "ECommunityNoMatch",
@@ -1917,6 +1917,7 @@ Session.prototype.get = function (oids, responseCb) {
 
 Session.prototype.getBulk = function () {
 	var oids, nonRepeaters, maxRepetitions, responseCb;
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
 	var backwardsGetNexts = this.backwardsGetNexts;
 
 	if (arguments.length >= 4) {
@@ -1938,71 +1939,59 @@ Session.prototype.getBulk = function () {
 
 	function feedCb (req, message) {
 		var pdu = message.pdu;
+		var reqVarbinds = req.message.pdu.varbinds;
 		var varbinds = [];
 		var i = 0;
 
-		// first walk through and grab non-repeaters
-		if (pdu.varbinds.length < nonRepeaters) {
-			req.responseCb (new ResponseInvalidError ("Varbind count in "
-					+ "response '" + pdu.varbinds.length + "' is less than "
-					+ "non-repeaters '" + nonRepeaters + "' in request",
-					ResponseInvalidCode.ENonRepeaterCountMismatch));
-			return;
-		} else {
-			for ( ; i < nonRepeaters; i++) {
-				if (isVarbindError (pdu.varbinds[i])) {
-					varbinds.push (pdu.varbinds[i]);
-				} else if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
-						pdu.varbinds[i].oid)) {
-					req.responseCb (new ResponseInvalidError ("OID '"
-							+ req.message.pdu.varbinds[i].oid + "' in request at "
-							+ "positiion '" + i + "' does not precede "
-							+ "OID '" + pdu.varbinds[i].oid + "' in response "
+		for ( ; i < reqVarbinds.length && i < pdu.varbinds.length; i++) {
+			if (isVarbindError (pdu.varbinds[i])) {
+				if ( reportOidMismatchErrors && reqVarbinds[i].oid != pdu.varbinds[i].oid ) {
+					req.responseCb (new ResponseInvalidError ("OID '" + reqVarbinds[i].oid
+							+ "' in request at position '" + i + "' does not "
+							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
+					return;
+				}
+			} else {
+				if ( ! backwardsGetNexts && ! oidFollowsOid (reqVarbinds[i].oid, pdu.varbinds[i].oid)) {
+					req.responseCb (new ResponseInvalidError ("OID '" + reqVarbinds[i].oid
+							+ "' in request at positiion '" + i + "' does not "
+							+ "precede OID '" + pdu.varbinds[i].oid + "' in response "
 							+ "at position '" + i + "'", ResponseInvalidCode.EOutOfOrder));
 					return;
-				} else {
-					varbinds.push (pdu.varbinds[i]);
 				}
 			}
+			if (i < nonRepeaters)
+				varbinds.push (pdu.varbinds[i]);
+			else
+				varbinds.push ([pdu.varbinds[i]]);
 		}
 
-		var repeaters = req.message.pdu.varbinds.length - nonRepeaters;
+		var repeaters = reqVarbinds.length - nonRepeaters;
 
-		// secondly walk through and grab repeaters
-		if (pdu.varbinds.length % (repeaters)) {
-			req.responseCb (new ResponseInvalidError ("Varbind count in "
-					+ "response '" + pdu.varbinds.length + "' is not a "
-					+ "multiple of repeaters '" + repeaters
-					+ "' plus non-repeaters '" + nonRepeaters + "' in request",
-					ResponseInvalidCode.ENonRepeaterCountMismatch));
-		} else {
-			while (i < pdu.varbinds.length) {
-				for (var j = 0; j < repeaters; j++, i++) {
-					var reqIndex = nonRepeaters + j;
-					var respIndex = i;
+		for ( ; i < pdu.varbinds.length; i++) {
+			var reqIndex = (i - nonRepeaters) % repeaters + nonRepeaters;
+			var prevIndex = i - repeaters;
+			var prevOid = pdu.varbinds[prevIndex].oid;
 
-					if (isVarbindError (pdu.varbinds[respIndex])) {
-						if (! varbinds[reqIndex])
-							varbinds[reqIndex] = [];
-						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					} else if ( ! backwardsGetNexts && ! oidFollowsOid (
-							req.message.pdu.varbinds[reqIndex].oid,
-							pdu.varbinds[respIndex].oid)) {
-						req.responseCb (new ResponseInvalidError ("OID '"
-								+ req.message.pdu.varbinds[reqIndex].oid
-								+ "' in request at position '" + (reqIndex)
-								+ "' does not precede OID '"
-								+ pdu.varbinds[respIndex].oid
-								+ "' in response at position '" + (respIndex) + "'",
-								ResponseInvalidCode.EOutOfOrder));
-						return;
-					} else {
-						if (! varbinds[reqIndex])
-							varbinds[reqIndex] = [];
-						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					}
+			if (isVarbindError (pdu.varbinds[i])) {
+				if ( reportOidMismatchErrors && prevOid != pdu.varbinds[i].oid ) {
+					req.responseCb (new ResponseInvalidError ("OID '" + prevOid
+							+ "' in response at position '" + prevIndex + "' does not "
+							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
+					return;
+				}
+			} else {
+				if ( ! backwardsGetNexts && ! oidFollowsOid (prevOid, pdu.varbinds[i].oid)) {
+					req.responseCb (new ResponseInvalidError ("OID '" + prevOid
+							+ "' in response at positiion '" + prevIndex + "' does not "
+							+ "precede OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EOutOfOrder));
+					return;
 				}
 			}
+			varbinds[reqIndex].push (pdu.varbinds[i]);
 		}
 
 		req.responseCb (null, varbinds);
