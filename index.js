@@ -919,7 +919,6 @@ var Authentication = {};
 
 Authentication.HMAC_BUFFER_SIZE = 1024*1024;
 Authentication.AUTHENTICATION_CODE_LENGTH = 12;
-Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
 
 Authentication.algorithms = {};
 
@@ -971,16 +970,11 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	return finalDigest;
 };
 
-Authentication.addParametersToMessageBuffer = function (messageBuffer, authProtocol, authPassword, engineID) {
-	var authenticationParametersOffset;
+Authentication.writeParameters = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
 	var digestToAdd;
 
-	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf (Authentication.AUTH_PARAMETERS_PLACEHOLDER);
-	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
-
 	digestToAdd = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
-	digestToAdd.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
+	digestToAdd.copy (digestInMessage);
 	// debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
 };
 
@@ -1374,19 +1368,24 @@ Message.prototype.toBufferV3 = function () {
 	writer.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
 	writer.writeString (this.msgSecurityParameters.msgUserName);
 
+	var msgAuthenticationParameters = '';
 	if ( this.hasAuthentication() ) {
-		writer.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
+		msgAuthenticationParameters = Buffer.alloc (Authentication.AUTHENTICATION_CODE_LENGTH);
+		writer.writeBuffer (msgAuthenticationParameters, ber.OctetString);
 	} else {
 		writer.writeString ("");
 	}
+	var msgAuthenticationParametersOffset = writer._offset - msgAuthenticationParameters.length;
 
 	if ( this.hasPrivacy() ) {
 		writer.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
 	} else {
 		writer.writeString ("");
 	}
+	msgAuthenticationParametersOffset -= writer._offset;
 	writer.endSequence ();
 	writer.endSequence ();
+	msgAuthenticationParametersOffset += writer._offset;
 
 	if ( this.hasPrivacy() ) {
 		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
@@ -1394,13 +1393,17 @@ Message.prototype.toBufferV3 = function () {
 		writer.writeBuffer (scopedPduWriter.buffer);
 	}
 
+	msgAuthenticationParametersOffset -= writer._offset;
 	writer.endSequence ();
+	msgAuthenticationParametersOffset += writer._offset;
 
 	this.buffer = writer.buffer;
 
 	if ( this.hasAuthentication() ) {
-		Authentication.addParametersToMessageBuffer(this.buffer, this.user.authProtocol, this.user.authKey,
-			this.msgSecurityParameters.msgAuthoritativeEngineID);
+		msgAuthenticationParameters = this.buffer.subarray (msgAuthenticationParametersOffset,
+			msgAuthenticationParametersOffset + msgAuthenticationParameters.length);
+		Authentication.writeParameters (this.buffer, this.user.authProtocol, this.user.authKey,
+			this.msgSecurityParameters.msgAuthoritativeEngineID, msgAuthenticationParameters);
 	}
 
 	return this.buffer;
