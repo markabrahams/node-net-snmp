@@ -979,17 +979,22 @@ Authentication.writeParameters = function (messageBuffer, authProtocol, authPass
 };
 
 Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
-	var authenticationParametersOffset;
+	var savedDigest;
 	var calculatedDigest;
 
+	if (digestInMessage.length !== Authentication.AUTHENTICATION_CODE_LENGTH)
+		return false;
+
+	// save original authenticationParameters field in message
+	savedDigest = Buffer.from (digestInMessage);
+
 	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf (digestInMessage);
-	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
+	digestInMessage.fill (0);
 
 	calculatedDigest = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
 
 	// replace previously cleared authenticationParameters field in message
-	digestInMessage.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
+	savedDigest.copy (digestInMessage);
 
 	// debug ("Digest in message: " + digestInMessage.toString('hex'));
 	// debug ("Calculated digest: " + calculatedDigest.toString('hex'));
@@ -1646,7 +1651,7 @@ Message.createFromBuffer = function (buffer, user) {
 		message.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
 		message.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
-		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
+		message.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString (ber.OctetString, true);
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 
 		if ( message.hasPrivacy() ) {
