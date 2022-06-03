@@ -1361,39 +1361,38 @@ Message.prototype.toBufferV3 = function () {
 	writer.endSequence ();
 
 	// msgSecurityParameters
-	var msgSecurityParametersWriter = new ber.Writer ();
-	msgSecurityParametersWriter.startSequence ();
-	//msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	writer.startSequence (ber.OctetString);
+	writer.startSequence ();
+	//writer.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
 	// writing a zero-length buffer fails - should fix asn1-ber for this condition
 	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
-		msgSecurityParametersWriter.writeString ("");
+		writer.writeString ("");
 	} else {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+		writer.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
 	}
-	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
-	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
-	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
+	writer.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
+	writer.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
+	writer.writeString (this.msgSecurityParameters.msgUserName);
 
 	if ( this.hasAuthentication() ) {
-		msgSecurityParametersWriter.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
+		writer.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
 	// should never happen where msgFlags has no authentication but authentication parameters still present
 	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
+		writer.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
 	} else {
-		msgSecurityParametersWriter.writeString ("");
+		writer.writeString ("");
 	}
 
 	if ( this.hasPrivacy() ) {
-		msgSecurityParametersWriter.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
+		writer.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
 	// should never happen where msgFlags has no privacy but privacy parameters still present
 	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
+		writer.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
-		msgSecurityParametersWriter.writeString ("");
+		writer.writeString ("");
 	}
-	msgSecurityParametersWriter.endSequence ();
-
-	writer.writeBuffer (msgSecurityParametersWriter.buffer, ber.OctetString);
+	writer.endSequence ();
+	writer.endSequence ();
 
 	if ( this.hasPrivacy() ) {
 		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
