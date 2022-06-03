@@ -1014,8 +1014,6 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 
 var Encryption = {};
 
-Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex');
-
 Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authProtocol, engine) {
 	var encryptFunction = Encryption.algorithms[privProtocol].encryptPdu;
 	return encryptFunction (scopedPdu, privProtocol, privPassword, authProtocol, engine);
@@ -1240,13 +1238,6 @@ Encryption.decryptPduAes = function (encryptedPdu, privProtocol, privParameters,
 	return decryptedPdu;
 };
 
-Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
-	var privacyParametersOffset;
-
-	privacyParametersOffset = messageBuffer.indexOf (Encryption.PRIV_PARAMETERS_PLACEHOLDER);
-	msgPrivacyParameters.copy (messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
-};
-
 Encryption.algorithms = {};
 
 Encryption.algorithms[PrivProtocols.des] = {
@@ -1330,6 +1321,29 @@ Message.prototype.toBufferV3 = function () {
 	if (this.buffer)
 		return this.buffer;
 
+	// ScopedPDU
+	var scopedPduWriter = new ber.Writer ();
+	scopedPduWriter.startSequence ();
+	var contextEngineID = this.pdu.contextEngineID ? this.pdu.contextEngineID : this.msgSecurityParameters.msgAuthoritativeEngineID;
+	if ( contextEngineID.length == 0 ) {
+		scopedPduWriter.writeString ("");
+	} else {
+		scopedPduWriter.writeBuffer (contextEngineID, ber.OctetString);
+	}
+	scopedPduWriter.writeString (this.pdu.contextName);
+	this.pdu.toBuffer (scopedPduWriter);
+	scopedPduWriter.endSequence ();
+
+	if ( this.hasPrivacy() ) {
+		var authoritativeEngine = {
+			engineID: this.msgSecurityParameters.msgAuthoritativeEngineID,
+			engineBoots: this.msgSecurityParameters.msgAuthoritativeEngineBoots,
+			engineTime: this.msgSecurityParameters.msgAuthoritativeEngineTime,
+		};
+		encryptionResult = Encryption.encryptPdu (this.user.privProtocol, scopedPduWriter.buffer,
+				this.user.privKey, this.user.authProtocol, authoritativeEngine);
+	}
+
 	var writer = new ber.Writer ();
 
 	writer.startSequence ();
@@ -1370,7 +1384,7 @@ Message.prototype.toBufferV3 = function () {
 	}
 
 	if ( this.hasPrivacy() ) {
-		msgSecurityParametersWriter.writeBuffer (Encryption.PRIV_PARAMETERS_PLACEHOLDER, ber.OctetString);
+		msgSecurityParametersWriter.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
 	// should never happen where msgFlags has no privacy but privacy parameters still present
 	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
 		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
@@ -1381,27 +1395,7 @@ Message.prototype.toBufferV3 = function () {
 
 	writer.writeBuffer (msgSecurityParametersWriter.buffer, ber.OctetString);
 
-	// ScopedPDU
-	var scopedPduWriter = new ber.Writer ();
-	scopedPduWriter.startSequence ();
-	var contextEngineID = this.pdu.contextEngineID ? this.pdu.contextEngineID : this.msgSecurityParameters.msgAuthoritativeEngineID;
-	if ( contextEngineID.length == 0 ) {
-		scopedPduWriter.writeString ("");
-	} else {
-		scopedPduWriter.writeBuffer (contextEngineID, ber.OctetString);
-	}
-	scopedPduWriter.writeString (this.pdu.contextName);
-	this.pdu.toBuffer (scopedPduWriter);
-	scopedPduWriter.endSequence ();
-
 	if ( this.hasPrivacy() ) {
-		var authoritativeEngine = {
-			engineID: this.msgSecurityParameters.msgAuthoritativeEngineID,
-			engineBoots: this.msgSecurityParameters.msgAuthoritativeEngineBoots,
-			engineTime: this.msgSecurityParameters.msgAuthoritativeEngineTime,
-		};
-		encryptionResult = Encryption.encryptPdu (this.user.privProtocol, scopedPduWriter.buffer,
-				this.user.privKey, this.user.authProtocol, authoritativeEngine);
 		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
 	} else {
 		writer.writeBuffer (scopedPduWriter.buffer);
@@ -1410,10 +1404,6 @@ Message.prototype.toBufferV3 = function () {
 	writer.endSequence ();
 
 	this.buffer = writer.buffer;
-
-	if ( this.hasPrivacy() ) {
-		Encryption.addParametersToMessageBuffer(this.buffer, encryptionResult.msgPrivacyParameters);
-	}
 
 	if ( this.hasAuthentication() ) {
 		Authentication.addParametersToMessageBuffer(this.buffer, this.user.authProtocol, this.user.authKey,
