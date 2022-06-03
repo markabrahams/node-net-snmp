@@ -231,11 +231,16 @@ RFC 3414:
 
 This object contains constants to select a supported digest algorithm for SNMPv3
 messages that require authentication:
- * `md5` - for MD5 message authentication (HMAC-MD5-96)
- * `sha` - for SHA message authentication (HMAC-SHA-96)
+ * `md5` - for HMAC-MD5 message authentication
+ * `sha` - for HMAC-SHA-1 message authentication
+ * `sha224` - for HMAC-SHA-224 message authentication
+ * `sha256` - for HMAC-SHA-256 message authentication
+ * `sha384` - for HMAC-SHA-384 message authentication
+ * `sha512` - for HMAC-SHA-512 message authentication
 
-These are the two hash algorithms specified in RFC 3414.  Other digest algorithms
-are not supported.
+MD5 and SHA (actually SHA-1) are the hash algorithms specified in the original
+SNMPv3 User-Based Security Model RFC (RFC 3414); the other four were added later
+in RFC 7860.
 
 ## snmp.PrivProtocols
 
