@@ -1376,18 +1376,12 @@ Message.prototype.toBufferV3 = function () {
 
 	if ( this.hasAuthentication() ) {
 		writer.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
-	// should never happen where msgFlags has no authentication but authentication parameters still present
-	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
-		writer.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
 	} else {
 		writer.writeString ("");
 	}
 
 	if ( this.hasPrivacy() ) {
 		writer.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
-	// should never happen where msgFlags has no privacy but privacy parameters still present
-	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
-		writer.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
 	} else {
 		writer.writeString ("");
 	}
