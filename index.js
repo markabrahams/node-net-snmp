@@ -918,17 +918,18 @@ var createDiscoveryPdu = function (context) {
 var Authentication = {};
 
 Authentication.HMAC_BUFFER_SIZE = 1024*1024;
-Authentication.AUTHENTICATION_CODE_LENGTH = 12;
 
 Authentication.algorithms = {};
 
 Authentication.algorithms[AuthProtocols.md5] = {
 	KEY_LENGTH: 16,
+	AUTHENTICATION_CODE_LENGTH: 12,
 	CRYPTO_ALGORITHM: 'md5'
 };
 
 Authentication.algorithms[AuthProtocols.sha] = {
 	KEY_LENGTH: 20,
+	AUTHENTICATION_CODE_LENGTH: 12,
 	CRYPTO_ALGORITHM: 'sha1'
 };
 
@@ -970,6 +971,10 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	return finalDigest;
 };
 
+Authentication.getParametersLength = function (authProtocol) {
+	return Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH;
+};
+
 Authentication.writeParameters = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
 	var digestToAdd;
 
@@ -982,7 +987,7 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 	var savedDigest;
 	var calculatedDigest;
 
-	if (digestInMessage.length !== Authentication.AUTHENTICATION_CODE_LENGTH)
+	if (digestInMessage.length !== Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH)
 		return false;
 
 	// save original authenticationParameters field in message
@@ -998,7 +1003,7 @@ Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword
 
 	// debug ("Digest in message: " + digestInMessage.toString('hex'));
 	// debug ("Calculated digest: " + calculatedDigest.toString('hex'));
-	return calculatedDigest.equals (digestInMessage, Authentication.AUTHENTICATION_CODE_LENGTH);
+	return calculatedDigest.equals (digestInMessage);
 };
 
 Authentication.calculateDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
@@ -1008,7 +1013,7 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 	var hmacAlgorithm = crypto.createHmac (cryptoAlgorithm, authKey);
 	hmacAlgorithm.update (messageBuffer);
 	var digest = hmacAlgorithm.digest ();
-	return digest.subarray (0, Authentication.AUTHENTICATION_CODE_LENGTH);
+	return digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH);
 };
 
 var Encryption = {};
@@ -1375,7 +1380,8 @@ Message.prototype.toBufferV3 = function () {
 
 	var msgAuthenticationParameters = '';
 	if ( this.hasAuthentication() ) {
-		msgAuthenticationParameters = Buffer.alloc (Authentication.AUTHENTICATION_CODE_LENGTH);
+		var authParametersLength = Authentication.getParametersLength (this.user.authProtocol);
+		msgAuthenticationParameters = Buffer.alloc (authParametersLength);
 		writer.writeBuffer (msgAuthenticationParameters, ber.OctetString);
 	} else {
 		writer.writeString ("");
