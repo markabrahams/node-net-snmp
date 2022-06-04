@@ -3199,6 +3199,10 @@ Example programs are included under the module's `example` directory.
 
  * Ignore mismatched returned OIDs by default
 
+## Version 3.7.0 - 04/06/2022
+
+ * Add SHA-2 authentication support (SHA-224, SHA-256, SHA-384, SHA-512)
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
