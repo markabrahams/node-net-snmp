@@ -1051,9 +1051,9 @@ Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authPro
 	return encryptFunction (scopedPdu, privProtocol, privPassword, authProtocol, engine);
 };
 
-Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine) {
+Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
 	var decryptFunction = Encryption.algorithms[privProtocol].decryptPdu;
-	return decryptFunction (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine);
+	return decryptFunction (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
 };
 
 Encryption.debugEncrypt = function (encryptionKey, iv, plainPdu, encryptedPdu) {
@@ -1179,7 +1179,7 @@ Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, auth
 	};
 };
 
-Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine) {
+Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
 	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var decryptionKey;
@@ -1203,9 +1203,23 @@ Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters,
 	}
 	
 	decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
-	decipher.setAutoPadding(false);
+	if ( forceAutoPaddingDisable ) {
+		decipher.setAutoPadding(false);
+	}
 	decryptedPdu = decipher.update (encryptedPdu);
-	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	// This try-catch is a workaround for a seemingly incorrect error condition
+	// - where sometimes a decrypt error is thrown with decipher.final()
+	// It replaces this line which should have been sufficient:
+	// decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	try {
+		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	} catch (error) {
+		// debug("Decrypt error: " + error);
+		decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
+		decipher.setAutoPadding(false);
+		decryptedPdu = decipher.update (encryptedPdu);
+		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	}
 	// Encryption.debugDecrypt (decryptionKey, iv, encryptedPdu, decryptedPdu);
 
 	return decryptedPdu;
@@ -1477,10 +1491,23 @@ Message.prototype.decryptPdu = function (user, responseCb) {
 		decryptedPduReader = new ber.Reader (decryptedPdu);
 		this.pdu = readPdu(decryptedPduReader, true);
 		return true;
-	} catch (error) {
-		responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error,
-				ResponseInvalidCode.ECouldNotDecrypt));
-		return false;
+	// really really occasionally the decrypt truncates a single byte
+	// causing an ASN read failure in readPdu()
+	// in this case, disabling auto padding decrypts the PDU correctly
+	// this try-catch provides the workaround for this condition
+	} catch (possibleTruncationError) {
+		try {
+			decryptedPdu = Encryption.decryptPdu(user.privProtocol, this.encryptedPdu,
+					this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
+					this.msgSecurityParameters.msgAuthoritativeEngineID, true);
+			decryptedPduReader = new ber.Reader (decryptedPdu);
+			this.pdu = readPdu(decryptedPduReader, true);
+			return true;
+		} catch (error) {
+			responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error,
+					ResponseInvalidCode.ECouldNotDecrypt));
+			return false;
+		}
 	}
 
 };
