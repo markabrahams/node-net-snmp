@@ -3203,6 +3203,10 @@ Example programs are included under the module's `example` directory.
 
  * Add SHA-2 authentication support (SHA-224, SHA-256, SHA-384, SHA-512)
 
+## Version 3.7.1 - 05/06/2022
+
+ * Fix DES decrypt corruption issue
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

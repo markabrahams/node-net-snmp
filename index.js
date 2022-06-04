@@ -879,7 +879,7 @@ var readPdu = function (reader, scoped) {
 	var contextEngineID;
 	var contextName;
 	if ( scoped ) {
-		reader.readSequence ();
+		reader = new ber.Reader (reader.readString (ber.Sequence | ber.Constructor, true));
 		contextEngineID = reader.readString (ber.OctetString, true);
 		contextName = reader.readString ();
 	}
