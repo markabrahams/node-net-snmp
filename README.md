@@ -315,7 +315,7 @@ Actions
 - `4 -  ECouldNotDecrypt`
 - `5 -  EAuthFailure`
 - `6 -  EReqResOidNoMatch`
-- `7 -  ENonRepeaterCountMismatch`
+- `7 -  (no longer used)
 - `8 -  EOutOfOrder`
 - `9 -  EVersionNoMatch`
 - `10 -  ECommunityNoMatch`
