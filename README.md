@@ -3207,6 +3207,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix DES decrypt corruption issue
 
+## Version 3.7.2 - 05/06/2022
+
+ * Improve getBulk response handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
