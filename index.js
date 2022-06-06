@@ -520,9 +520,16 @@ function readVarbinds (buffer, varbinds) {
 }
 
 function writeUint (buffer, type, value) {
-	var b = Buffer.alloc (4);
-	b.writeUInt32BE (value, 0);
-	buffer.writeBuffer (b, type);
+	if (typeof(value) !== 'number')
+		throw new TypeError('argument must be a Number');
+	if (value >= 0x80000000) {
+		// asn1-ber's writeInt does not work correctly outside int32 range
+		let b = Buffer.alloc (5);
+		b.writeUInt32BE (value, 1);
+		buffer.writeBuffer (b, type);
+	} else {
+		buffer.writeInt (value, type);
+	}
 }
 
 function writeUint64 (buffer, value) {
