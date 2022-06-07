@@ -1,13 +1,13 @@
 {
   "name": "net-snmp",
-  "version": "3.7.2",
+  "version": "3.8.0",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
     "example": "example"
   },
   "dependencies": {
-    "asn1-ber": "*",
+    "asn1-ber": "^1.2.0",
     "smart-buffer": "^4.1.0"
   },
   "devDependencies": {

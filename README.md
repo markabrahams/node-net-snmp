@@ -3211,6 +3211,10 @@ Example programs are included under the module's `example` directory.
 
  * Improve getBulk response handling
 
+## Version 3.8.0 - 07/06/2022
+
+ * Fix 32-bit unsigned integer writing
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

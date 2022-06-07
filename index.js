@@ -11,7 +11,10 @@ var crypto = require ("crypto");
 var mibparser = require ("./lib/mib");
 var DEBUG = false;
 
-var MAX_INT32 = 2147483647;
+var MIN_SIGNED_INT32 = -2147483648;
+var MAX_SIGNED_INT32 = 2147483647;
+var MIN_UNSIGNED_INT32 = 0;
+var MAX_UNSIGNED_INT32 = 4294967295;
 
 function debug (line) {
 	if ( DEBUG ) {
@@ -378,19 +381,32 @@ function oidInSubtree (oidString, nextString) {
 	return true;
 }
 
-/**
- ** Some SNMP agents produce integers on the wire such as 00 ff ff ff ff.
- ** The ASN.1 BER parser we use throws an error when parsing this, which we
- ** believe is correct.  So, we decided not to bother the "asn1" developer(s)
- ** with this, instead opting to work around it here.
- **
- ** If an integer is 5 bytes in length we check if the first byte is 0, and if so
- ** simply drop it and parse it like it was a 4 byte integer, otherwise throw
- ** an error since the integer is too large.
- **/
+function readInt32 (buffer) {
+	var parsedInt = buffer.readInt ();
+	if ( ! Number.isInteger(parsedInt) ) {
+		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
+	}
+	if ( parsedInt < MIN_SIGNED_INT32 || parsedInt > MAX_SIGNED_INT32 ) {
+		throw new RangeError('Read integer ' + parsedInt + ' is outside the signed 32-bit range');
+	}
+	return parsedInt;
+}
 
-function readInt (buffer) {
-	return readUint (buffer, true);
+function readUint32 (buffer) {
+	var parsedInt = buffer.readInt ();
+	if ( ! Number.isInteger(parsedInt) ) {
+		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
+	}
+	if ( parsedInt < MIN_UNSIGNED_INT32 || parsedInt > MAX_UNSIGNED_INT32 ) {
+		throw new RangeError('Read integer ' + parsedInt + ' is outside the unsigned 32-bit range');
+	}
+	return parsedInt;
+}
+
+function readUint64 (buffer) {
+	var value = buffer.readString (ObjectType.Counter64, true);
+
+	return value;
 }
 
 function readIpAddress (buffer) {
@@ -403,60 +419,12 @@ function readIpAddress (buffer) {
 	return value;
 }
 
-function readUint (buffer, isSigned) {
-	buffer.readByte ();
-	var length = buffer.readByte ();
-	var value = 0;
-	var signedBitSet = false;
-
-	// Handle BER long-form length encoding
-	if ((length & 0x80) == 0x80) {
-		var lengthOctets = (length & 0x7f);
-		length = 0;
-		for (var lengthOctet = 0; lengthOctet < lengthOctets; lengthOctet++) {
-			length *= 256;
-			length += buffer.readByte ();
-		}
-	}
-
-	if (length > 5) {
-		throw new RangeError ("Integer too long '" + length + "'");
-	} else if (length == 5) {
-		if (buffer.readByte () !== 0)
-			throw new RangeError ("Integer too long '" + length + "'");
-		length = 4;
-	}
-
-	for (var i = 0; i < length; i++) {
-		value *= 256;
-		value += buffer.readByte ();
-
-		if (isSigned && i <= 0) {
-			if ((value & 0x80) == 0x80) {
-				signedBitSet = true;
-			}
-		}
-	}
-	
-	if (signedBitSet) {
-		value -= 2 ** (i * 8);
-	}
-
-	return value;
-}
-
-function readUint64 (buffer) {
-	var value = buffer.readString (ObjectType.Counter64, true);
-
-	return value;
-}
-
 function readVarbindValue (buffer, type) {
 	var value;
 	if (type == ObjectType.Boolean) {
 		value = buffer.readBoolean ();
 	} else if (type == ObjectType.Integer) {
-		value = readInt (buffer);
+		value = readInt32 (buffer);
 	} else if (type == ObjectType.OctetString) {
 		value = buffer.readString (null, true);
 	} else if (type == ObjectType.Null) {
@@ -468,11 +436,11 @@ function readVarbindValue (buffer, type) {
 	} else if (type == ObjectType.IpAddress) {
 		value = readIpAddress (buffer);
 	} else if (type == ObjectType.Counter) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.Gauge) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.TimeTicks) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.Opaque) {
 		value = buffer.readString (ObjectType.Opaque, true);
 	} else if (type == ObjectType.Counter64) {
@@ -519,10 +487,24 @@ function readVarbinds (buffer, varbinds) {
 	}
 }
 
-function writeUint (buffer, type, value) {
-	var b = Buffer.alloc (4);
-	b.writeUInt32BE (value, 0);
-	buffer.writeBuffer (b, type);
+function writeInt32 (buffer, type, value) {
+	if ( ! Number.isInteger(value) ) {
+		throw new TypeError('Value to write as integer ' + value + ' is not an integer');
+	}
+	if ( value < MIN_SIGNED_INT32 || value > MAX_SIGNED_INT32 ) {
+		throw new RangeError('Integer to write ' + value + ' is outside the signed 32-bit range');
+	}
+	buffer.writeInt(value, type);
+}
+
+function writeUint32 (buffer, type, value) {
+	if ( ! Number.isInteger(value) ) {
+		throw new TypeError('Value to write as integer ' + value + ' is not an integer');
+	}
+	if ( value < MIN_UNSIGNED_INT32 || value > MAX_UNSIGNED_INT32 ) {
+		throw new RangeError('Integer to write ' + value + ' is outside the unsigned 32-bit range');
+	}
+	buffer.writeInt(value, type);
 }
 
 function writeUint64 (buffer, value) {
@@ -544,7 +526,7 @@ function writeVarbinds (buffer, varbinds) {
 					buffer.writeBoolean (value ? true : false);
 					break;
 				case ObjectType.Integer: // also Integer32
-					buffer.writeInt (value);
+					writeInt32 (buffer, ObjectType.Integer, value);
 					break;
 				case ObjectType.OctetString:
 					if (typeof value == "string")
@@ -566,13 +548,13 @@ function writeVarbinds (buffer, varbinds) {
 					buffer.writeBuffer (Buffer.from (bytes), 64);
 					break;
 				case ObjectType.Counter: // also Counter32
-					writeUint (buffer, ObjectType.Counter, value);
+					writeUint32 (buffer, ObjectType.Counter, value);
 					break;
 				case ObjectType.Gauge: // also Gauge32 & Unsigned32
-					writeUint (buffer, ObjectType.Gauge, value);
+					writeUint32 (buffer, ObjectType.Gauge, value);
 					break;
 				case ObjectType.TimeTicks:
-					writeUint (buffer, ObjectType.TimeTicks, value);
+					writeUint32 (buffer, ObjectType.TimeTicks, value);
 					break;
 				case ObjectType.Opaque:
 					buffer.writeBuffer (value, ObjectType.Opaque);
@@ -609,11 +591,13 @@ var SimplePdu = function () {
 SimplePdu.prototype.toBuffer = function (buffer) {
 	buffer.startSequence (this.type);
 
-	buffer.writeInt (this.id);
-	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+	writeInt32 (buffer, ObjectType.Integer, this.id);
+	writeInt32 (buffer, ObjectType.Integer,
+			(this.type == PduType.GetBulkRequest)
 			? (this.options.nonRepeaters || 0)
 			: 0);
-	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+	writeInt32 (buffer, ObjectType.Integer,
+			(this.type == PduType.GetBulkRequest)
 			? (this.options.maxRepetitions || 0)
 			: 0);
 
@@ -633,9 +617,9 @@ SimplePdu.prototype.initializeFromBuffer = function (reader) {
 	this.type = reader.peek ();
 	reader.readSequence ();
 
-	this.id = reader.readInt ();
-	this.nonRepeaters = reader.readInt ();
-	this.maxRepetitions = reader.readInt ();
+	this.id = readInt32 (reader);
+	this.nonRepeaters = readInt32 (reader);
+	this.maxRepetitions = readInt32 (reader);
 
 	this.varbinds = [];
 	readVarbinds (reader, this.varbinds);
@@ -740,9 +724,9 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.writeOID (this.enterprise);
 	buffer.writeBuffer (Buffer.from (this.agentAddr.split (".")),
 			ObjectType.IpAddress);
-	buffer.writeInt (this.generic);
-	buffer.writeInt (this.specific);
-	writeUint (buffer, ObjectType.TimeTicks,
+	writeInt32 (buffer, ObjectType.Integer, this.generic);
+	writeInt32 (buffer, ObjectType.Integer, this.specific);
+	writeUint32 (buffer, ObjectType.TimeTicks,
 			this.upTime || Math.floor (process.uptime () * 100));
 
 	writeVarbinds (buffer, this.varbinds);
@@ -756,9 +740,9 @@ TrapPdu.createFromBuffer = function (reader) {
 
 	pdu.enterprise = reader.readOID ();
 	pdu.agentAddr = readIpAddress (reader);
-	pdu.generic = reader.readInt ();
-	pdu.specific = reader.readInt ();
-	pdu.upTime = readUint (reader);
+	pdu.generic = readInt32 (reader);
+	pdu.specific = readInt32 (reader);
+	pdu.upTime = readUint32 (reader);
 
 	pdu.varbinds = [];
 	readVarbinds (reader, pdu.varbinds);
@@ -811,9 +795,9 @@ var SimpleResponsePdu = function() {
 SimpleResponsePdu.prototype.toBuffer = function (writer) {
 	writer.startSequence (this.type);
 
-	writer.writeInt (this.id);
-	writer.writeInt (this.errorStatus || 0);
-	writer.writeInt (this.errorIndex || 0);
+	writeInt32 (writer, ObjectType.Integer, this.id);
+	writeInt32 (writer, this.errorStatus || 0);
+	writeInt32 (writer, ObjectType.Integer, this.errorIndex || 0);
 	writeVarbinds (writer, this.varbinds);
 	writer.endSequence ();
 
@@ -822,9 +806,9 @@ SimpleResponsePdu.prototype.toBuffer = function (writer) {
 SimpleResponsePdu.prototype.initializeFromBuffer = function (reader) {
 	reader.readSequence (this.type);
 
-	this.id = reader.readInt ();
-	this.errorStatus = reader.readInt ();
-	this.errorIndex = reader.readInt ();
+	this.id = readInt32 (reader);
+	this.errorStatus = readInt32 (reader);
+	this.errorIndex = readInt32 (reader);
 
 	this.varbinds = [];
 	readVarbinds (reader, this.varbinds);
@@ -1335,7 +1319,7 @@ Message.prototype.toBufferCommunity = function () {
 
 	writer.startSequence ();
 
-	writer.writeInt (this.version);
+	writeInt32 (writer, ObjectType.Integer, this.version);
 	writer.writeString (this.community);
 
 	this.pdu.toBuffer (writer);
@@ -1380,16 +1364,16 @@ Message.prototype.toBufferV3 = function () {
 
 	writer.startSequence ();
 
-	writer.writeInt (this.version);
+	writeInt32 (writer, ObjectType.Integer, this.version);
 
 	// HeaderData
 	writer.startSequence ();
-	writer.writeInt (this.msgGlobalData.msgID);
-	writer.writeInt (this.msgGlobalData.msgMaxSize);
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgID);
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgMaxSize);
 	writer.writeByte (ber.OctetString);
 	writer.writeByte (1);
 	writer.writeByte (this.msgGlobalData.msgFlags);
-	writer.writeInt (this.msgGlobalData.msgSecurityModel);
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgSecurityModel);
 	writer.endSequence ();
 
 	// msgSecurityParameters
@@ -1402,8 +1386,8 @@ Message.prototype.toBufferV3 = function () {
 	} else {
 		writer.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
 	}
-	writer.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
-	writer.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
+	writeInt32 (writer, ObjectType.Integer, this.msgSecurityParameters.msgAuthoritativeEngineBoots);
+	writeInt32 (writer, ObjectType.Integer, this.msgSecurityParameters.msgAuthoritativeEngineTime);
 	writer.writeString (this.msgSecurityParameters.msgUserName);
 
 	var msgAuthenticationParameters = '';
@@ -1663,7 +1647,7 @@ Message.createFromBuffer = function (buffer, user) {
 
 	reader.readSequence ();
 
-	message.version = reader.readInt ();
+	message.version = readInt32 (reader);
 
 	if (message.version != 3) {
 		message.community = reader.readString ();
@@ -1672,18 +1656,18 @@ Message.createFromBuffer = function (buffer, user) {
 		// HeaderData
 		message.msgGlobalData = {};
 		reader.readSequence ();
-		message.msgGlobalData.msgID = reader.readInt ();
-		message.msgGlobalData.msgMaxSize = reader.readInt ();
+		message.msgGlobalData.msgID = readInt32 (reader);
+		message.msgGlobalData.msgMaxSize = readInt32 (reader);
 		message.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
-		message.msgGlobalData.msgSecurityModel = reader.readInt ();
+		message.msgGlobalData.msgSecurityModel = readInt32 (reader);
 
 		// msgSecurityParameters
 		message.msgSecurityParameters = {};
 		var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
 		msgSecurityParametersReader.readSequence ();
 		message.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
-		message.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
-		message.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
+		message.msgSecurityParameters.msgAuthoritativeEngineBoots = readInt32 (msgSecurityParametersReader);
+		message.msgSecurityParameters.msgAuthoritativeEngineTime = readInt32 (msgSecurityParametersReader);
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
 		message.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString (ber.OctetString, true);
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
@@ -4416,7 +4400,7 @@ Mib.convertOidToAddress = function (oid) {
 			throw new RangeError('object identifier component ' +
 				address[i] + ' is negative');
 		}
-		if (n > MAX_INT32) {
+		if (n > MAX_SIGNED_INT32) {
 			throw new RangeError('object identifier component ' +
 				address[i] + ' is too large');
 		}
@@ -6230,8 +6214,8 @@ exports.RequestTimedOutError = RequestTimedOutError;
  ** Added for testing
  **/
 exports.ObjectParser = {
-	readInt: readInt,
-	readUint: readUint,
+	readInt32: readInt32,
+	readUint32: readUint32,
 	readVarbindValue: readVarbindValue
 };
 exports.Authentication = Authentication;
