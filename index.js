@@ -62,6 +62,7 @@ _expandConstantObject (ErrorStatus);
 var ObjectType = {
 	1: "Boolean",
 	2: "Integer",
+	3: "BitString",
 	4: "OctetString",
 	5: "Null",
 	6: "OID",
@@ -425,6 +426,8 @@ function readVarbindValue (buffer, type) {
 		value = buffer.readBoolean ();
 	} else if (type == ObjectType.Integer) {
 		value = readInt32 (buffer);
+	} else if (type == ObjectType.BitString) {
+		value = buffer.readBitString();
 	} else if (type == ObjectType.OctetString) {
 		value = buffer.readString (null, true);
 	} else if (type == ObjectType.Null) {

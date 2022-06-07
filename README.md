@@ -3213,7 +3213,11 @@ Example programs are included under the module's `example` directory.
 
 ## Version 3.8.0 - 07/06/2022
 
- * Fix 32-bit unsigned integer writing
+ * Fix 32-bit unsigned integer writing and add integer range checking
+
+## Version 3.8.1 - 07/06/2022
+
+ * Add bit string type to varbind reading
 
 # License
 
