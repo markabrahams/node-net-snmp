@@ -1,0 +1,10 @@
+language: node_js
+node_js:
+  - lts/*
+  - 14
+  - 12
+  - 10
+  - 8
+
+script:
+  - npm run lint

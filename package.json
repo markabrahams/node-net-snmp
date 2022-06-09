@@ -1,16 +1,17 @@
 {
   "name": "net-snmp-domotz",
-  "version": "2.6.7",
+  "version": "3.8.1",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
     "example": "example"
   },
   "dependencies": {
-      "asn1-ber": "1.1.0",
-      "smart-buffer": "4.1.0"
+    "asn1-ber": "^1.2.1",
+    "smart-buffer": "^4.1.0"
   },
   "devDependencies": {
+      "eslint": "^5.16.0",
       "getopts": "2.2.5"
   },
   "contributors": [
@@ -44,5 +45,8 @@
     "monitoring"
   ],
   "author": "Mark Abrahams <mark@abrahams.co.nz>",
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "lint": "./node_modules/.bin/eslint . ./**/*.js"
+  }
 }

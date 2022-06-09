@@ -3,38 +3,51 @@
 This module implements versions 1, 2c and 3 of the [Simple Network Management
 Protocol (SNMP)][SNMP].
 
+*Read this in other languages: [English](README.md), [简体中文](README.cn.md).*
+
 This module is installed using [node package manager (npm)][npm]:
 
-    npm install net-snmp
+```bash
+npm install net-snmp
+```
 
 It is loaded using the `require()` function:
 
-    var snmp = require ("net-snmp");
+```js
+var snmp = require ("net-snmp");
+```
+
+# Quick Start
 
 Sessions to remote hosts can then be created and used to perform SNMP requests
 and send SNMP traps or informs:
 
-    var session = snmp.createSession ("127.0.0.1", "public");
+```js
+var session = snmp.createSession ("127.0.0.1", "public");
 
-    var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
-    
-    session.get (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error);
-        } else {
-            for (var i = 0; i < varbinds.length; i++)
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]))
-                else
-                    console.log (varbinds[i].oid + " = " + varbinds[i].value);
+var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
+
+session.get (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error);
+    } else {
+        for (var i = 0; i < varbinds.length; i++) {
+            if (snmp.isVarbindError (varbinds[i])) {
+                console.error (snmp.varbindError (varbinds[i]));
+            } else {
+                console.log (varbinds[i].oid + " = " + varbinds[i].value);
+            }
         }
-        session.close ();
-    });
+    }
+    session.close ();
+});
 
-    session.trap (snmp.TrapType.LinkDown, function (error) {
-        if (error)
-            console.error (error);
-    });
+session.trap (snmp.TrapType.LinkDown, function (error) {
+    if (error) {
+        console.error (error);
+    }
+});
+```
 
 [SNMP]: http://en.wikipedia.org/wiki/Simple_Network_Management_Protocol "SNMP"
 [npm]: https://npmjs.org/ "npm"
@@ -72,6 +85,8 @@ for each shown in this table:
  * MIB parsing and MIB module store
  * SNMP agent with MIB management for both scalar and tabular data
  * Agent table index support for non-integer keys, foreign keys, composite keys and table augmentation
+ * Agent support for "RowStatus" protocol-based creation and deletion of table rows
+ * Agent support for these MIB constraints: MAX-ACCESS, integer ranges, string sizes, integer enumerations
  * SNMP proxy forwarder for agent
  * AgentX subagent
  * IPv4 and IPv6
@@ -146,11 +161,13 @@ constants are defined in this object:
 This object contains constants used to specify syntax for varbind objects,
 e.g.:
 
-    var varbind = {
-        oid: "1.3.6.1.2.1.1.4.0",
-        type: snmp.ObjectType.OctetString,
-        value: "user.name@domain.name"
-    };
+```js
+var varbind = {
+    oid: "1.3.6.1.2.1.1.4.0",
+    type: snmp.ObjectType.OctetString,
+    value: "user.name@domain.name"
+};
+```
 
 The following constants are defined in this object:
 
@@ -214,22 +231,31 @@ RFC 3414:
 
 This object contains constants to select a supported digest algorithm for SNMPv3
 messages that require authentication:
- * `md5` - for MD5 message authentication (HMAC-MD5-96)
- * `sha` - for SHA message authentication (HMAC-SHA-96)
+ * `md5` - for HMAC-MD5 message authentication
+ * `sha` - for HMAC-SHA-1 message authentication
+ * `sha224` - for HMAC-SHA-224 message authentication
+ * `sha256` - for HMAC-SHA-256 message authentication
+ * `sha384` - for HMAC-SHA-384 message authentication
+ * `sha512` - for HMAC-SHA-512 message authentication
 
-These are the two hash algorithms specified in RFC 3414.  Other digest algorithms
-are not supported.
+MD5 and SHA (actually SHA-1) are the hash algorithms specified in the original
+SNMPv3 User-Based Security Model RFC (RFC 3414); the other four were added later
+in RFC 7860.
 
 ## snmp.PrivProtocols
 
 This object contains constants to select a supported encryption algorithm for
 SNMPv3 messages that require privacy:
  * `des` - for DES encryption (CBC-DES)
- * `aes` - for AES encryption (CFB-AES-128)
+ * `aes` - for 128-bit AES encryption (CFB-AES-128)
+ * `aes256b` - for 256-bit AES encryption (CFB-AES-256) with "Blumenthal" key localization
+ * `aes256r` - for 256-bit AES encryption (CFB-AES-256) with "Reeder" key localization
 
 DES is the sole encryption algorithm specified in the original SNMPv3 User-Based
-Security Model RFC (RFC 3414); AES for SNMPv3 was added later in RFC 3826.  Other
-encryption algorithms are not supported.
+Security Model RFC (RFC 3414); 128-bit AES for SNMPv3 was added later in RFC 3826.
+256-bit AES has *not* been standardized, and as such comes with two varieties of key
+localization.  Cisco and a number of other vendors commonly use the "Reeder" key
+localization variant.  Other encryption algorithms are not supported.
 
 ## snmp.AgentXPduType
 
@@ -253,21 +279,68 @@ The Agent Extensibility (AgentX) Protocol specifies these PDUs in RFC 2741:
  * `17 - RemoveAgentCaps`
  * `18 - Response`
 
+## snmp.AccessControlModelType
+
+ * `None` - no access control for defined communities and users
+ * `Simple` - simple access control of levels "read-only" or "read-write" for defined communites and users
+
+## snmp.AccessLevel
+
+- `None` - no access granted to the community or user
+- `ReadOnly` - read-only access granted to the community or user
+- `ReadWrite` - read-write access granted to the community or user
+
+## snmp.MaxAccess
+- `0 - not-accessible`
+- `1 - accessible-for-notify`
+- `2 - read-only`
+- `3 - read-write`
+- `4 - read-create`
+
+## snmp.RowStatus
+Status values
+- `1 - active`
+- `2 - notInService`
+- `3 - notReady`
+
+Actions
+- `4 - createAndGo`
+- `5 - createAndWait`
+- `6 - destroy`
+
+## snmp.ResponseInvalidCode
+- `1 -  EIp4AddressSize`
+- `2 -  EUnknownObjectType`
+- `3 -  EUnknownPduType`
+- `4 -  ECouldNotDecrypt`
+- `5 -  EAuthFailure`
+- `6 -  EReqResOidNoMatch`
+- `7 -  (no longer used)
+- `8 -  EOutOfOrder`
+- `9 -  EVersionNoMatch`
+- `10 -  ECommunityNoMatch`
+- `11 -  EUnexpectedReport`
+- `12 -  EResponseNotHandled`
+- `13 -  EUnexpectedResponse`
 
 # OID Strings & Varbinds
 
 Some parts of this module accept simple OID strings, e.g.:
 
-    var oid = "1.3.6.1.2.1.1.5.0";
+```js
+var oid = "1.3.6.1.2.1.1.5.0";
+```
 
 Other parts take an OID string, it's type and value.  This is collectively
 referred to as a varbind, and is specified as an object, e.g.:
 
-    var varbind = {
-        oid: "1.3.6.1.2.1.1.5.0",
-        type: snmp.ObjectType.OctetString,
-        value: new Buffer ("host1")
-    };
+```js
+var varbind = {
+    oid: "1.3.6.1.2.1.1.5.0",
+    type: snmp.ObjectType.OctetString,
+    value: new Buffer ("host1")
+};
+```
 
 The `type` parameter is one of the constants defined in the `snmp.ObjectType`
 object.
@@ -313,15 +386,17 @@ has been dispatched or a successful response was received.
 The first parameter to every callback is an error object.  In the case no
 error occurred this parameter will be "null" indicating no error, e.g.:
 
-    function responseCb (error, varbinds) {
-        if (error) {
-            console.error (error);
-        } else {
-            // no error, do something with varbinds
-        }
+```js
+function responseCb (error, varbinds) {
+    if (error) {
+        console.error (error);
+    } else {
+        // no error, do something with varbinds
     }
+}
+```
 
-When defined, the error parameter is always an instance of the `Error` class,
+When defined, the `error` parameter is always an instance of the `Error` class,
 or a sub-class described in one of the sub-sections contained in this section.
 
 The semantics of error handling is slightly different between SNMP version
@@ -337,15 +412,17 @@ defined detailing the error.
 Requests made with SNMP version 1 can simply assume all OIDs have a value when
 no error object is passed to the `callback`, i.e.:
 
-    var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
-    
-    session.get (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            var sysName = varbinds[0].value; // this WILL have a value
-        }
-    });
+```js
+var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
+
+session.get (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        var sysName = varbinds[0].value; // this WILL have a value
+    }
+});
+```
 
 In SNMP versions 2c and 3, instead of using the error-status and error-index
 fields of the response to signal an error, the value for the varbind placed in the
@@ -357,22 +434,24 @@ This changes the way in which error checking is performed in the `callback`.
 When using SNMP version 2c each varbind must be checked to see if its value
 was computed and returned successfully:
 
-    var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
-    
-    session.get (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
+```js
+var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
+
+session.get (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        if (varbinds[0].type != snmp.ErrorStatus.NoSuchObject
+                && varbinds[0].type != snmp.ErrorStatus.NoSuchInstance
+                && varbinds[0].type != snmp.ErrorStatus.EndOfMibView) {
+            var sysName = varbinds[0].value;
         } else {
-            if (varbinds[0].type != snmp.ErrorStatus.NoSuchObject
-                    && varbinds[0].type != snmp.ErrorStatus.NoSuchInstance
-                    && varbinds[0].type != snmp.ErrorStatus.EndOfMibView) {
-                var sysName = varbinds[0].value;
-            } else {
-                console.error (snmp.ObjectType[varbinds[0].type] + ": "
-                        + varbinds[0].oid);
-            }
+            console.error (snmp.ObjectType[varbinds[0].type] + ": "
+                    + varbinds[0].oid);
         }
-    });
+    }
+});
+```
 
 This module exports two functions and promotes a specifc pattern to make error
 checking a little simpler.  Firstly, regardless of version in use varbinds can
@@ -385,17 +464,19 @@ error condition.  This function takes a single `varbind` parameter and returns
 `varbindError()` function can then be used to obtain the error string
 describing the error, which will include the OID for the varbind:
 
-    session.get (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
+```js
+session.get (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        if (snmp.isVarbindError (varbinds[0])) {
+            console.error (snmp.varbindError (varbinds[0]));
         } else {
-            if (snmp.isVarbindError (varbinds[0])) {
-                console.error (snmp.varbindError (varbinds[0]));
-            } else {
-                var sysName = varbinds[0].value;
-            }
+            var sysName = varbinds[0].value;
         }
-    });
+    }
+});
+```
 
 If the `varbindError` function is called with a varbind for which
 `isVarbindError` would return false, the string `NotAnError` will be returned
@@ -424,8 +505,17 @@ exposed `message` attribute will contain the value `Request timed out`.
 
 ## snmp.ResponseInvalidError
 
-This error indicates a failure to parse a response message.  The exposed
-`message` attribute will contain a detailed error message.
+This error indicates a failure to parse a response message. The
+exposed `message` attribute will contain a detailed error message, and
+as a sub-class of Error, its `toString()` method will yield that
+`message` attribute.
+
+An error of this class will always additionally include a `code`
+attribute (one of the values in `ResponseInvalidCode`); and in some
+cases, also have an `info` attribute which provides `code`-specific
+supplemental information. An authentication error, for example -- code
+`ResponseInvalidCode.EAuthFailure` -- will contain a map in `info`
+with the attempted authentication data which failed to authenticate.
 
 # Using This Module: Command & Notification Generator
 
@@ -444,20 +534,23 @@ module exports two functions that are used to create instances of the
 The `createSession()` function instantiates and returns an instance of the
 `Session` class for SNMPv1 or SNMPv2c:
 
-    // Default options
-    var options = {
-        port: 161,
-        retries: 1,
-        timeout: 5000,
-        backoff: 1.0,
-        transport: "udp4",
-        trapPort: 162,
-        version: snmp.Version1,
-        backwardsGetNexts: true,
-        idBitsSize: 32
-    };
-    
-    var session = snmp.createSession ("127.0.0.1", "public", options);
+```js
+// Default options
+var options = {
+    port: 161,
+    retries: 1,
+    timeout: 5000,
+    backoff: 1.0,
+    transport: "udp4",
+    trapPort: 162,
+    version: snmp.Version1,
+    backwardsGetNexts: true,
+    reportOidMismatchErrors: false,
+    idBitsSize: 32
+};
+
+var session = snmp.createSession ("127.0.0.1", "public", options);
+```
 
 The optional `target` parameter defaults to `127.0.0.1`.  The optional
 `community` parameter defaults to `public`.  The optional `options` parameter
@@ -480,42 +573,51 @@ is an object, and can contain the following items:
  * `version` - Either `snmp.Version1` or `snmp.Version2c`, defaults to
    `snmp.Version1`
  * `backwardsGetNexts` - boolean to allow GetNext operations to retrieve lexicographically
-   preceeding OIDs
+   preceding OIDs, defaults to `true`
+ * `reportOidMismatchErrors` - boolean to allow error reporting of OID mismatches between
+   requests and responses, defaults to `false`
  * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
     of the generated id for compatibility with some older devices.
 
 When a session has been finished with it should be closed:
 
-    session.close ();
+```js
+session.close ();
+```
 
 ## snmp.createV3Session (target, user, [options])
 
 The `createV3Session()` function instantiates and returns an instance of the
 same `Session` class as `createSession()`, only instead initialized for SNMPv3:
-    
-    // Default options for v3
-    var options = {
-        port: 161,
-        retries: 1,
-        timeout: 5000,
-        transport: "udp4",
-        trapPort: 162,
-        version: snmp.Version3,
-        idBitsSize: 32,
-        context: ""
-    };
 
-    // Example user
-    var user = {
-        name: "blinkybill",
-        level: snmp.SecurityLevel.authPriv,
-        authProtocol: snmp.AuthProtocols.sha,
-        authKey: "madeahash",
-        privProtocol: snmp.PrivProtocols.des,
-        privKey: "privycouncil"
-    };
-    
-    var session = snmp.createV3Session ("127.0.0.1", user, options);
+```js
+// Default options for v3
+var options = {
+    port: 161,
+    retries: 1,
+    timeout: 5000,
+    transport: "udp4",
+    trapPort: 162,
+    version: snmp.Version3,
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
+    backwardsGetNexts: true,
+    reportOidMismatchErrors: false,
+    idBitsSize: 32,
+    context: ""
+};
+
+// Example user
+var user = {
+    name: "blinkybill",
+    level: snmp.SecurityLevel.authPriv,
+    authProtocol: snmp.AuthProtocols.sha,
+    authKey: "madeahash",
+    privProtocol: snmp.PrivProtocols.des,
+    privKey: "privycouncil"
+};
+
+var session = snmp.createV3Session ("127.0.0.1", user, options);
+```
 
 The `target` and `user` parameters are mandatory.  The optional `options` parameter
 has the same meaning as for the `createSession()` call.  The one additional field
@@ -558,9 +660,11 @@ each request will be an instance of the `Error` class with the errors
 The following example prints a message to the console when a sessions
 underlying UDP socket is closed:
 
-    session.on ("close", function () {
-        console.log ("socket closed");
-    });
+```js
+session.on ("close", function () {
+    console.log ("socket closed");
+});
+```
 
 ## session.on ("error", callback)
 
@@ -575,10 +679,12 @@ The following arguments will be passed to the `callback` function:
 The following example prints a message to the console when an error occurs
 with a sessions underlying UDP socket, the session is then closed:
 
-    session.on ("error", function (error) {
-        console.log (error.toString ());
-        session.close ();
-    });
+```js
+session.on ("error", function (error) {
+    console.log (error.toString ());
+    session.close ();
+});
+```
 
 ## session.close ()
 
@@ -589,7 +695,9 @@ emitting a `close` event.
 
 The following example closes a sessions underlying UDP socket:
 
-    session.close ();
+```js
+session.close ();
+```
 
 ## session.get (oids, callback)
 
@@ -612,24 +720,26 @@ Each varbind must be checked for an error condition using the
 The following example fetches values for the sysName (`1.3.6.1.2.1.1.5.0`) and
 sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
 
-    var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
-    
-    session.get (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            for (var i = 0; i < varbinds.length; i++) {
-                // for version 1 we can assume all OIDs were successful
+```js
+var oids = ["1.3.6.1.2.1.1.5.0", "1.3.6.1.2.1.1.6.0"];
+
+session.get (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        for (var i = 0; i < varbinds.length; i++) {
+            // for version 1 we can assume all OIDs were successful
+            console.log (varbinds[i].oid + "|" + varbinds[i].value);
+        
+            // for version 2c we must check each OID for an error condition
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
                 console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            
-                // for version 2c we must check each OID for an error condition
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]));
-                else
-                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            }
         }
-    });
+    }
+});
+```
 
 ## session.getBulk (oids, [nonRepeaters], [maxRepetitions], callback)
 
@@ -667,41 +777,44 @@ The following example fetches values for the OIDs following the sysContact
 first 20 OIDs in the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifType
 (`1.3.6.1.2.1.2.2.1.3`) columns from the ifTable (`1.3.6.1.2.1.2.2`) table:
 
-    var oids = [
-        "1.3.6.1.2.1.1.4.0",
-        "1.3.6.1.2.1.1.5.0",
-        "1.3.6.1.2.1.2.2.1.2",
-        "1.3.6.1.2.1.2.2.1.3"
-    ];
-    
-    var nonRepeaters = 2;
-    
-    session.getNext (oids, nonRepeaters, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            // step through the non-repeaters which are single varbinds
-            for (var i = 0; i < nonRepeaters; i++) {
-                if (i >= varbinds.length)
-                    break;
+```js
+var oids = [
+    "1.3.6.1.2.1.1.4.0",
+    "1.3.6.1.2.1.1.5.0",
+    "1.3.6.1.2.1.2.2.1.2",
+    "1.3.6.1.2.1.2.2.1.3"
+];
 
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]));
-                else
-                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            }
+var nonRepeaters = 2;
 
-            // then step through the repeaters which are varbind arrays
-            for (var i = nonRepeaters; i < varbinds.length; i++) {
-                for (var j = 0; j < varbinds[i].length; j++) {
-                    if (snmp.isVarbindError (varbinds[i][j]))
-                        console.error (snmp.varbindError (varbinds[i][j]));
-                    else
-                        console.log (varbinds[i][j].oid + "|"
-                        		+ varbinds[i][j].value);
-                }
+session.getBulk (oids, nonRepeaters, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        // step through the non-repeaters which are single varbinds
+        for (var i = 0; i < nonRepeaters; i++) {
+            if (i >= varbinds.length)
+                break;
+
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
+                console.log (varbinds[i].oid + "|" + varbinds[i].value);
         }
-    });
+
+        // then step through the repeaters which are varbind arrays
+        for (var i = nonRepeaters; i < varbinds.length; i++) {
+            for (var j = 0; j < varbinds[i].length; j++) {
+                if (snmp.isVarbindError (varbinds[i][j]))
+                    console.error (snmp.varbindError (varbinds[i][j]));
+                else
+                    console.log (varbinds[i][j].oid + "|"
+                    		+ varbinds[i][j].value);
+            }
+        }
+    }
+});
+```
 
 ## session.getNext (oids, callback)
 
@@ -725,27 +838,29 @@ Each varbind must be checked for an error condition using the
 The following example fetches values for the next OIDs following the
 sysObjectID (`1.3.6.1.2.1.1.1.0`) and sysName (`1.3.6.1.2.1.1.4.0`) OIDs:
 
-    var oids = [
-        "1.3.6.1.2.1.1.1.0",
-        "1.3.6.1.2.1.1.4.0"
-    ];
-    
-    session.getNext (oids, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            for (var i = 0; i < varbinds.length; i++) {
-                // for version 1 we can assume all OIDs were successful
+```js
+var oids = [
+    "1.3.6.1.2.1.1.1.0",
+    "1.3.6.1.2.1.1.4.0"
+];
+
+session.getNext (oids, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        for (var i = 0; i < varbinds.length; i++) {
+            // for version 1 we can assume all OIDs were successful
+            console.log (varbinds[i].oid + "|" + varbinds[i].value);
+        
+            // for version 2c we must check each OID for an error condition
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
                 console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            
-                // for version 2c we must check each OID for an error condition
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]));
-                else
-                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            }
         }
-    });
+    }
+});
+```
 
 ## session.inform (typeOrOid, [varbinds], [options], callback)
 
@@ -796,35 +911,39 @@ since the varbinds are as they were sent in the request.
 The following example sends a generic cold-start inform to a remote host,
 it does not include any varbinds:
 
-    session.inform (snmp.TrapType.ColdStart, function (error) {
-        if (error)
-            console.error (error);
-    });
+```js
+session.inform (snmp.TrapType.ColdStart, function (error) {
+    if (error)
+        console.error (error);
+});
+```
 
 The following example sends an enterprise specific inform to a remote host,
 and includes two enterprise specific varbinds:
 
-    var informOid = "1.3.6.1.4.1.2000.1";
-    
-    var varbinds = [
-        {
-            oid: "1.3.6.1.4.1.2000.2",
-            type: snmp.ObjectType.OctetString,
-            value: "Periodic hardware self-check"
-        },
-        {
-            oid: "1.3.6.1.4.1.2000.3",
-            type: snmp.ObjectType.OctetString,
-            value: "hardware-ok"
-        }
-    ];
-    
-    // Override sysUpTime, specfiying it as 10 seconds...
-    var options = {upTime: 1000};
-    session.inform (informOid, varbinds, options, function (error) {
-        if (error)
-            console.error (error);
-    });
+```js
+var informOid = "1.3.6.1.4.1.2000.1";
+
+var varbinds = [
+    {
+        oid: "1.3.6.1.4.1.2000.2",
+        type: snmp.ObjectType.OctetString,
+        value: "Periodic hardware self-check"
+    },
+    {
+        oid: "1.3.6.1.4.1.2000.3",
+        type: snmp.ObjectType.OctetString,
+        value: "hardware-ok"
+    }
+];
+
+// Override sysUpTime, specfiying it as 10 seconds...
+var options = {upTime: 1000};
+session.inform (informOid, varbinds, options, function (error) {
+    if (error)
+        console.error (error);
+});
+```
 
 ## session.set (varbinds, callback)
 
@@ -850,34 +969,36 @@ Each varbind must be checked for an error condition using the
 The following example sets the value of the sysName (`1.3.6.1.2.1.1.4.0`) and
 sysLocation (`1.3.6.1.2.1.1.6.0`) OIDs:
 
-    var varbinds = [
-        {
-            oid: "1.3.6.1.2.1.1.5.0",
-            type: snmp.ObjectType.OctetString,
-            value: "host1"
-        }, {
-            oid: "1.3.6.1.2.1.1.6.0",
-            type: snmp.ObjectType.OctetString,
-            value: "somewhere"
-        }
-    ];
-    
-    session.set (varbinds, function (error, varbinds) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            for (var i = 0; i < varbinds.length; i++) {
-                // for version 1 we can assume all OIDs were successful
+```js
+var varbinds = [
+    {
+        oid: "1.3.6.1.2.1.1.5.0",
+        type: snmp.ObjectType.OctetString,
+        value: "host1"
+    }, {
+        oid: "1.3.6.1.2.1.1.6.0",
+        type: snmp.ObjectType.OctetString,
+        value: "somewhere"
+    }
+];
+
+session.set (varbinds, function (error, varbinds) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        for (var i = 0; i < varbinds.length; i++) {
+            // for version 1 we can assume all OIDs were successful
+            console.log (varbinds[i].oid + "|" + varbinds[i].value);
+        
+            // for version 2c we must check each OID for an error condition
+            if (snmp.isVarbindError (varbinds[i]))
+                console.error (snmp.varbindError (varbinds[i]));
+            else
                 console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            
-                // for version 2c we must check each OID for an error condition
-                if (snmp.isVarbindError (varbinds[i]))
-                    console.error (snmp.varbindError (varbinds[i]));
-                else
-                    console.log (varbinds[i].oid + "|" + varbinds[i].value);
-            }
         }
-    });
+    }
+});
+```
 
 ## session.subtree (oid, [maxRepetitions], feedCallback, doneCallback)
 
@@ -921,27 +1042,29 @@ be called.
 
 The following example fetches all OIDS under the system (`1.3.6.1.2.1.1`) OID:
 
-    var oid = "1.3.6.1.2.1.1";
-    
-    function doneCb (error) {
-        if (error)
-            console.error (error.toString ());
+```js
+var oid = "1.3.6.1.2.1.1";
+
+function doneCb (error) {
+    if (error)
+        console.error (error.toString ());
+}
+
+function feedCb (varbinds) {
+    for (var i = 0; i < varbinds.length; i++) {
+        if (snmp.isVarbindError (varbinds[i]))
+            console.error (snmp.varbindError (varbinds[i]));
+        else
+            console.log (varbinds[i].oid + "|" + varbinds[i].value);
     }
-    
-    function feedCb (varbinds) {
-        for (var i = 0; i < varbinds.length; i++) {
-            if (snmp.isVarbindError (varbinds[i]))
-                console.error (snmp.varbindError (varbinds[i]));
-            else
-                console.log (varbinds[i].oid + "|" + varbinds[i].value);
-        }
-    }
-    
-    var maxRepetitions = 20;
-    
-    // The maxRepetitions argument is optional, and will be ignored unless using
-    // SNMP verison 2c
-    session.subtree (oid, maxRepetitions, feedCb, doneCb);
+}
+
+var maxRepetitions = 20;
+
+// The maxRepetitions argument is optional, and will be ignored unless using
+// SNMP verison 2c
+session.subtree (oid, maxRepetitions, feedCb, doneCb);
+```
 
 ## session.table (oid, [maxRepetitions], callback)
 
@@ -949,26 +1072,28 @@ The `table()` method fetches the value for all OIDs lexicographically
 following a specified OID in the MIB tree which have the specified OID as
 their base, much like the `subtree()` method.
 
-This method is designed to fetch conceptial tables, for example the ifTable
+This method is designed to fetch conceptual tables, for example the ifTable
 (`1.3.6.1.2.1.2.2`) table.  The values for returned varbinds will be structured
 into objects to represent conceptual rows.  Each row is then placed into an
 object with the rows index being the key, e.g.:
 
-    var table = {
-        // Rows keyed by ifIndex (1 and 2 are shown)
-        1: {
-            // ifDescr (column 2) and ifType (columnd 3) are shown
-            2: "interface-1",
-            3: 6,
-            ...
-        },
-        2: {
-            2: "interface-2",
-            3: 6,
-            ...
-        },
+```js
+var table = {
+    // Rows keyed by ifIndex (1 and 2 are shown)
+    1: {
+        // ifDescr (column 2) and ifType (columnd 3) are shown
+        2: "interface-1",
+        3: 6,
         ...
-    }
+    },
+    2: {
+        2: "interface-2",
+        3: 6,
+        ...
+    },
+    ...
+}
+```
 
 Internally this method calls the `subtree()` method to obtain the subtree of
 the specified table.
@@ -996,55 +1121,57 @@ instance of the `RequestFailedError` class.
 
 The following example fetches the ifTable (`1.3.6.1.2.1.2.2`) table:
 
-    var oid = "1.3.6.1.2.1.2.2";
-    
-    function sortInt (a, b) {
-        if (a > b)
-            return 1;
-        else if (b > a)
-            return -1;
-        else
-            return 0;
-    }
-    
-    function responseCb (error, table) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            // This code is purely used to print rows out in index order,
-            // ifIndex's are integers so we'll sort them numerically using
-            // the sortInt() function above
-            var indexes = [];
-            for (index in table)
-                indexes.push (parseInt (index));
-            indexes.sort (sortInt);
+```js
+var oid = "1.3.6.1.2.1.2.2";
+
+function sortInt (a, b) {
+    if (a > b)
+        return 1;
+    else if (b > a)
+        return -1;
+    else
+        return 0;
+}
+
+function responseCb (error, table) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        // This code is purely used to print rows out in index order,
+        // ifIndex's are integers so we'll sort them numerically using
+        // the sortInt() function above
+        var indexes = [];
+        for (index in table)
+            indexes.push (parseInt (index));
+        indexes.sort (sortInt);
+        
+        // Use the sorted indexes we've calculated to walk through each
+        // row in order
+        for (var i = 0; i < indexes.length; i++) {
+            // Like indexes we sort by column, so use the same trick here,
+            // some rows may not have the same columns as other rows, so
+            // we calculate this per row
+            var columns = [];
+            for (column in table[indexes[i]])
+                columns.push (parseInt (column));
+            columns.sort (sortInt);
             
-            // Use the sorted indexes we've calculated to walk through each
-            // row in order
-            for (var i = 0; i < indexes.length; i++) {
-                // Like indexes we sort by column, so use the same trick here,
-                // some rows may not have the same columns as other rows, so
-                // we calculate this per row
-                var columns = [];
-                for (column in table[indexes[i]])
-                    columns.push (parseInt (column));
-                columns.sort (sortInt);
-                
-                // Print index, then each column indented under the index
-                console.log ("row for index = " + indexes[i]);
-                for (var j = 0; j < columns.length; j++) {
-                    console.log ("   column " + columns[j] + " = "
-                            + table[indexes[i]][columns[j]]);
-                }
+            // Print index, then each column indented under the index
+            console.log ("row for index = " + indexes[i]);
+            for (var j = 0; j < columns.length; j++) {
+                console.log ("   column " + columns[j] + " = "
+                        + table[indexes[i]][columns[j]]);
             }
         }
     }
-    
-    var maxRepetitions = 20;
-    
-    // The maxRepetitions argument is optional, and will be ignored unless using
-    // SNMP verison 2c
-    session.table (oid, maxRepetitions, responseCb);
+}
+
+var maxRepetitions = 20;
+
+// The maxRepetitions argument is optional, and will be ignored unless using
+// SNMP verison 2c
+session.table (oid, maxRepetitions, responseCb);
+```
 
 ## session.tableColumns (oid, columns, [maxRepetitions], callback)
 
@@ -1054,62 +1181,64 @@ be in the resulting table.
 
 This method should be used when only selected columns are required, and
 will be many times faster than the `table()` method since a much smaller
-amount of data will be fected.
+amount of data will be fetched.
 
 The following example fetches the ifTable (`1.3.6.1.2.1.2.2`) table, and
 specifies that only the ifDescr (`1.3.6.1.2.1.2.2.1.2`) and ifPhysAddress
 (`1.3.6.1.2.1.2.2.1.6`) columns should actually be fetched:
 
-    var oid = "1.3.6.1.2.1.2.2";
-    var columns = [2, 6];
-    
-    function sortInt (a, b) {
-        if (a > b)
-            return 1;
-        else if (b > a)
-            return -1;
-        else
-            return 0;
-    }
-    
-    function responseCb (error, table) {
-        if (error) {
-            console.error (error.toString ());
-        } else {
-            // This code is purely used to print rows out in index order,
-            // ifIndex's are integers so we'll sort them numerically using
-            // the sortInt() function above
-            var indexes = [];
-            for (index in table)
-                indexes.push (parseInt (index));
-            indexes.sort (sortInt);
+```js
+var oid = "1.3.6.1.2.1.2.2";
+var columns = [2, 6];
+
+function sortInt (a, b) {
+    if (a > b)
+        return 1;
+    else if (b > a)
+        return -1;
+    else
+        return 0;
+}
+
+function responseCb (error, table) {
+    if (error) {
+        console.error (error.toString ());
+    } else {
+        // This code is purely used to print rows out in index order,
+        // ifIndex's are integers so we'll sort them numerically using
+        // the sortInt() function above
+        var indexes = [];
+        for (index in table)
+            indexes.push (parseInt (index));
+        indexes.sort (sortInt);
+        
+        // Use the sorted indexes we've calculated to walk through each
+        // row in order
+        for (var i = 0; i < indexes.length; i++) {
+            // Like indexes we sort by column, so use the same trick here,
+            // some rows may not have the same columns as other rows, so
+            // we calculate this per row
+            var columns = [];
+            for (column in table[indexes[i]])
+                columns.push (parseInt (column));
+            columns.sort (sortInt);
             
-            // Use the sorted indexes we've calculated to walk through each
-            // row in order
-            for (var i = 0; i < indexes.length; i++) {
-                // Like indexes we sort by column, so use the same trick here,
-                // some rows may not have the same columns as other rows, so
-                // we calculate this per row
-                var columns = [];
-                for (column in table[indexes[i]])
-                    columns.push (parseInt (column));
-                columns.sort (sortInt);
-                
-                // Print index, then each column indented under the index
-                console.log ("row for index = " + indexes[i]);
-                for (var j = 0; j < columns.length; j++) {
-                    console.log ("   column " + columns[j] + " = "
-                            + table[indexes[i]][columns[j]]);
-                }
+            // Print index, then each column indented under the index
+            console.log ("row for index = " + indexes[i]);
+            for (var j = 0; j < columns.length; j++) {
+                console.log ("   column " + columns[j] + " = "
+                        + table[indexes[i]][columns[j]]);
             }
         }
     }
-    
-    var maxRepetitions = 20;
-    
-    // The maxRepetitions argument is optional, and will be ignored unless using
-    // SNMP verison 2c
-    session.tableColumns (oid, columns, maxRepetitions, responseCb);
+}
+
+var maxRepetitions = 20;
+
+// The maxRepetitions argument is optional, and will be ignored unless using
+// SNMP verison 2c
+session.tableColumns (oid, columns, maxRepetitions, responseCb);
+```
 
 ## session.trap (typeOrOid, [varbinds], [agentAddrOrOptions], callback)
 
@@ -1140,7 +1269,7 @@ returned by the `process.uptime ()` function multiplied by `100`.
 SNMP version 2c messages are quite different in comparison with version 1.
 The version 2c trap has a much simpler format, simply a sequence of varbinds.
 The first varbind to be placed in the trap message will be for the
-`sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`).  The value for this varbind will
+`sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`).  The value for this varbind will
 be the value returned by the `process.uptime ()` function multiplied by 100
 (this can be overridden by providing `upTime` in the optional `options`
 parameter, as documented below).
@@ -1161,7 +1290,7 @@ following items:
 
  * `agentAddr` - IP address used to populate the agent-addr field for SNMP
    version 1 type traps, and defaults to `127.0.0.1`
- * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.6.3.1.1.4.1.0`) in the
+ * `upTime` - Value of the `sysUptime.0` OID (`1.3.6.1.2.1.1.3.0`) in the
    trap, defaults to the value returned by the `process.uptime ()` function
    multiplied by 100
 
@@ -1179,62 +1308,68 @@ a SNMP version 1 trap, and includes the sysName (`1.3.6.1.2.1.1.5.0`) varbind
 in the trap.  Before the trap is sent the `agentAddr` field is calculated using
 DNS to resolve the hostname of the local host:
 
-    var enterpriseOid = "1.3.6.1.4.1.2000.1"; // made up, but it may be valid
-    
-    var varbinds = [
-        {
-            oid: "1.3.6.1.2.1.1.5.0",
-            type: snmp.ObjectType.OctetString,
-            value: "host1"
-        }
-    ];
-    
-    dns.lookup (os.hostname (), function (error, agentAddress) {
-        if (error) {
-            console.error (error);
-        } else {
-            // Override sysUpTime, specfiying it as 10 seconds...
-            var options = {agentAddr: agentAddress, upTime: 1000};
-            session.trap (enterpriseOid, varbinds, agentAddress,
-                    function (error) {
-                if (error)
-                    console.error (error);
-            });
-        }
-    });
+```js
+var enterpriseOid = "1.3.6.1.4.1.2000.1"; // made up, but it may be valid
+
+var varbinds = [
+    {
+        oid: "1.3.6.1.2.1.1.5.0",
+        type: snmp.ObjectType.OctetString,
+        value: "host1"
+    }
+];
+
+dns.lookup (os.hostname (), function (error, agentAddress) {
+    if (error) {
+        console.error (error);
+    } else {
+        // Override sysUpTime, specfiying it as 10 seconds...
+        var options = {agentAddr: agentAddress, upTime: 1000};
+        session.trap (enterpriseOid, varbinds, agentAddress,
+                function (error) {
+            if (error)
+                console.error (error);
+        });
+    }
+});
+```
 
 The following example sends a generic link-down trap to a remote host using a
 SNMP version 1 trap, it does not include any varbinds or specify the
 `agentAddr` parameter:
 
-    session.trap (snmp.TrapType.LinkDown, function (error) {
-        if (error)
-            console.error (error);
-    });
+```js
+session.trap (snmp.TrapType.LinkDown, function (error) {
+    if (error)
+        console.error (error);
+});
+```
 
 The following example sends an enterprise specific trap to a remote host using
 a SNMP version 2c trap, and includes two enterprise specific varbinds:
 
-    var trapOid = "1.3.6.1.4.1.2000.1";
-    
-    var varbinds = [
-        {
-            oid: "1.3.6.1.4.1.2000.2",
-            type: snmp.ObjectType.OctetString,
-            value: "Hardware health status changed"
-        },
-        {
-            oid: "1.3.6.1.4.1.2000.3",
-            type: snmp.ObjectType.OctetString,
-            value: "status-error"
-        }
-    ];
-    
-    // version 2c should have been specified when creating the session
-    session.trap (trapOid, varbinds, function (error) {
-        if (error)
-            console.error (error);
-    });
+```js
+var trapOid = "1.3.6.1.4.1.2000.1";
+
+var varbinds = [
+    {
+        oid: "1.3.6.1.4.1.2000.2",
+        type: snmp.ObjectType.OctetString,
+        value: "Hardware health status changed"
+    },
+    {
+        oid: "1.3.6.1.4.1.2000.3",
+        type: snmp.ObjectType.OctetString,
+        value: "status-error"
+    }
+];
+
+// version 2c should have been specified when creating the session
+session.trap (trapOid, varbinds, function (error) {
+    if (error)
+        console.error (error);
+});
+```
 
 ## session.walk (oid, [maxRepetitions], feedCallback, doneCallback)
 
@@ -1275,27 +1410,29 @@ be called.
 The following example walks to the end of the MIB tree starting from the
 ifTable (`1.3.6.1.2.1.2.2`) OID:
 
-    var oid = "1.3.6.1.2.1.2.2";
-    
-    function doneCb (error) {
-        if (error)
-            console.error (error.toString ());
+```js
+var oid = "1.3.6.1.2.1.2.2";
+
+function doneCb (error) {
+    if (error)
+        console.error (error.toString ());
+}
+
+function feedCb (varbinds) {
+    for (var i = 0; i < varbinds.length; i++) {
+        if (snmp.isVarbindError (varbinds[i]))
+            console.error (snmp.varbindError (varbinds[i]));
+        else
+            console.log (varbinds[i].oid + "|" + varbinds[i].value);
     }
-    
-    function feedCb (varbinds) {
-        for (var i = 0; i < varbinds.length; i++) {
-            if (snmp.isVarbindError (varbinds[i]))
-                console.error (snmp.varbindError (varbinds[i]));
-            else
-                console.log (varbinds[i].oid + "|" + varbinds[i].value);
-        }
-    }
-    
-    var maxRepetitions = 20;
-    
-    // The maxRepetitions argument is optional, and will be ignored unless using
-    // SNMP verison 2c
-    session.walk (oid, maxRepetitions, feedCb, doneCb);
+}
+
+var maxRepetitions = 20;
+
+// The maxRepetitions argument is optional, and will be ignored unless using
+// SNMP verison 2c
+session.walk (oid, maxRepetitions, feedCb, doneCb);
+```
 
 # Using This Module: Notification Receiver
 
@@ -1320,23 +1457,28 @@ below.
 The `createReceiver()` function instantiates and returns an instance of the `Receiver`
 class:
 
-    // Default options
-    var options = {
-        port: 162,
-        disableAuthorization: false,
-        engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
-        transport: "udp4"
-    };
+```js
+// Default options
+var options = {
+    port: 162,
+    disableAuthorization: false,
+    includeAuthentication: false,
+    accessControlModelType: snmp.AccessControlModelType.None,
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
+    address: null,
+    transport: "udp4"
+};
 
-    var callback = function (error, notification) {
-        if ( error ) {
-            console.error (error);
-        } else {
-            console.log (JSON.stringify(notification, null, 2));
-        }
-    };
+var callback = function (error, notification) {
+    if ( error ) {
+        console.error (error);
+    } else {
+        console.log (JSON.stringify(notification, null, 2));
+    }
+};
 
-    receiver = snmp.createReceiver (options, callback);
+receiver = snmp.createReceiver (options, callback);
+```
 
 The `options` and `callback` parameters are mandatory.  The `options` parameter is
 an object, possibly empty, and can contain the following fields:
@@ -1350,6 +1492,10 @@ an object, possibly empty, and can contain the following fields:
  * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
+ * `address` - the IP address to bind to - default to `null`, which means bind to all IP
+ addresses
+ * `includeAuthentication` - adds the community (v1/2c) or user name (v3) information
+ to the notification callback - defaults to `false`
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
@@ -1358,31 +1504,33 @@ parameter is set to `null`, and the `notification` parameter is set as an object
 with the notification PDU details in the `pdu` field and the sender socket details
 in the `rinfo` field.  For example:
 
-    {
-        "pdu": {
-            "type": 166,
-            "id": 45385686,
-            "varbinds": [
-                {
-                    "oid": "1.3.6.1.2.1.1.3.0",
-                    "type": 67,
-                    "value": 5
-                },
-                {
-                    "oid": "1.3.6.1.6.3.1.1.4.1.0",
-                    "type": 6,
-                    "value": "1.3.6.1.6.3.1.1.5.2"
-                }
-            ],
-            "scoped": false
-        },
-        "rinfo": {
-            "address": "127.0.0.1",
-            "family": "IPv4",
-            "port": 43162,
-            "size": 72
-        }
+```json
+{
+    "pdu": {
+        "type": 166,
+        "id": 45385686,
+        "varbinds": [
+            {
+                "oid": "1.3.6.1.2.1.1.3.0",
+                "type": 67,
+                "value": 5
+            },
+            {
+                "oid": "1.3.6.1.6.3.1.1.4.1.0",
+                "type": 6,
+                "value": "1.3.6.1.6.3.1.1.5.2"
+            }
+        ],
+        "scoped": false
+    },
+    "rinfo": {
+        "address": "127.0.0.1",
+        "family": "IPv4",
+        "port": 43162,
+        "size": 72
     }
+}
+```
 
 ## receiver.getAuthorizer ()
 
@@ -1417,28 +1565,32 @@ the above four request-class PDUs.
 The agent also supports SNMP proxy forwarder applications with its singleton `Forwarder` instance,
 which is documented in the [Forwarder Module](#forwarder-module) section below.
 
-## snmp.createAgent (options, callback)
+## snmp.createAgent (options, callback, mib)
 
 The `createAgent()` function instantiates and returns an instance of the `Agent`
 class:
 
-    // Default options
-    var options = {
-        port: 161,
-        disableAuthorization: false,
-        engineID: "8000B98380XXXXXXXXXXXX", // where the X's are random hex digits
-        transport: "udp4"
-    };
+```js
+// Default options
+var options = {
+    port: 161,
+    disableAuthorization: false,
+    accessControlModelType: snmp.AccessControlModelType.None,
+    engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
+    address: null,
+    transport: "udp4"
+};
 
-    var callback = function (error, data) {
-        if ( error ) {
-            console.error (error);
-        } else {
-            console.log (JSON.stringify(data, null, 2));
-        }
-    };
+var callback = function (error, data) {
+    if ( error ) {
+        console.error (error);
+    } else {
+        console.log (JSON.stringify(data, null, 2));
+    }
+};
 
-    agent = snmp.createAgent (options, callback);
+agent = snmp.createAgent (options, callback);
+```
 
 The `options` and `callback` parameters are mandatory.  The `options` parameter is
 an object, possibly empty, and can contain the following fields:
@@ -1450,9 +1602,20 @@ an object, possibly empty, and can contain the following fields:
  * `disableAuthorization` - disables local authorization for all community-based
  notifications received and for those user-based notifications received with no
  message authentication or privacy (noAuthNoPriv) - defaults to false
+ * `accessControlModelType` - specifies which access control model to use.  Defaults
+ to `snmp.AccessControlModelType.None`, but can be set to `snmp.AccessControlModelType.Simple`
+ for further access control capabilities.  See the `Authorization` class description
+ for more information.
  * `engineID` - the engineID used for SNMPv3 communications, given as a hex string -
  defaults to a system-generated engineID containing elements of random
  * `transport` - the transport family to use - defaults to `udp4`
+ * `address` - the IP address to bind to - default to `null`, which means bind to all IP
+ addresses
+
+The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
+If not supplied, the agent creates itself a new empty `Mib` singleton.  If supplied,
+the `Mib` instance needs to be created and populated as per the [Mib Module](#mib-module)
+section below.
 
 ## agent.getAuthorizer ()
 
@@ -1463,6 +1626,11 @@ to the agent.  See the `Authorizer` section for further details.
 
 Returns the agent's singleton `Mib` instance, which holds all of the management data
 for the agent.
+
+## agent.setMib (mib)
+
+Sets the agent's singleton `Mib` instance to the supplied one.  The agent discards
+its existing `Mib` instance.
 
 ## agent.getForwarder ()
 
@@ -1495,13 +1663,30 @@ as the library still requires access to the correct keys for the message authent
 and encryption operations, and these keys are stored against a user in the user
 authorization list.
 
-The API allows the receiver's community authorization and user authorization lists
+The API allows the receiver's / agent's community authorization and user authorization lists
 to be managed with adds, queries and deletes.
+
+For an agent, there is a further optional access control check, that can limit the
+access for a given community or user according to the `AccessControlModelType` supplied
+as an option to the agent.  The default model type is `snmp.AccessControlModelType.None`,
+which means that - after the authorization list checks described in the preceding paragraphs -
+there is no further access control restrictions i.e. all requests are granted access by
+the agent.  A second access control model type `snmp.AccessControlModelType.Simple` can
+be selected, which creates a `SimpleAccessControlModel` object that can be manipulated
+to specify that a community or user has one of three levels of access to agent information:
+ * none
+ * read-only
+ * read-write
+
+More information on how to configure access with the `SimpleAccessControlModel` class is
+provided below under the description of that class.
 
 The authorizer instance can be obtained by using the `getAuthorizer()`
 call, for both the receiver and the agent.  For example:
 
-    receiver.getAuthorizer() .getCommunities();
+```js
+receiver.getAuthorizer ().getCommunities ();
+```
 
 ## authorizer.addCommunity (community)
 
@@ -1530,16 +1715,18 @@ is in the list, this call deletes the existing user, and replaces it with the su
 user, ensuring that only one user with a given name will exist in the list.  The user
 object is in the same format as that used for the `session.createV3Session()` call.
 
-    var user = {
-        name: "elsa"
-        level: snmp.SecurityLevel.authPriv,
-        authProtocol: snmp.AuthProtocols.sha,
-        authKey: "imlettingitgo",
-        privProtocol: snmp.PrivProtocols.des,
-        privKey: "intotheunknown"
-    };
+```js
+var user = {
+    name: "elsa",
+    level: snmp.SecurityLevel.authPriv,
+    authProtocol: snmp.AuthProtocols.sha,
+    authKey: "imlettingitgo",
+    privProtocol: snmp.PrivProtocols.des,
+    privKey: "intotheunknown"
+};
 
-    receiver.getAuthorizer ().addUser (elsa);
+receiver.getAuthorizer ().addUser (elsa);
+```
 
 ## authorizer.getUser (userName)
 
@@ -1555,12 +1742,100 @@ Returns the receiver's user authorization list.
 Deletes a user from the receiver's user authorization list.  Does nothing if the user
 with the supplied name is not in the list.
 
+## authorizer.getAccessControlModelType ()
+
+Returns the `snmp.AccessControlModelType` of this authorizer, which is one of:
+- `snmp.AccessControlModelType.None`
+- `snmp.AccessControlModelType.Simple`
+
+## authorizer.getAccessControlModel ()
+
+Returns the access control model object:
+- for a type of `snmp.AccessControlModelType.None` - returns null (as the access control check returns positive every time)
+- for a type of `snmp.AccessControlModelType.Simple` - returns a `SimpleAccessControlModel` object
+
+# Simple Access Control Model
+
+The `SimpleAccessControlModel` class can be optionally selected as the access control model used by an `Agent`.  The
+`SimpleAccessControlModel` provides basic three-level access control for a given community or user.
+The access levels are specified in the snmp.AccessLevel constant:
+ * `snmp.AccessLevel.None` - no access is granted to the community or user
+ * `snmp.AccessLevel.ReadOnly` - access is granted for the community or user for Get, GetNext and GetBulk requests but not Set requests
+ * `snmp.AccessLevel.ReadWrite` - access is granted for the community or user for Get, GetNext, GetBulk and Set requests
+
+The `SimpleAccessControlModel` is not created via a direct API call, but is created internally by an `Agent`'s `Authorizer` singleton.
+So an agent's access control model can be accessed with:
+
+```js
+var acm = agent.getAuthorizer ().getAccessControlModel ();
+```
+
+Note that any community or user that is used in any of the API calls in this section must first be created in the agent's `Authorizer`,
+otherwise the agent will fail the initial community/user list check that the authorizer performs.
+
+When using the Simple Access Control Model, the default access level for a newly created community or user in the
+`Authorizer` is read-only.
+
+Example use:
+
+```js
+var agent = snmp.createAgent({
+    accessControlModelType: snmp.AccessControlModelType.Simple
+}, function (error, data) {
+    // null callback for example brevity
+});
+var authorizer = agent.getAuthorizer ();
+authorizer.addCommunity ("public");
+authorizer.addCommunity ("private");
+authorizer.addUser ({
+    name: "fred",
+    level: snmp.SecurityLevel.noAuthNoPriv
+});
+var acm = authorizer.getAccessControlModel ();
+// Since read-only is the default, explicitly setting read-only access is not required - just shown here as an example
+acm.setCommunityAccess ("public", snmp.AccessLevel.ReadOnly);
+acm.setCommunityAccess ("private", snmp.AccessLevel.ReadWrite);
+acm.setUserAccess ("fred", snmp.AccessLevel.ReadWrite);
+```
+
+## simpleAccessControlModel.setCommunityAccess (community, accessLevel)
+
+Grant the given community the given access level.
+
+## simpleAccessControlModel.removeCommunityAccess (community)
+
+Remove all access for the given community.
+
+## simpleAccessControlModel.getCommunityAccessLevel (community)
+
+Return the access level for the given community.
+
+## simpleAccessControlModel.getCommunitiesAccess ()
+
+Return a list of all community access control entries defined by this access control model.
+
+## simpleAccessControlModel.setUserAccess (userName, accessLevel)
+
+Grant the given user the given access level.
+
+## simpleAccessControlModel.removeUserAccess (userName)
+
+Remove all access for the given user.
+
+## simpleAccessControlModel.getUserAccessLevel (userName)
+
+Return the access level for the given user.
+
+## simpleAccessControlModel.getUsersAccess ()
+
+Return a list of all user access control entries defined by this access control model.
+
+
 # Mib Module
 
-An `Agent` instance, when created, in turn creates an instance of the `Mib` class.  There
-is no direct API call to create a `Mib` instance; this creation is the responsibility of
-the agent.  An agent always has one and only one `Mib` instance.  The agent's `Mib`
-instance is accessed through the `agent.getMib ()` call.
+An `Agent` instance, when created, in turn creates an instance of the `Mib` class.
+An agent always has one and only one `Mib` instance.  The agent's `Mib` instance is
+accessed through the `agent.getMib ()` call.
 
 The MIB is a tree structure that holds management information.  Information is "addressed"
 in the tree by a series of integers, which form an Object ID (OID) from the root of the
@@ -1599,19 +1874,22 @@ On creation, an `Agent` instance creates a singleton instance of the `Mib` modul
 then register a "provider" to the agent's `Mib` instance that gives an interface to either a scalar
 data instance, or a table.
 
-    var myScalarProvider = {
-        name: "sysDescr",
-        type: snmp.MibProviderType.Scalar,
-        oid: "1.3.6.1.2.1.1.1",
-        scalarType: snmp.ObjectType.OctetString,
-        handler: function (mibRequest) {
-           // e.g. can update the MIB data before responding to the request here
-           mibRequest.done ();
-        }
-    };
-    var mib = agent.getMib ();
-    mib.registerProvider (myScalarProvider);
-    mib.setScalarValue ("sysDescr", "MyAwesomeHost");
+```js
+var myScalarProvider = {
+    name: "sysDescr",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.2.1.1.1",
+    scalarType: snmp.ObjectType.OctetString,
+    maxAccess: snmp.MaxAccess["read-write"],
+    handler: function (mibRequest) {
+       // e.g. can update the MIB data before responding to the request here
+       mibRequest.done ();
+    }
+};
+var mib = agent.getMib ();
+mib.registerProvider (myScalarProvider);
+mib.setScalarValue ("sysDescr", "MyAwesomeHost");
+```
 
 This code first gives the definition of a scalar "provider".  A further explanation of
 these fields is given in the `mib.registerProvider()` section.  Importantly, the `name`
@@ -1628,36 +1906,49 @@ At this point, the agent will serve up the value of this MIB node when the insta
 
 A table provider has a similar definition:
 
-    var myTableProvider = {
-        name: "smallIfTable",
-        type: snmp.MibProviderType.Table,
-        oid: "1.3.6.1.2.1.2.2.1",
-        tableColumns: [
-            {
-                number: 1,
-                name: "ifIndex",
-                type: snmp.ObjectType.Integer
-            },
-            {
-                number: 2,
-                name: "ifDescr",
-                type: snmp.ObjectType.OctetString
-            },
-            {
-                number: 3,
-                name: "ifType",
-                type: snmp.ObjectType.Integer
+```js
+var myTableProvider = {
+    name: "smallIfTable",
+    type: snmp.MibProviderType.Table,
+    oid: "1.3.6.1.2.1.2.2.1",
+    maxAccess: snmp.MaxAccess["not-accessible"],
+    tableColumns: [
+        {
+            number: 1,
+            name: "ifIndex",
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess["read-only"]
+        },
+        {
+            number: 2,
+            name: "ifDescr",
+            type: snmp.ObjectType.OctetString,
+            maxAccess: snmp.MaxAccess["read-write"],
+        },
+        {
+            number: 3,
+            name: "ifType",
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess["read-only"],
+            constraints: {
+                enumeration: {
+                    "1": "goodif",
+                    "2": "averageif",
+                    "3": "badif"
+                }
             }
-        ],
-        tableIndex: [
-            {
-                columnName: "ifIndex"
-            }
-        ]
-    };
-    var mib = agent.getMib ();
-    mib.registerProvider (myTableProvider);
-    mib.addTableRow ("smallIfTable", [1, "eth0", 6]);
+        }
+    ],
+    tableIndex: [
+        {
+            columnName: "ifIndex"
+        }
+    ]
+};
+var mib = agent.getMib ();
+mib.registerProvider (myTableProvider);
+mib.addTableRow ("smallIfTable", [1, "eth0", 6]);
+```
 
 Here, the provider definition takes two additions fields: `tableColumns` for the column defintions,
 and `tableIndex` for the columns used for row indexes.  In the example the `tableIndex` is the
@@ -1670,6 +1961,87 @@ The `oid` must be that of the "table entry" node, not its parent "table" node e.
 Note that there is no `handler` callback function in this particular example, so any interaction
 is directly between SNMP requests and MIB values with no other intervention.
 
+## Constraints
+Three types of constraints are supported: enumerations, integer
+ranges, and string sizes. These can be specified in a handler's
+`constraints` map, with keys `enumeration`, `ranges`, or `sizes`.
+
+Any SetRequest protocol operations are checked against the defined constraints, and are not
+actioned if the value in the SetRequest would violate the constraints e.g. the value is not
+a member of the defined enumeration.
+
+The MIB parser converts definitions such as this to `enumeration` constraints (see RFC 2578 Section 7.1.1):
+```
+SYNTAX       INTEGER { cont(0), alt(1) }
+```
+
+It converts definitions such as these to `ranges` constraints (see RFC 2578 Appendix A):
+```
+SYNTAX       Integer32 (172..184)
+```
+
+And it converts definitions like these to `sizes` constraints (see RFC 2578 Appendix A):
+```
+SYNTAX       OCTET STRING (SIZE (0..31))
+```
+
+### enumerations
+Enumerations identify each of the valid values of an object of type Integer, like this:
+```js
+constraints: {
+    enumeration: {
+        "1": "goodif",
+        "2": "averageif",
+        "3": "badif"
+    }
+```
+
+### ranges
+Ranges are used in Integer types, to limit the object's allowable
+values. They are specified using an array of maps. Each map optionally
+contains `min` and/or `max` values, specifying a single range.
+Mutliple ranges allow the union of values specified by those ranges.
+Specifying only `min` in a range allows all values greater than or
+equal to the specified one to be valid. Specifying only `max` in a
+range allows all values less than or equal to the specified one to be
+valid. This example shows that any value between 1 and 3 (inclusive)
+or 5 or greater is allowed, i.e., all integers greater than or equal
+to 1, except 4:
+```js
+constraints: {
+    ranges: [
+        { min: 1, max: 3 },
+        { min: 5 }
+    ]
+},
+```
+
+### sizes
+Sizes are used to limit the lengths of strings. The syntax is similar
+to `ranges`, allowing multiple ranges of sizes each potentially
+providing `min` and`max` values. A constraint that allows a string to
+be any length 1 or greater, except length 4, would look like this:
+```js
+constraints: {
+    sizes: [
+        { min: 1, max: 3 },
+        { min: 5 }
+    ]
+}
+```
+## snmp.createMib ()
+
+The `createMib()` function instantiates and returns an instance of the
+`Mib` class. The new Mib does not have any nodes (except for a single
+root node) and does not have any registered providers.
+
+Note that this is only usable for an agent, not an AgentX subagent.  Since an agent instanciates
+a `Mib` instance on creation, this call is not needed in many scenarios.  Two scenarios where it
+might be useful are:
+
+ * where you want to pre-populate a `Mib` instance with providers and scalar/tabular data
+ before creating the `Agent` instance itself.
+ * where you want to swap out an agent's existing `Mib` instance for an entirely new one.
 
 ## mib.registerProvider (definition)
 
@@ -1687,7 +2059,10 @@ A provider definition has these fields:
  * `scalarType`  *(mandatory for scalar types)* - only relevant to scalar provider type, this
   give the type of the variable, selected from `snmp.ObjectType`
  * `tableColumns` *(mandatory for table types)* - gives any array of column definition objects for the
- table.  Each column object must have a unique `number`, a `name` and a `type` from `snmp.ObjectType`.
+ table.  Each column object must have a unique `number`, a `name`, a `type` from `snmp.ObjectType`, and
+ a `maxAccess` value from `snmp.MaxAccess`. A column object with type `ObjectType.Integer` can optionally
+ contain a `constraints` object, the format and meaning of which is identical to that defined on a single
+ scalar provider (see the "Constraints" section above for further details on this).
  * `tableIndex` *(optional for table types)* - gives an array of index entry objects used for row indexes.
  Use a single-element array for a single-column index, and multiple values for a composite index.
  An index entry object has a `columnName` field, and if the entry is in another provider's table, then
@@ -1698,14 +2073,33 @@ A provider definition has these fields:
  table, and doesn't exist in the local table's column definitions.  If the `tableIndex` field is
  absent, `tableAugments` is mandatory i.e. one of `tableIndex` and `tableAugments` needs to be
  present to define the table index.
+ * `maxAccess` *(mandatory)* - specifies the maximum allowed access
+level provided by this provider. The allowable values are the
+numeric values from the MaxAccess export. If a `maxAccess` value is
+specified, a `get` request to the agent will return a `noAccess`
+error if `maxAccess` is not at least "read-only" (2). `maxAccess`
+must be at least "read-write" (3) for a `set` request to succeed.
+ * `defVal` *(optional)* - the default value to assign for scalar
+objects automatically created, when `maxAccess` is set to
+"read-create" (4). Note that table columns can specify such `defVal`
+default values in an identical way, to be used when a new row is to be
+automatically created, except that these are stored under the column
+object definition for each column. See `Automatic creation of
+objects`, below, for details.
  * `handler` *(optional)* - an optional callback function, which is called before the request to the
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
  The callback function takes a `MibRequest` instance, which has a `done()` function.  This
- must be called when finished processing the request.  The `MibRequest` also has an `oid` field
+ must be called when finished processing the request.  To signal an error, give a single error object
+ in the form of `{errorStatus: <status>}`, where `<status>` is a value from ErrorStatus e.g.
+ `{errorStatus: snmp.ErrorStatus.GeneralError}`.  The `MibRequest` also has an `oid` field
  with the instance OID being operated on, and an `operation` field with the request type from
  `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
  `setType` contain the value and type received in the `SetRequest` varbind.
+ * `constraints` *(optional for scalar types)* - an optional object to specify constraints for
+ integer-based enumerated types, integer range restrictions and string size restrictions.  Note that
+ table columns can specify such `constraints` in an identical way, except that these are stored under
+ the column object definition for each column.  See the "Constraints" section above for further details.
 
 After registering the provider with the MIB, the provider is referenced by its `name` in other API calls.
 
@@ -1781,12 +2175,12 @@ are the details of the conversions from index values to row instance OID sequenc
 - **ObjectType.OID** - the exact sequence of integers in the OID
 - **ObjectType.IpAddress** - a sequence of the four integers in the IP address
 
-## mib.getTableSingleCell (tableProviderName, columnIndex, rowIndex)
+## mib.getTableSingleCell (tableProviderName, columnNumber, rowIndex)
 
 Returns a single cell value from the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.
 
-## mib.setTableSingleCell (tableProviderName, columnIndex, rowIndex, value)
+## mib.setTableSingleCell (tableProviderName, columnNumber, rowIndex, value)
 
 Sets a single cell value at the column and row specified.  The row index array is specified
 in the same way as for the `getTableRowCells()` call.
@@ -1797,6 +2191,27 @@ Deletes a table row at the row index specified.  The row index array is specifie
 in the same way as for the `getTableRowCells()` call.  If this was the last row in the table,
 the table is pruned from the MIB, although the provider still remains registered with the MIB.
 Meaning that on the addition of another row, the table will be instantiated again.
+
+## mib.setScalarDefaultValue (tableProviderName, defaultValue)
+
+Adds a default value, called `defVal`, to a scalar provider. This
+default value will be used for automatic creation of the scalar's
+object instance, when its `maxAccess` value is "read-create". This
+method is of primary usefulness when providers are automatically
+created, e.g., via `store.getProvidersForModule`. See `Automatic
+creation of objects` for details.
+
+## mib.setTableRowDefaultValues (tableProviderName, defaultValues)
+
+Add default values, called `defVal`, to each table column in a table
+provider. These default values will be used for automatic creation of
+a table row. `defaultValues` must be an array of values of length
+equal to the length of the tableColumns array in the provider. When a
+specific column need not be given a default value, that element of the
+array should be set to `undefined`. This method is of primary
+usefulness when providers are automatically created, e.g., via
+`store.getProvidersForModule`. See `Automatic creation of objects` for
+details.
 
 ## mib.dump (options)
 
@@ -1811,7 +2226,9 @@ options fields (all are booleans that default to `true`):
 
 For example:
 
-    mib.dump ();
+```js
+mib.dump ();
+```
 
 produces this sort of output:
 
@@ -1827,6 +2244,139 @@ produces this sort of output:
 1.3.6.1.2.1.2.2.1.3.2 = Integer: 6
 ```
 
+## Automatic creation of objects
+
+### Scalars
+When a provider's `maxAccess` is set to "read-create" (4), then an
+agent request to access the object's instance will result in the
+instance being automatically created, if `defVal` is also defined in
+the provider. The new instance's value will be set to the default
+value specified in `defVal`. If `defVal` is not specified in the
+provider, then the instance will not, by default, be automatically
+created.
+
+The default handling of instance creation can be overridden by
+providing a handler in a provider, called, `createHandler`. The
+handler is passed a `createRequest` object, containing a singe
+field `provider` - the provider for the scalar. The
+method must return either the value to be assigned to the
+newly-created instance; or `undefined` to indicate that the instance
+should not be created.
+
+An example handler method, accomplishing the default behavior, looks
+like this:
+
+```
+function scalarReadCreateHandler (createRequest) {
+    let provider = createRequest.provider;
+	// If there's a default value specified...
+	if ( typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+}
+```
+
+Automatic instance creation of table rows can be disabled entirely by
+setting `createHandler` to null.
+
+### Table rows
+
+Table rows may be added to a table, or deleted from it, if the table
+has a column defined with `rowStatus: true` in the provider.
+The semantics of adding and deleting rows is described beginning on
+page 5 of RFC 2579, and in
+[SNMPv2-TC.mib](https://github.com/markabrahams/node-net-snmp/blob/master/lib/mibs/SNMPv2-TC.mib#L186).
+The row status column is typically referred to, simply, as the Status
+column.
+
+When a row does not exist and its Status column's value is set to
+"createAndGo" (4) or "createAndWait" (5), the specified row will be
+created, by default, using the default values specified in each
+non-index and non-Status column's `defVal` member. If `defVal` is not
+specified in any column other than index or Status columns, the row
+will not be automatically created.
+
+The default handling of row creation can be overridden by providing a
+handler in a provider, called, `createHandler`. The handler is
+passed a `createRequest` object with three fields:
+
+- `provider` - the provider for the table
+- `action` - the action invoking the row creation: one of "createAndGo" or "createAndWait"
+- `row` - an array of columns forming the table index, where each element of
+  the array is an index into the `tableColumns` array of the provider
+
+The handler must return either an array of column values for the new
+row, with exactly one value corresponding to each column specified in
+`tableColumns`; or `undefined` to indicate that the row should not be
+created.
+
+An example handler method, accomplishing the default behavior, looks
+like this:
+
+```
+function tableRowStatusHandler(createRequest) {
+    let provider = createRequest.provider;
+    let action = createRequest.action;
+    let row = createRequest.row;
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo, index) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Replace the action with the appropriate state
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo] ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
+}
+```
+
+Automatic instance creation of table rows can be disabled entirely by
+setting `createHandler` to null.
+
+### Mapping from MIB files
+
+When a MIB is read from a file using `ModuleStore`'s `loadFromFile`
+method, and the providers for that module automatically created via a
+call to the store's `getProvidersForModule` method, default values
+specified as `DEFVAL` in the MIB are mapped to `defVal` within the
+provider, both from scalar definitions and from table columns
+definitions.
+
+If the MIB files do not contain some or all of the default values
+needed for automatic creation of scalar objects or table rows, the
+methods `Mib.setScalarDefaultValue` and `Mib.setTableRowDefaultValues`
+may be used to conveniently add defaults after the MIB files are
+loaded.
+
 # Using This Module: Module Store
 
 The library supports MIB parsing by providing an interface to a `ModuleStore` instance into which
@@ -1836,25 +2386,30 @@ Additionally, once a MIB is loaded into the module store, you can produce a list
 definitions that an `Agent` can register (see the `Agent` documentation for more details), so
 that you can start manipulating all the values defined in your MIB file right away.
 
-    // Create a module store, load a MIB module, and fetch its JSON representation
-    var store = snmp.createModuleStore ();
-    store.loadFromFile ("/path/to/your/mibs/SNMPv2-MIB.mib");
-    var jsonModule = store.getModule ("SNMPv2-MIB");
+```js
+// Create a module store, load a MIB module, and fetch its JSON representation
+var store = snmp.createModuleStore ();
+store.loadFromFile ("/path/to/your/mibs/SNMPv2-MIB.mib");
+var jsonModule = store.getModule ("SNMPv2-MIB");
 
-    // Fetch MIB providers, create an agent, and register the providers with your agent
-    var providers = store.getProvidersForModule ("SNMPv2-MIB");
-    // Not recommended - but authorization and callback turned off for example brevity
-    var agent = snmp.createAgent ({disableAuthorization: true}, function (error, data) {});
-    var mib = agent.getMib ();
-    mib.registerProviders (providers);
+// Fetch MIB providers, create an agent, and register the providers with your agent
+var providers = store.getProvidersForModule ("SNMPv2-MIB");
+// Not recommended - but authorization and callback turned off for example brevity
+var agent = snmp.createAgent ({disableAuthorization: true}, function (error, data) {});
+var mib = agent.getMib ();
+mib.registerProviders (providers);
 
-    // Start manipulating the MIB through the registered providers using the `Mib` API calls
-    mib.setScalarValue ("sysDescr", "The most powerful system you can think of");
-    mib.setScalarValue ("sysName", "multiplied-by-six");
-    mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreamed up this MIB", 20]);
+// Start manipulating the MIB through the registered providers using the `Mib` API calls
+mib.setScalarValue ("sysDescr", "The most powerful system you can think of");
+mib.setScalarValue ("sysName", "multiplied-by-six");
+mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreamed up this MIB", 20]);
+```
 
-    // Then hit those bad boys with your favourite SNMP tools (or library ;-), e.g.
-    snmpwalk -v 2c -c public localhost 1.3.6.1
+Then hit those bad boys with your favourite SNMP tools (or library ;-), e.g.
+
+```bash
+snmpwalk -v 2c -c public localhost 1.3.6.1
+```
 
 Meaning you can get right to the implementation of your MIB functionality with a minimum of
 boilerplate code.
@@ -1883,7 +2438,7 @@ MIB module name, not the source file name.  The MIB module name is the name prec
 `DEFINITIONS ::= BEGIN` in the MIB file, and is often the very first thing present in
 a MIB file.
 
-Note that if your MIB dependends on ("imports") definitions from other MIB files, these must be
+Note that if your MIB depends on ("imports") definitions from other MIB files, these must be
 loaded first e.g. the popular **IF-MIB** uses definitions from the **IANAifType-MIB**, which
 therefore must be loaded first.  These dependencies are listed in the **IMPORTS** section of
 a MIB module, usually near the top of a MIB file.  The pre-loaded "base" MIB modules contain
@@ -1924,7 +2479,7 @@ of "proxy" entries, each of which configures a named SNMPv3 context name to enab
 to a given target host with the given user credentials.  The `Forwarder` supports proxying
 of SNMPv3 sessions only.
 
-```
+```js
 var forwarder = agent.getForwarder ();
 forwarder.addProxy({
     context: "slatescontext",
@@ -1945,7 +2500,7 @@ You can query the proxy with a local agent user (added with the agent's `Authori
 Assuming your proxy runs on localhost, port 161, you could add local user "fred", and access the proxy
 with the new "fred" user.
 
-```
+```js
 var authorizer = agent.getAuthorizer();
 authorizer.addUser ({
     name: "fred",
@@ -2044,15 +2599,17 @@ on the MIB object.
 The `createSubagent ()` function instantiates and returns an instance of the `Subagent`
 class:
 
-    // Default options
-    var options = {
-        master: localhost
-        masterPort: 705,
-        timeout: 0,
-        description: "Node net-snmp AgentX sub-agent",
-    };
+```js
+// Default options
+var options = {
+    master: "localhost",
+    masterPort: 705,
+    timeout: 0,
+    description: "Node net-snmp AgentX sub-agent"
+};
 
-    subagent = snmp.createSubagent (options);
+subagent = snmp.createSubagent (options);
+```
 
 The `options` parameter is a mandatory object, possibly empty, and can contain the following fields:
 
@@ -2266,7 +2823,7 @@ Example programs are included under the module's `example` directory.
  * Correct reference to non-existant `req` variable in the `Session` objects
    constructor (should be `this`)
 
-## Version 1.1.18 - 15/05/2015
+## Version 1.1.18 - 15/05/2016
 
  * Correct argument number and names to the `snmp.createSession()` function
  * Add missing braces to an example in the README.md file
@@ -2409,6 +2966,258 @@ Example programs are included under the module's `example` directory.
 ## Version 2.6.7 - 01/06/2020
 
  * Add support for zero-index rows in agent tables
+
+## Version 2.6.8 - 08/07/2020
+
+ * Fix GetBulk async mibRequest handling
+
+## Version 2.7.0 - 09/07/2020
+
+ * Add MIB create, add MIB setting for agent, and fix MIB error response crash
+
+## Version 2.7.1 - 17/07/2020
+
+ * Fix AgentX subagent noSuchInstance crash
+
+## Version 2.7.2 - 02/09/2020
+
+ * Declare variables to fix transpile errors
+
+## Version 2.7.3 - 02/09/2020
+
+ * MIB getobject callback convention update
+
+## Version 2.7.4 - 02/09/2020
+
+ * Fix columnNumber check in getColumnProvider
+
+## Version 2.7.5 - 05/09/2020
+
+ * Fix parsing of iso.org
+
+## Version 2.7.6 - 05/09/2020
+
+ * Add revisions/descriptions MIB parsing
+
+## Version 2.7.7 - 07/09/2020
+
+ * Fix double callback invocation on callback error
+
+## Version 2.8.0 - 09/09/2020
+
+ * Add eslint rules and conformance, fix AgentX subagent Unregister
+
+## Version 2.8.1 - 09/09/2020
+
+ * Add Travis CI configuration
+
+## Version 2.9.0 - 12/09/2020
+
+ * Add simple access control model for agent
+
+## Version 2.9.1 - 17/09/2020
+
+ * Add MIB integer enumeration constraints for providers and SetRequests
+
+## Version 2.9.2 - 25/09/2020
+
+ * Fix MIB parsing of files leading with a comment
+
+## Version 2.9.3 - 12/10/2020
+
+ * Add bind address support for agent
+
+## Version 2.9.4 - 14/10/2020
+
+ * Fix getBulk documentation errors
+
+## Version 2.9.5 - 15/10/2020
+
+ * Add syntax definitions to README code blocks
+
+## Version 2.9.6 - 24/10/2020
+
+ * Fix providers for MIB table at end of MIB file
+
+## Version 2.9.7 - 06/11/2020
+
+ * Add README.cn.md for Chinese language
+
+## Version 2.9.8 - 21/11/2020
+
+ * Add support for BER long-form length encoding
+
+## Version 2.10.0 - 02/12/2020
+
+ * Add message security level checks against user security level
+
+## Version 2.10.1 - 25/12/2020
+
+ * Fix UNITS key recognition in MIB parser
+
+## Version 3.0.0 - 30/12/2020
+
+ * Add MAX-ACCESS provider and agent support
+
+## Version 3.0.1 - 01/01/2021
+
+ * Fix error indexing for failed varbinds from agent
+
+## Version 3.0.2 - 03/01/2021
+
+ * Fix agent hang on GetBulk with non-repeaters greater than varbind length
+
+## Version 3.0.3 - 03/01/2021
+
+ * Add agent errorStatus signalling support
+
+## Version 3.0.4 - 06/01/2021
+
+ * Prevent non-accessible index objects from being columns in table rows
+
+## Version 3.0.5 - 08/01/2021
+
+ * Fix MIB file reading from relative paths
+
+## Version 3.0.6 - 10/01/2021
+
+ * Fix MIB parsing of tab characters
+
+## Version 3.0.7 - 10/01/2021
+
+ * Fix MIB parsing of quoted unmatched brackets
+
+## Version 3.1.0 - 14/01/2021
+
+ * Add RowStatus support to agent tables
+
+## Version 3.1.1 - 14/01/2021
+
+ * Fix scalar default createHandler
+
+## Version 3.2.0 - 22/01/2021
+
+ * Add row index, row and column to agent table callback info
+
+## Version 3.2.1 - 23/01/2021
+
+ * Fix agent scalar read-create and set
+
+## Version 3.2.2 - 23/01/2021
+
+ * Fix agent state for row deletion to empty table
+
+## Version 3.2.3 - 23/01/2021
+
+ * Fix return from agent set outside of constraints to WrongValue
+
+## Version 3.3.0 - 24/01/2021
+
+ * Add range and size constraints support to MIB variables
+
+## Version 3.3.1 - 25/01/2021
+
+ * Add range and size constraints to MIB parsing and provider generation
+
+## Version 3.3.2 - 26/01/2021
+
+ * Add range and size constraints documentation
+
+## Version 3.3.3 - 27/01/2021
+
+ * Add column position to agent varbind callback
+
+## Version 3.4.0 - 27/01/2021
+
+ * Add 256-bit AES encryption
+
+## Version 3.4.1 - 28/01/2021
+
+ * Add oldValue to agent callback info and convert buffers to strings
+
+## Version 3.4.2 - 05/02/2021
+
+ * Add error codes to ResponseInvalidError
+
+## Version 3.4.3 - 06/02/2021
+
+ * Add documentation for ResponseInvalidError error codes
+
+## Version 3.5.0 - 28/02/2021
+
+ * Add engineID option to v3 session
+
+## Version 3.5.1 - 28/02/2021
+
+ * Fix MIB parsing of sized integers without whitespace
+
+## Version 3.5.2 - 02/03/2021
+
+ * Fix MIB table index handling of Buffer type
+
+## Version 3.5.3 - 22/08/2021
+
+ * Fix error with empty varbind array in walk
+
+## Version 3.5.4 - 24/08/2021
+
+ * Align accessible-for-notify row cell behaviour with not-accessible behaviour
+
+## Version 3.5.5 - 29/09/2021
+
+ * Add missing return in getbulk feedCb callback non-repeaters error condition
+
+## Version 3.5.6 - 20/10/2021
+
+ * Fix GetNext OID calculation for off-tree OIDs
+
+## Version 3.5.7 - 20/11/2021
+
+ * Fix handing of null varbinds in walk
+
+## Version 3.5.8 - 24/11/2021
+
+ * Fix processing of negative integers larger than 32 bits
+
+## Version 3.6.0 - 18/02/2022
+
+ * Add calculated key cache to remove authNoPriv and authPriv performance bottleneck
+
+## Version 3.6.1 - 21/03/2022
+
+ * Add v3 context to non-initial PDUs
+
+## Version 3.6.2 - 07/04/2022
+
+ * Add option for receiver to receive client authentication identity
+
+## Version 3.6.3 - 26/04/2022
+
+ * Fix logic for v3 time synchronization requirement
+
+## Version 3.6.4 - 14/05/2022
+
+ * Ignore mismatched returned OIDs by default
+
+## Version 3.7.0 - 04/06/2022
+
+ * Add SHA-2 authentication support (SHA-224, SHA-256, SHA-384, SHA-512)
+
+## Version 3.7.1 - 05/06/2022
+
+ * Fix DES decrypt corruption issue
+
+## Version 3.7.2 - 05/06/2022
+
+ * Improve getBulk response handling
+
+## Version 3.8.0 - 07/06/2022
+
+ * Fix 32-bit unsigned integer writing and add integer range checking
+
+## Version 3.8.1 - 07/06/2022
+
+ * Add bit string type to varbind reading
 
 # License
 

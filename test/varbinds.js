@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-expressions */
 
 var ber    = require ('asn1-ber').Ber;
 var assert = require('assert');
@@ -10,7 +11,7 @@ describe('parseInt()', function() {
 		var reader = new ber.Reader(writer.buffer);
 		it('returns a negative integer', function() {
 			assert.equal(-3, snmp.ObjectParser.readInt(reader));
-		})
+		});
 	}),
 	describe('given a positive integer', function() {
 		var writer = new ber.Writer();
@@ -18,8 +19,8 @@ describe('parseInt()', function() {
 		var reader = new ber.Reader(writer.buffer);
 		it('returns a positive integer', function() {
 			assert.equal(3245689, snmp.ObjectParser.readInt(reader));
-		})
-	})
+		});
+	});
 });
 
 describe('parseUint()', function() {
@@ -29,7 +30,7 @@ describe('parseUint()', function() {
 		var reader = new ber.Reader(writer.buffer);
 		it('returns a positive integer', function() {
 			assert.equal(3242425, snmp.ObjectParser.readUint(reader));
-		})
+		});
 	}),
 	describe('given a negative integer', function() {
 		var writer = new ber.Writer();
@@ -37,6 +38,6 @@ describe('parseUint()', function() {
 		var reader = new ber.Reader(writer.buffer);
 		it('returns a positive integer', function() {
 			assert.equal(253, snmp.ObjectParser.readUint(reader));
-		})
-	})
+		});
+	});
 });

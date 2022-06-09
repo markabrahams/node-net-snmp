@@ -11,7 +11,10 @@ var crypto = require ("crypto");
 var mibparser = require ("./lib/mib");
 var DEBUG = false;
 
-var MAX_INT32 = 2147483647;
+var MIN_SIGNED_INT32 = -2147483648;
+var MAX_SIGNED_INT32 = 2147483647;
+var MIN_UNSIGNED_INT32 = 0;
+var MAX_UNSIGNED_INT32 = 4294967295;
 
 function debug (line) {
 	if ( DEBUG ) {
@@ -59,6 +62,7 @@ _expandConstantObject (ErrorStatus);
 var ObjectType = {
 	1: "Boolean",
 	2: "Integer",
+	3: "BitString",
 	4: "OctetString",
 	5: "Null",
 	6: "OID",
@@ -138,7 +142,11 @@ _expandConstantObject (SecurityLevel);
 var AuthProtocols = {
 	"1": "none",
 	"2": "md5",
-	"3": "sha"
+	"3": "sha",
+	"4": "sha224",
+	"5": "sha256",
+	"6": "sha384",
+	"7": "sha512"
 };
 
 _expandConstantObject (AuthProtocols);
@@ -146,7 +154,9 @@ _expandConstantObject (AuthProtocols);
 var PrivProtocols = {
 	"1": "none",
 	"2": "des",
-	"4": "aes"
+	"4": "aes",
+	"6": "aes256b",
+	"8": "aes256r"
 };
 
 _expandConstantObject (PrivProtocols);
@@ -204,13 +214,81 @@ var AgentXPduType = {
 
 _expandConstantObject (AgentXPduType);
 
+var AccessControlModelType = {
+	0: "None",
+	1: "Simple"
+};
+
+_expandConstantObject (AccessControlModelType);
+
+var AccessLevel = {
+	0: "None",
+	1: "ReadOnly",
+	2: "ReadWrite"
+};
+
+_expandConstantObject (AccessLevel);
+
+// SMIv2 MAX-ACCESS values
+var MaxAccess = {
+	0: "not-accessible",
+	1: "accessible-for-notify",
+	2: "read-only",
+	3: "read-write",
+	4: "read-create"
+};
+
+_expandConstantObject (MaxAccess);
+
+// SMIv1 ACCESS value mapping to SMIv2 MAX-ACCESS
+var AccessToMaxAccess = {
+	"not-accessible": "not-accessible",
+	"read-only": "read-only",
+	"read-write": "read-write",
+	"write-only": "read-write"
+};
+
+var RowStatus = {
+	// status values
+	1: "active",
+	2: "notInService",
+	3: "notReady",
+
+	// actions
+	4: "createAndGo",
+	5: "createAndWait",
+	6: "destroy"
+};
+
+_expandConstantObject (RowStatus);
+
+var ResponseInvalidCode = {
+	1: "EIp4AddressSize",
+	2: "EUnknownObjectType",
+	3: "EUnknownPduType",
+	4: "ECouldNotDecrypt",
+	5: "EAuthFailure",
+	6: "EReqResOidNoMatch",
+//	7: "ENonRepeaterCountMismatch",  // no longer used
+	8: "EOutOfOrder",
+	9: "EVersionNoMatch",
+	10: "ECommunityNoMatch",
+	11: "EUnexpectedReport",
+	12: "EResponseNotHandled",
+	13: "EUnexpectedResponse"
+};
+
+_expandConstantObject (ResponseInvalidCode);
+
 /*****************************************************************************
  ** Exception class definitions
  **/
 
-function ResponseInvalidError (message) {
+function ResponseInvalidError (message, code, info) {
 	this.name = "ResponseInvalidError";
 	this.message = message;
+	this.code = code;
+	this.info = info;
 	Error.captureStackTrace(this, ResponseInvalidError);
 }
 util.inherits (ResponseInvalidError, Error);
@@ -304,59 +382,26 @@ function oidInSubtree (oidString, nextString) {
 	return true;
 }
 
-/**
- ** Some SNMP agents produce integers on the wire such as 00 ff ff ff ff.
- ** The ASN.1 BER parser we use throws an error when parsing this, which we
- ** believe is correct.  So, we decided not to bother the "asn1" developer(s)
- ** with this, instead opting to work around it here.
- **
- ** If an integer is 5 bytes in length we check if the first byte is 0, and if so
- ** simply drop it and parse it like it was a 4 byte integer, otherwise throw
- ** an error since the integer is too large.
- **/
-
-function readInt (buffer) {
-	return readUint (buffer, true);
+function readInt32 (buffer) {
+	var parsedInt = buffer.readInt ();
+	if ( ! Number.isInteger(parsedInt) ) {
+		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
+	}
+	if ( parsedInt < MIN_SIGNED_INT32 || parsedInt > MAX_SIGNED_INT32 ) {
+		throw new RangeError('Read integer ' + parsedInt + ' is outside the signed 32-bit range');
+	}
+	return parsedInt;
 }
 
-function readIpAddress (buffer) {
-	var bytes = buffer.readString (ObjectType.IpAddress, true);
-	if (bytes.length != 4)
-		throw new ResponseInvalidError ("Length '" + bytes.length
-				+ "' of IP address '" + bytes.toString ("hex")
-				+ "' is not 4");
-	var value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
-	return value;
-}
-
-function readUint (buffer, isSigned) {
-	buffer.readByte ();
-	var length = buffer.readByte ();
-	var value = 0;
-	var signedBitSet = false;
-
-	if (length > 5) {
-		 throw new RangeError ("Integer too long '" + length + "'");
-	} else if (length == 5) {
-		if (buffer.readByte () !== 0)
-			throw new RangeError ("Integer too long '" + length + "'");
-		length = 4;
+function readUint32 (buffer) {
+	var parsedInt = buffer.readInt ();
+	if ( ! Number.isInteger(parsedInt) ) {
+		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
 	}
-
-	for (var i = 0; i < length; i++) {
-		value *= 256;
-		value += buffer.readByte ();
-
-		if (isSigned && i <= 0) {
-			if ((value & 0x80) == 0x80)
-				signedBitSet = true;
-		}
+	if ( parsedInt < MIN_UNSIGNED_INT32 || parsedInt > MAX_UNSIGNED_INT32 ) {
+		throw new RangeError('Read integer ' + parsedInt + ' is outside the unsigned 32-bit range');
 	}
-	
-	if (signedBitSet)
-		value -= (1 << (i * 8));
-
-	return value;
+	return parsedInt;
 }
 
 function readUint64 (buffer) {
@@ -365,12 +410,24 @@ function readUint64 (buffer) {
 	return value;
 }
 
+function readIpAddress (buffer) {
+	var bytes = buffer.readString (ObjectType.IpAddress, true);
+	if (bytes.length != 4)
+		throw new ResponseInvalidError ("Length '" + bytes.length
+				+ "' of IP address '" + bytes.toString ("hex")
+				+ "' is not 4", ResponseInvalidCode.EIp4AddressSize);
+	var value = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + bytes[3];
+	return value;
+}
+
 function readVarbindValue (buffer, type) {
 	var value;
 	if (type == ObjectType.Boolean) {
 		value = buffer.readBoolean ();
 	} else if (type == ObjectType.Integer) {
-		value = readInt (buffer);
+		value = readInt32 (buffer);
+	} else if (type == ObjectType.BitString) {
+		value = buffer.readBitString();
 	} else if (type == ObjectType.OctetString) {
 		value = buffer.readString (null, true);
 	} else if (type == ObjectType.Null) {
@@ -382,11 +439,11 @@ function readVarbindValue (buffer, type) {
 	} else if (type == ObjectType.IpAddress) {
 		value = readIpAddress (buffer);
 	} else if (type == ObjectType.Counter) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.Gauge) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.TimeTicks) {
-		value = readUint (buffer);
+		value = readUint32 (buffer);
 	} else if (type == ObjectType.Opaque) {
 		value = buffer.readString (ObjectType.Opaque, true);
 	} else if (type == ObjectType.Counter64) {
@@ -405,7 +462,7 @@ function readVarbindValue (buffer, type) {
 		value = null;
 	} else {
 		throw new ResponseInvalidError ("Unknown type '" + type
-				+ "' in response");
+				+ "' in response", ResponseInvalidCode.EUnknownObjectType);
 	}
 	return value;
 }
@@ -433,10 +490,24 @@ function readVarbinds (buffer, varbinds) {
 	}
 }
 
-function writeUint (buffer, type, value) {
-	var b = Buffer.alloc (4);
-	b.writeUInt32BE (value, 0);
-	buffer.writeBuffer (b, type);
+function writeInt32 (buffer, type, value) {
+	if ( ! Number.isInteger(value) ) {
+		throw new TypeError('Value to write as integer ' + value + ' is not an integer');
+	}
+	if ( value < MIN_SIGNED_INT32 || value > MAX_SIGNED_INT32 ) {
+		throw new RangeError('Integer to write ' + value + ' is outside the signed 32-bit range');
+	}
+	buffer.writeInt(value, type);
+}
+
+function writeUint32 (buffer, type, value) {
+	if ( ! Number.isInteger(value) ) {
+		throw new TypeError('Value to write as integer ' + value + ' is not an integer');
+	}
+	if ( value < MIN_UNSIGNED_INT32 || value > MAX_UNSIGNED_INT32 ) {
+		throw new RangeError('Integer to write ' + value + ' is outside the unsigned 32-bit range');
+	}
+	buffer.writeInt(value, type);
 }
 
 function writeUint64 (buffer, value) {
@@ -458,7 +529,7 @@ function writeVarbinds (buffer, varbinds) {
 					buffer.writeBoolean (value ? true : false);
 					break;
 				case ObjectType.Integer: // also Integer32
-					buffer.writeInt (value);
+					writeInt32 (buffer, ObjectType.Integer, value);
 					break;
 				case ObjectType.OctetString:
 					if (typeof value == "string")
@@ -480,13 +551,13 @@ function writeVarbinds (buffer, varbinds) {
 					buffer.writeBuffer (Buffer.from (bytes), 64);
 					break;
 				case ObjectType.Counter: // also Counter32
-					writeUint (buffer, ObjectType.Counter, value);
+					writeUint32 (buffer, ObjectType.Counter, value);
 					break;
 				case ObjectType.Gauge: // also Gauge32 & Unsigned32
-					writeUint (buffer, ObjectType.Gauge, value);
+					writeUint32 (buffer, ObjectType.Gauge, value);
 					break;
 				case ObjectType.TimeTicks:
-					writeUint (buffer, ObjectType.TimeTicks, value);
+					writeUint32 (buffer, ObjectType.TimeTicks, value);
 					break;
 				case ObjectType.Opaque:
 					buffer.writeBuffer (value, ObjectType.Opaque);
@@ -523,11 +594,13 @@ var SimplePdu = function () {
 SimplePdu.prototype.toBuffer = function (buffer) {
 	buffer.startSequence (this.type);
 
-	buffer.writeInt (this.id);
-	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+	writeInt32 (buffer, ObjectType.Integer, this.id);
+	writeInt32 (buffer, ObjectType.Integer,
+			(this.type == PduType.GetBulkRequest)
 			? (this.options.nonRepeaters || 0)
 			: 0);
-	buffer.writeInt ((this.type == PduType.GetBulkRequest)
+	writeInt32 (buffer, ObjectType.Integer,
+			(this.type == PduType.GetBulkRequest)
 			? (this.options.maxRepetitions || 0)
 			: 0);
 
@@ -541,15 +614,15 @@ SimplePdu.prototype.initializeFromVariables = function (id, varbinds, options) {
 	this.varbinds = varbinds;
 	this.options = options || {};
 	this.contextName = (options && options.context) ? options.context : "";
-}
+};
 
 SimplePdu.prototype.initializeFromBuffer = function (reader) {
 	this.type = reader.peek ();
 	reader.readSequence ();
 
-	this.id = reader.readInt ();
-	this.nonRepeaters = reader.readInt ();
-	this.maxRepetitions = reader.readInt ();
+	this.id = readInt32 (reader);
+	this.nonRepeaters = readInt32 (reader);
+	this.maxRepetitions = readInt32 (reader);
 
 	this.varbinds = [];
 	readVarbinds (reader, this.varbinds);
@@ -654,9 +727,9 @@ TrapPdu.prototype.toBuffer = function (buffer) {
 	buffer.writeOID (this.enterprise);
 	buffer.writeBuffer (Buffer.from (this.agentAddr.split (".")),
 			ObjectType.IpAddress);
-	buffer.writeInt (this.generic);
-	buffer.writeInt (this.specific);
-	writeUint (buffer, ObjectType.TimeTicks,
+	writeInt32 (buffer, ObjectType.Integer, this.generic);
+	writeInt32 (buffer, ObjectType.Integer, this.specific);
+	writeUint32 (buffer, ObjectType.TimeTicks,
 			this.upTime || Math.floor (process.uptime () * 100));
 
 	writeVarbinds (buffer, this.varbinds);
@@ -670,9 +743,9 @@ TrapPdu.createFromBuffer = function (reader) {
 
 	pdu.enterprise = reader.readOID ();
 	pdu.agentAddr = readIpAddress (reader);
-	pdu.generic = reader.readInt ();
-	pdu.specific = reader.readInt ();
-	pdu.upTime = readUint (reader)
+	pdu.generic = readInt32 (reader);
+	pdu.specific = readInt32 (reader);
+	pdu.upTime = readUint32 (reader);
 
 	pdu.varbinds = [];
 	readVarbinds (reader, pdu.varbinds);
@@ -725,9 +798,9 @@ var SimpleResponsePdu = function() {
 SimpleResponsePdu.prototype.toBuffer = function (writer) {
 	writer.startSequence (this.type);
 
-	writer.writeInt (this.id);
-	writer.writeInt (this.errorStatus || 0);
-	writer.writeInt (this.errorIndex || 0);
+	writeInt32 (writer, ObjectType.Integer, this.id);
+	writeInt32 (writer, this.errorStatus || 0);
+	writeInt32 (writer, ObjectType.Integer, this.errorIndex || 0);
 	writeVarbinds (writer, this.varbinds);
 	writer.endSequence ();
 
@@ -736,9 +809,9 @@ SimpleResponsePdu.prototype.toBuffer = function (writer) {
 SimpleResponsePdu.prototype.initializeFromBuffer = function (reader) {
 	reader.readSequence (this.type);
 
-	this.id = reader.readInt ();
-	this.errorStatus = reader.readInt ();
-	this.errorIndex = reader.readInt ();
+	this.id = readInt32 (reader);
+	this.errorStatus = readInt32 (reader);
+	this.errorIndex = readInt32 (reader);
 
 	this.varbinds = [];
 	readVarbinds (reader, this.varbinds);
@@ -793,7 +866,7 @@ var readPdu = function (reader, scoped) {
 	var contextEngineID;
 	var contextName;
 	if ( scoped ) {
-		reader.readSequence ();
+		reader = new ber.Reader (reader.readString (ber.Sequence | ber.Constructor, true));
 		contextEngineID = reader.readString (ber.OctetString, true);
 		contextName = reader.readString ();
 	}
@@ -819,7 +892,7 @@ var readPdu = function (reader, scoped) {
 		pdu = GetBulkRequestPdu.createFromBuffer (reader);
 	} else {
 		throw new ResponseInvalidError ("Unknown PDU type '" + type
-				+ "' in response");
+				+ "' in response", ResponseInvalidCode.EUnknownPduType);
 	}
 	if ( scoped ) {
 		pdu.contextEngineID = contextEngineID;
@@ -836,20 +909,50 @@ var createDiscoveryPdu = function (context) {
 var Authentication = {};
 
 Authentication.HMAC_BUFFER_SIZE = 1024*1024;
-Authentication.HMAC_BLOCK_SIZE = 64;
-Authentication.AUTHENTICATION_CODE_LENGTH = 12;
-Authentication.AUTH_PARAMETERS_PLACEHOLDER = Buffer.from('8182838485868788898a8b8c', 'hex');
 
 Authentication.algorithms = {};
 
 Authentication.algorithms[AuthProtocols.md5] = {
-	// KEY_LENGTH: 16,
+	KEY_LENGTH: 16,
+	AUTHENTICATION_CODE_LENGTH: 12,
 	CRYPTO_ALGORITHM: 'md5'
 };
 
 Authentication.algorithms[AuthProtocols.sha] = {
-	// KEY_LENGTH: 20,
+	KEY_LENGTH: 20,
+	AUTHENTICATION_CODE_LENGTH: 12,
 	CRYPTO_ALGORITHM: 'sha1'
+};
+
+Authentication.algorithms[AuthProtocols.sha224] = {
+	KEY_LENGTH: 28,
+	AUTHENTICATION_CODE_LENGTH: 16,
+	CRYPTO_ALGORITHM: 'sha224'
+};
+
+Authentication.algorithms[AuthProtocols.sha256] = {
+	KEY_LENGTH: 32,
+	AUTHENTICATION_CODE_LENGTH: 24,
+	CRYPTO_ALGORITHM: 'sha256'
+};
+
+Authentication.algorithms[AuthProtocols.sha384] = {
+	KEY_LENGTH: 48,
+	AUTHENTICATION_CODE_LENGTH: 32,
+	CRYPTO_ALGORITHM: 'sha384'
+};
+
+Authentication.algorithms[AuthProtocols.sha512] = {
+	KEY_LENGTH: 64,
+	AUTHENTICATION_CODE_LENGTH: 48,
+	CRYPTO_ALGORITHM: 'sha512'
+};
+
+Authentication.authToKeyCache = {};
+
+Authentication.computeCacheKey = function (authProtocol, authPasswordString, engineID) {
+	var engineIDString = engineID.toString('base64');
+	return authProtocol + authPasswordString + engineIDString;
 };
 
 // Adapted from RFC3414 Appendix A.2.1. Password to Key Sample Code for MD5
@@ -857,19 +960,16 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	var hashAlgorithm;
 	var firstDigest;
 	var finalDigest;
-	var buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE);
-	var bufOffset = 0;
-	var passwordIndex = 0;
-	var count = 0;
-	var password = Buffer.from (authPasswordString);
+	var buf;
 	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
-	
-	while (count < Authentication.HMAC_BUFFER_SIZE) {
-		for (var i = 0; i < Authentication.HMAC_BLOCK_SIZE; i++) {
-			buf.writeUInt8(password[passwordIndex++ % password.length], bufOffset++);
-		}
-		count += Authentication.HMAC_BLOCK_SIZE;
+
+	var cacheKey = Authentication.computeCacheKey(authProtocol, authPasswordString, engineID);
+	if (Authentication.authToKeyCache[cacheKey] !== undefined) {
+		return Authentication.authToKeyCache[cacheKey];
 	}
+
+	buf = Buffer.alloc (Authentication.HMAC_BUFFER_SIZE, authPasswordString);
+
 	hashAlgorithm = crypto.createHash(cryptoAlgorithm);
 	hashAlgorithm.update(buf);
 	firstDigest = hashAlgorithm.digest();
@@ -880,99 +980,67 @@ Authentication.passwordToKey = function (authProtocol, authPasswordString, engin
 	hashAlgorithm.update(engineID);
 	hashAlgorithm.update(firstDigest);
 	finalDigest = hashAlgorithm.digest();
-	debug ("Localized key: " + finalDigest.toString('hex'));
+	// debug ("Localized key: " + finalDigest.toString('hex'));
 
+	Authentication.authToKeyCache[cacheKey] = finalDigest;
 	return finalDigest;
 };
 
-Authentication.addParametersToMessageBuffer = function (messageBuffer, authProtocol, authPassword, engineID) {
-	var authenticationParametersOffset;
+Authentication.getParametersLength = function (authProtocol) {
+	return Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH;
+};
+
+Authentication.writeParameters = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
 	var digestToAdd;
 
-	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf (Authentication.AUTH_PARAMETERS_PLACEHOLDER);
-	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
-
 	digestToAdd = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
-	digestToAdd.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
-	debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
+	digestToAdd.copy (digestInMessage);
+	// debug ("Added Auth Parameters: " + digestToAdd.toString('hex'));
 };
 
 Authentication.isAuthentic = function (messageBuffer, authProtocol, authPassword, engineID, digestInMessage) {
-	var authenticationParametersOffset;
+	var savedDigest;
 	var calculatedDigest;
 
+	if (digestInMessage.length !== Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH)
+		return false;
+
+	// save original authenticationParameters field in message
+	savedDigest = Buffer.from (digestInMessage);
+
 	// clear the authenticationParameters field in message
-	authenticationParametersOffset = messageBuffer.indexOf (digestInMessage);
-	messageBuffer.fill (0, authenticationParametersOffset, authenticationParametersOffset + Authentication.AUTHENTICATION_CODE_LENGTH);
+	digestInMessage.fill (0);
 
 	calculatedDigest = Authentication.calculateDigest (messageBuffer, authProtocol, authPassword, engineID);
 
 	// replace previously cleared authenticationParameters field in message
-	digestInMessage.copy (messageBuffer, authenticationParametersOffset, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
+	savedDigest.copy (digestInMessage);
 
-	debug ("Digest in message: " + digestInMessage.toString('hex'));
-	debug ("Calculated digest: " + calculatedDigest.toString('hex'));
-	return calculatedDigest.equals (digestInMessage, Authentication.AUTHENTICATION_CODE_LENGTH);
+	// debug ("Digest in message: " + digestInMessage.toString('hex'));
+	// debug ("Calculated digest: " + calculatedDigest.toString('hex'));
+	return calculatedDigest.equals (digestInMessage);
 };
 
 Authentication.calculateDigest = function (messageBuffer, authProtocol, authPassword, engineID) {
 	var authKey = Authentication.passwordToKey (authProtocol, authPassword, engineID);
 
-	// Adapted from RFC3147 Section 6.3.1. Processing an Outgoing Message
-	var hashAlgorithm;
-	var kIpad;
-	var kOpad;
-	var firstDigest;
-	var finalDigest;
-	var truncatedDigest;
-	var i;
 	var cryptoAlgorithm = Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM;
-
-	if (authKey.length > Authentication.HMAC_BLOCK_SIZE) {
-		hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-		hashAlgorithm.update (authKey);
-		authKey = hashAlgorithm.digest ();
-	}
-
-	// MD(K XOR opad, MD(K XOR ipad, msg))
-	kIpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
-	kOpad = Buffer.alloc (Authentication.HMAC_BLOCK_SIZE);
-	for (i = 0; i < authKey.length; i++) {
-		kIpad[i] = authKey[i] ^ 0x36;
-		kOpad[i] = authKey[i] ^ 0x5c;
-	}
-	kIpad.fill (0x36, authKey.length);
-	kOpad.fill (0x5c, authKey.length);
-
-	// inner MD
-	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-	hashAlgorithm.update (kIpad);
-	hashAlgorithm.update (messageBuffer);
-	firstDigest = hashAlgorithm.digest ();
-	// outer MD
-	hashAlgorithm = crypto.createHash (cryptoAlgorithm);
-	hashAlgorithm.update (kOpad);
-	hashAlgorithm.update (firstDigest);
-	finalDigest = hashAlgorithm.digest ();
-
-	truncatedDigest = Buffer.alloc (Authentication.AUTHENTICATION_CODE_LENGTH);
-	finalDigest.copy (truncatedDigest, 0, 0, Authentication.AUTHENTICATION_CODE_LENGTH);
-	return truncatedDigest;
+	var hmacAlgorithm = crypto.createHmac (cryptoAlgorithm, authKey);
+	hmacAlgorithm.update (messageBuffer);
+	var digest = hmacAlgorithm.digest ();
+	return digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH);
 };
 
 var Encryption = {};
 
-Encryption.PRIV_PARAMETERS_PLACEHOLDER = Buffer.from ('9192939495969798', 'hex');
-
 Encryption.encryptPdu = function (privProtocol, scopedPdu, privPassword, authProtocol, engine) {
 	var encryptFunction = Encryption.algorithms[privProtocol].encryptPdu;
-	return encryptFunction (scopedPdu, privPassword, authProtocol, engine);
+	return encryptFunction (scopedPdu, privProtocol, privPassword, authProtocol, engine);
 };
 
-Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
+Encryption.decryptPdu = function (privProtocol, encryptedPdu, privParameters, privPassword, authProtocol, engine) {
 	var decryptFunction = Encryption.algorithms[privProtocol].decryptPdu;
-	return decryptFunction (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable);
+	return decryptFunction (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine);
 };
 
 Encryption.debugEncrypt = function (encryptionKey, iv, plainPdu, encryptedPdu) {
@@ -1000,7 +1068,57 @@ Encryption.generateLocalizedKey = function (algorithm, authProtocol, privPasswor
 	return encryptionKey;
 };
 
-Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engine) {
+Encryption.generateLocalizedKeyBlumenthal = function (algorithm, authProtocol, privPassword, engineID) {
+	let authKeyLength;
+	let privLocalizedKey;
+	let encryptionKey;
+	let rounds;
+	let hashInput;
+	let nextHash;
+	let hashAlgorithm;
+
+	authKeyLength = Authentication.algorithms[authProtocol].KEY_LENGTH;
+	rounds = Math.ceil (algorithm.KEY_LENGTH / authKeyLength );
+	encryptionKey = Buffer.alloc (algorithm.KEY_LENGTH);
+	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engineID);
+	nextHash = privLocalizedKey;
+
+	for ( let round = 0 ; round < rounds ; round++ ) {
+		nextHash.copy (encryptionKey, round * authKeyLength, 0, authKeyLength);
+		if ( round < rounds - 1 ) {
+			hashAlgorithm = crypto.createHash (Authentication.algorithms[authProtocol].CRYPTO_ALGORITHM);
+			hashInput = Buffer.alloc ( (round + 1) * authKeyLength);
+			encryptionKey.copy (hashInput, round * authKeyLength, 0, (round + 1) * authKeyLength);
+			hashAlgorithm.update (hashInput);
+			nextHash = hashAlgorithm.digest ();
+		}
+	}
+
+	return encryptionKey;
+};
+
+Encryption.generateLocalizedKeyReeder = function (algorithm, authProtocol, privPassword, engineID) {
+	let authKeyLength;
+	let privLocalizedKey;
+	let encryptionKey;
+	let rounds;
+	let nextPasswordInput;
+
+	authKeyLength = Authentication.algorithms[authProtocol].KEY_LENGTH;
+	rounds = Math.ceil (algorithm.KEY_LENGTH / authKeyLength );
+	encryptionKey = Buffer.alloc (algorithm.KEY_LENGTH);
+	nextPasswordInput = privPassword;
+
+	for ( let round = 0 ; round < rounds ; round++ ) {
+		privLocalizedKey = Authentication.passwordToKey (authProtocol, nextPasswordInput, engineID);
+		privLocalizedKey.copy (encryptionKey, round * authKeyLength, 0, authKeyLength);
+		nextPasswordInput = privLocalizedKey;
+	}
+
+	return encryptionKey;
+};
+
+Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, authProtocol, engine) {
 	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var encryptionKey;
@@ -1011,6 +1129,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	var paddedScopedPduLength;
 	var paddedScopedPdu;
 	var encryptedPdu;
+	var cipher;
 
 	encryptionKey = Encryption.generateLocalizedKey (des, authProtocol, privPassword, engine.engineID);
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
@@ -1047,7 +1166,7 @@ Encryption.encryptPduDes = function (scopedPdu, privPassword, authProtocol, engi
 	};
 };
 
-Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine, forceAutoPaddingDisable) {
+Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine) {
 	var des = Encryption.algorithms[PrivProtocols.des];
 	var privLocalizedKey;
 	var decryptionKey;
@@ -1056,6 +1175,7 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 	var iv;
 	var i;
 	var decryptedPdu;
+	var decipher;
 
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
 	decryptionKey = Buffer.alloc (des.KEY_LENGTH);
@@ -1070,23 +1190,9 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 	}
 	
 	decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
-	if ( forceAutoPaddingDisable ) {
-		decipher.setAutoPadding(false);
-	}
+	decipher.setAutoPadding(false);
 	decryptedPdu = decipher.update (encryptedPdu);
-	// This try-catch is a workaround for a seemingly incorrect error condition
-	// - where sometimes a decrypt error is thrown with decipher.final()
-	// It replaces this line which should have been sufficient:
-	// decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
-	try {
-		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
-	} catch (error) {
-		// debug("Decrypt error: " + error);
-		decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
-		decipher.setAutoPadding(false);
-		decryptedPdu = decipher.update (encryptedPdu);
-		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
-	}
+	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
 	// Encryption.debugDecrypt (decryptionKey, iv, encryptedPdu, decryptedPdu);
 
 	return decryptedPdu;
@@ -1094,6 +1200,8 @@ Encryption.decryptPduDes = function (encryptedPdu, privParameters, privPassword,
 
 Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	var iv;
+	var engineBootsBuffer;
+	var engineTimeBuffer;
 
 	// iv = engineBoots(4) | engineTime(4) | salt(8)
 	iv = Buffer.alloc (aes.BLOCK_LENGTH);
@@ -1106,17 +1214,18 @@ Encryption.generateIvAes = function (aes, engineBoots, engineTime, salt) {
 	salt.copy (iv, 8, 0, 8);
 
 	return iv;
-}
+};
 
-Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engine) {
-	var aes = Encryption.algorithms[PrivProtocols.aes];
+Encryption.encryptPduAes = function (scopedPdu, privProtocol, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[privProtocol];
+	var localizationAlgorithm = aes.localizationAlgorithm;
 	var encryptionKey;
 	var salt;
 	var iv;
 	var cipher;
 	var encryptedPdu;
 
-	encryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	encryptionKey = localizationAlgorithm (aes, authProtocol, privPassword, engine.engineID);
 	salt = Buffer.alloc (8).fill (crypto.randomBytes (8), 0, 8);
 	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, salt);
 	cipher = crypto.createCipheriv (aes.CRYPTO_ALGORITHM, encryptionKey, iv);
@@ -1130,14 +1239,15 @@ Encryption.encryptPduAes = function (scopedPdu, privPassword, authProtocol, engi
 	};
 };
 
-Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword, authProtocol, engine) {
-	var aes = Encryption.algorithms[PrivProtocols.aes];
+Encryption.decryptPduAes = function (encryptedPdu, privProtocol, privParameters, privPassword, authProtocol, engine) {
+	var aes = Encryption.algorithms[privProtocol];
+	var localizationAlgorithm = aes.localizationAlgorithm;
 	var decryptionKey;
 	var iv;
 	var decipher;
 	var decryptedPdu;
 
-	decryptionKey = Encryption.generateLocalizedKey (aes, authProtocol, privPassword, engine.engineID);
+	decryptionKey = localizationAlgorithm (aes, authProtocol, privPassword, engine.engineID);
 	iv = Encryption.generateIvAes (aes, engine.engineBoots, engine.engineTime, privParameters);
 	decipher = crypto.createDecipheriv (aes.CRYPTO_ALGORITHM, decryptionKey, iv);
 	decryptedPdu = decipher.update (encryptedPdu);
@@ -1147,11 +1257,6 @@ Encryption.decryptPduAes = function (encryptedPdu, privParameters, privPassword,
 	return decryptedPdu;
 };
 
-Encryption.addParametersToMessageBuffer = function (messageBuffer, msgPrivacyParameters) {
-	privacyParametersOffset = messageBuffer.indexOf (Encryption.PRIV_PARAMETERS_PLACEHOLDER);
-	msgPrivacyParameters.copy (messageBuffer, privacyParametersOffset, 0, Encryption.DES_IV_LENGTH);
-};
-
 Encryption.algorithms = {};
 
 Encryption.algorithms[PrivProtocols.des] = {
@@ -1159,7 +1264,8 @@ Encryption.algorithms[PrivProtocols.des] = {
 	KEY_LENGTH: 8,
 	BLOCK_LENGTH: 8,
 	encryptPdu: Encryption.encryptPduDes,
-	decryptPdu: Encryption.decryptPduDes
+	decryptPdu: Encryption.decryptPduDes,
+	localizationAlgorithm: Encryption.generateLocalizedKey
 };
 
 Encryption.algorithms[PrivProtocols.aes] = {
@@ -1167,7 +1273,26 @@ Encryption.algorithms[PrivProtocols.aes] = {
 	KEY_LENGTH: 16,
 	BLOCK_LENGTH: 16,
 	encryptPdu: Encryption.encryptPduAes,
-	decryptPdu: Encryption.decryptPduAes
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKey
+};
+
+Encryption.algorithms[PrivProtocols.aes256b] = {
+	CRYPTO_ALGORITHM: 'aes-256-cfb',
+	KEY_LENGTH: 32,
+	BLOCK_LENGTH: 16,
+	encryptPdu: Encryption.encryptPduAes,
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKeyBlumenthal
+};
+
+Encryption.algorithms[PrivProtocols.aes256r] = {
+	CRYPTO_ALGORITHM: 'aes-256-cfb',
+	KEY_LENGTH: 32,
+	BLOCK_LENGTH: 16,
+	encryptPdu: Encryption.encryptPduAes,
+	decryptPdu: Encryption.decryptPduAes,
+	localizationAlgorithm: Encryption.generateLocalizedKeyReeder
 };
 
 /*****************************************************************************
@@ -1175,7 +1300,7 @@ Encryption.algorithms[PrivProtocols.aes] = {
  **/
 
 var Message = function () {
-}
+};
 
 Message.prototype.getReqId = function () {
 	return this.version == Version3 ? this.msgGlobalData.msgID : this.pdu.id;
@@ -1187,7 +1312,7 @@ Message.prototype.toBuffer = function () {
 	} else {
 		return this.toBufferCommunity();
 	}
-}
+};
 
 Message.prototype.toBufferCommunity = function () {
 	if (this.buffer)
@@ -1197,7 +1322,7 @@ Message.prototype.toBufferCommunity = function () {
 
 	writer.startSequence ();
 
-	writer.writeInt (this.version);
+	writeInt32 (writer, ObjectType.Integer, this.version);
 	writer.writeString (this.community);
 
 	this.pdu.toBuffer (writer);
@@ -1214,57 +1339,6 @@ Message.prototype.toBufferV3 = function () {
 
 	if (this.buffer)
 		return this.buffer;
-
-	var writer = new ber.Writer ();
-
-	writer.startSequence ();
-
-	writer.writeInt (this.version);
-
-	// HeaderData
-	writer.startSequence ();
-	writer.writeInt (this.msgGlobalData.msgID);
-	writer.writeInt (this.msgGlobalData.msgMaxSize);
-	writer.writeByte (ber.OctetString);
-	writer.writeByte (1);
-	writer.writeByte (this.msgGlobalData.msgFlags);
-	writer.writeInt (this.msgGlobalData.msgSecurityModel);
-	writer.endSequence ();
-
-	// msgSecurityParameters
-	var msgSecurityParametersWriter = new ber.Writer ();
-	msgSecurityParametersWriter.startSequence ();
-	//msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
-	// writing a zero-length buffer fails - should fix asn1-ber for this condition
-	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
-		msgSecurityParametersWriter.writeString ("");
-	} else {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
-	}
-	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineBoots);
-	msgSecurityParametersWriter.writeInt (this.msgSecurityParameters.msgAuthoritativeEngineTime);
-	msgSecurityParametersWriter.writeString (this.msgSecurityParameters.msgUserName);
-
-	if ( this.hasAuthentication() ) {
-		msgSecurityParametersWriter.writeBuffer (Authentication.AUTH_PARAMETERS_PLACEHOLDER, ber.OctetString);
-	// should never happen where msgFlags has no authentication but authentication parameters still present
-	} else if ( this.msgSecurityParameters.msgAuthenticationParameters.length > 0 ) {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgAuthenticationParameters, ber.OctetString);
-	} else {
-		msgSecurityParametersWriter.writeString ("");
-	}
-
-	if ( this.hasPrivacy() ) {
-		msgSecurityParametersWriter.writeBuffer (Encryption.PRIV_PARAMETERS_PLACEHOLDER, ber.OctetString);
-	// should never happen where msgFlags has no privacy but privacy parameters still present
-	} else if ( this.msgSecurityParameters.msgPrivacyParameters.length > 0 ) {
-		msgSecurityParametersWriter.writeBuffer (this.msgSecurityParameters.msgPrivacyParameters, ber.OctetString);
-	} else {
-		 msgSecurityParametersWriter.writeString ("");
-	}
-	msgSecurityParametersWriter.endSequence ();
-
-	writer.writeBuffer (msgSecurityParametersWriter.buffer, ber.OctetString);
 
 	// ScopedPDU
 	var scopedPduWriter = new ber.Writer ();
@@ -1287,22 +1361,75 @@ Message.prototype.toBufferV3 = function () {
 		};
 		encryptionResult = Encryption.encryptPdu (this.user.privProtocol, scopedPduWriter.buffer,
 				this.user.privKey, this.user.authProtocol, authoritativeEngine);
+	}
+
+	var writer = new ber.Writer ();
+
+	writer.startSequence ();
+
+	writeInt32 (writer, ObjectType.Integer, this.version);
+
+	// HeaderData
+	writer.startSequence ();
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgID);
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgMaxSize);
+	writer.writeByte (ber.OctetString);
+	writer.writeByte (1);
+	writer.writeByte (this.msgGlobalData.msgFlags);
+	writeInt32 (writer, ObjectType.Integer, this.msgGlobalData.msgSecurityModel);
+	writer.endSequence ();
+
+	// msgSecurityParameters
+	writer.startSequence (ber.OctetString);
+	writer.startSequence ();
+	//writer.writeString (this.msgSecurityParameters.msgAuthoritativeEngineID);
+	// writing a zero-length buffer fails - should fix asn1-ber for this condition
+	if ( this.msgSecurityParameters.msgAuthoritativeEngineID.length == 0 ) {
+		writer.writeString ("");
+	} else {
+		writer.writeBuffer (this.msgSecurityParameters.msgAuthoritativeEngineID, ber.OctetString);
+	}
+	writeInt32 (writer, ObjectType.Integer, this.msgSecurityParameters.msgAuthoritativeEngineBoots);
+	writeInt32 (writer, ObjectType.Integer, this.msgSecurityParameters.msgAuthoritativeEngineTime);
+	writer.writeString (this.msgSecurityParameters.msgUserName);
+
+	var msgAuthenticationParameters = '';
+	if ( this.hasAuthentication() ) {
+		var authParametersLength = Authentication.getParametersLength (this.user.authProtocol);
+		msgAuthenticationParameters = Buffer.alloc (authParametersLength);
+		writer.writeBuffer (msgAuthenticationParameters, ber.OctetString);
+	} else {
+		writer.writeString ("");
+	}
+	var msgAuthenticationParametersOffset = writer._offset - msgAuthenticationParameters.length;
+
+	if ( this.hasPrivacy() ) {
+		writer.writeBuffer (encryptionResult.msgPrivacyParameters, ber.OctetString);
+	} else {
+		writer.writeString ("");
+	}
+	msgAuthenticationParametersOffset -= writer._offset;
+	writer.endSequence ();
+	writer.endSequence ();
+	msgAuthenticationParametersOffset += writer._offset;
+
+	if ( this.hasPrivacy() ) {
 		writer.writeBuffer (encryptionResult.encryptedPdu, ber.OctetString);
 	} else {
 		writer.writeBuffer (scopedPduWriter.buffer);
 	}
 
+	msgAuthenticationParametersOffset -= writer._offset;
 	writer.endSequence ();
+	msgAuthenticationParametersOffset += writer._offset;
 
 	this.buffer = writer.buffer;
 
-	if ( this.hasPrivacy() ) {
-		Encryption.addParametersToMessageBuffer(this.buffer, encryptionResult.msgPrivacyParameters);
-	}
-
 	if ( this.hasAuthentication() ) {
-		Authentication.addParametersToMessageBuffer(this.buffer, this.user.authProtocol, this.user.authKey,
-			this.msgSecurityParameters.msgAuthoritativeEngineID);
+		msgAuthenticationParameters = this.buffer.subarray (msgAuthenticationParametersOffset,
+			msgAuthenticationParametersOffset + msgAuthenticationParameters.length);
+		Authentication.writeParameters (this.buffer, this.user.authProtocol, this.user.authKey,
+			this.msgSecurityParameters.msgAuthoritativeEngineID, msgAuthenticationParameters);
 	}
 
 	return this.buffer;
@@ -1337,22 +1464,10 @@ Message.prototype.decryptPdu = function (user, responseCb) {
 		decryptedPduReader = new ber.Reader (decryptedPdu);
 		this.pdu = readPdu(decryptedPduReader, true);
 		return true;
-	// really really occasionally the decrypt truncates a single byte
-	// causing an ASN read failure in readPdu()
-	// in this case, disabling auto padding decrypts the PDU correctly
-	// this try-catch provides the workaround for this condition
-	} catch (possibleTruncationError) {
-		try {
-			decryptedPdu = Encryption.decryptPdu(user.privProtocol, this.encryptedPdu,
-					this.msgSecurityParameters.msgPrivacyParameters, user.privKey, user.authProtocol,
-					this.msgSecurityParameters.msgAuthoritativeEngineID, true);
-			decryptedPduReader = new ber.Reader (decryptedPdu);
-			this.pdu = readPdu(decryptedPduReader, true);
-			return true;
-		} catch (error) {
-			responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error));
-			return false;
-		}
+	} catch (error) {
+		responseCb (new ResponseInvalidError ("Failed to decrypt PDU: " + error,
+				ResponseInvalidCode.ECouldNotDecrypt));
+		return false;
 	}
 
 };
@@ -1365,9 +1480,9 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 		responseCb (new ResponseInvalidError ("Authentication digest "
 				+ this.msgSecurityParameters.msgAuthenticationParameters.toString ('hex')
 				+ " received in message does not match digest "
-				+ Authentication.calculateDigest (buffer, user.authProtocol, user.authKey,
+				+ Authentication.calculateDigest (this.buffer, user.authProtocol, user.authKey,
 					this.msgSecurityParameters.msgAuthoritativeEngineID).toString ('hex')
-				+ " calculated for message") );
+				+ " calculated for message", ResponseInvalidCode.EAuthFailure, { user }));
 		return false;
 	}
 
@@ -1381,7 +1496,7 @@ Message.prototype.setMsgFlags = function (bitPosition, flag) {
 			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - Math.pow(2, bitPosition) );
 		}
 	}
-}
+};
 
 Message.prototype.hasAuthentication = function () {
 	return this.msgGlobalData && this.msgGlobalData.msgFlags && this.msgGlobalData.msgFlags & 1;
@@ -1527,7 +1642,7 @@ Message.createDiscoveryV3 = function (pdu) {
 		level: SecurityLevel.noAuthNoPriv
 	};
 	return Message.createRequestV3 (emptyUser, msgSecurityParameters, pdu);
-}
+};
 
 Message.createFromBuffer = function (buffer, user) {
 	var reader = new ber.Reader (buffer);
@@ -1535,7 +1650,7 @@ Message.createFromBuffer = function (buffer, user) {
 
 	reader.readSequence ();
 
-	message.version = reader.readInt ();
+	message.version = readInt32 (reader);
 
 	if (message.version != 3) {
 		message.community = reader.readString ();
@@ -1544,20 +1659,20 @@ Message.createFromBuffer = function (buffer, user) {
 		// HeaderData
 		message.msgGlobalData = {};
 		reader.readSequence ();
-		message.msgGlobalData.msgID = reader.readInt ();
-		message.msgGlobalData.msgMaxSize = reader.readInt ();
+		message.msgGlobalData.msgID = readInt32 (reader);
+		message.msgGlobalData.msgMaxSize = readInt32 (reader);
 		message.msgGlobalData.msgFlags = reader.readString (ber.OctetString, true)[0];
-		message.msgGlobalData.msgSecurityModel = reader.readInt ();
+		message.msgGlobalData.msgSecurityModel = readInt32 (reader);
 
 		// msgSecurityParameters
 		message.msgSecurityParameters = {};
 		var msgSecurityParametersReader = new ber.Reader (reader.readString (ber.OctetString, true));
 		msgSecurityParametersReader.readSequence ();
 		message.msgSecurityParameters.msgAuthoritativeEngineID = msgSecurityParametersReader.readString (ber.OctetString, true);
-		message.msgSecurityParameters.msgAuthoritativeEngineBoots = msgSecurityParametersReader.readInt ();
-		message.msgSecurityParameters.msgAuthoritativeEngineTime = msgSecurityParametersReader.readInt ();
+		message.msgSecurityParameters.msgAuthoritativeEngineBoots = readInt32 (msgSecurityParametersReader);
+		message.msgSecurityParameters.msgAuthoritativeEngineTime = readInt32 (msgSecurityParametersReader);
 		message.msgSecurityParameters.msgUserName = msgSecurityParametersReader.readString ();
-		message.msgSecurityParameters.msgAuthenticationParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
+		message.msgSecurityParameters.msgAuthenticationParameters = msgSecurityParametersReader.readString (ber.OctetString, true);
 		message.msgSecurityParameters.msgPrivacyParameters = Buffer.from(msgSecurityParametersReader.readString (ber.OctetString, true));
 
 		if ( message.hasPrivacy() ) {
@@ -1651,9 +1766,13 @@ var Session = function (target, authenticator, options) {
 			? options.backwardsGetNexts
 			: true;
 
+	this.reportOidMismatchErrors = (typeof options.reportOidMismatchErrors !== 'undefined')
+            ? options.reportOidMismatchErrors
+            : false;
+
 	DEBUG = options.debug;
 
-	this.engine = new Engine ();
+	this.engine = new Engine (options.engineID);
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -1693,21 +1812,23 @@ function _generateId (bitSize) {
 }
 
 Session.prototype.get = function (oids, responseCb) {
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+				if ( reportOidMismatchErrors && req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid ) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid
-							+ "' in request at positiion '" + i + "' does not "
+							+ "' in request at position '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -1734,6 +1855,7 @@ Session.prototype.get = function (oids, responseCb) {
 
 Session.prototype.getBulk = function () {
 	var oids, nonRepeaters, maxRepetitions, responseCb;
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
 	var backwardsGetNexts = this.backwardsGetNexts;
 
 	if (arguments.length >= 4) {
@@ -1755,67 +1877,59 @@ Session.prototype.getBulk = function () {
 
 	function feedCb (req, message) {
 		var pdu = message.pdu;
+		var reqVarbinds = req.message.pdu.varbinds;
 		var varbinds = [];
 		var i = 0;
 
-		// first walk through and grab non-repeaters
-		if (pdu.varbinds.length < nonRepeaters) {
-			req.responseCb (new ResponseInvalidError ("Varbind count in "
-					+ "response '" + pdu.varbinds.length + "' is less than "
-					+ "non-repeaters '" + nonRepeaters + "' in request"));
-		} else {
-			for ( ; i < nonRepeaters; i++) {
-				if (isVarbindError (pdu.varbinds[i])) {
-					varbinds.push (pdu.varbinds[i]);
-				} else if (! oidFollowsOid (req.message.pdu.varbinds[i].oid,
-						pdu.varbinds[i].oid)) {
-					req.responseCb (new ResponseInvalidError ("OID '"
-							+ req.message.pdu.varbinds[i].oid + "' in request at "
-							+ "positiion '" + i + "' does not precede "
-							+ "OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+		for ( ; i < reqVarbinds.length && i < pdu.varbinds.length; i++) {
+			if (isVarbindError (pdu.varbinds[i])) {
+				if ( reportOidMismatchErrors && reqVarbinds[i].oid != pdu.varbinds[i].oid ) {
+					req.responseCb (new ResponseInvalidError ("OID '" + reqVarbinds[i].oid
+							+ "' in request at position '" + i + "' does not "
+							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
-				} else {
-					varbinds.push (pdu.varbinds[i]);
+				}
+			} else {
+				if ( ! backwardsGetNexts && ! oidFollowsOid (reqVarbinds[i].oid, pdu.varbinds[i].oid)) {
+					req.responseCb (new ResponseInvalidError ("OID '" + reqVarbinds[i].oid
+							+ "' in request at positiion '" + i + "' does not "
+							+ "precede OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EOutOfOrder));
+					return;
 				}
 			}
+			if (i < nonRepeaters)
+				varbinds.push (pdu.varbinds[i]);
+			else
+				varbinds.push ([pdu.varbinds[i]]);
 		}
 
-		var repeaters = req.message.pdu.varbinds.length - nonRepeaters;
+		var repeaters = reqVarbinds.length - nonRepeaters;
 
-		// secondly walk through and grab repeaters
-		if (pdu.varbinds.length % (repeaters)) {
-			req.responseCb (new ResponseInvalidError ("Varbind count in "
-					+ "response '" + pdu.varbinds.length + "' is not a "
-					+ "multiple of repeaters '" + repeaters
-					+ "' plus non-repeaters '" + nonRepeaters + "' in request"));
-		} else {
-			while (i < pdu.varbinds.length) {
-				for (var j = 0; j < repeaters; j++, i++) {
-					var reqIndex = nonRepeaters + j;
-					var respIndex = i;
+		for ( ; i < pdu.varbinds.length; i++) {
+			var reqIndex = (i - nonRepeaters) % repeaters + nonRepeaters;
+			var prevIndex = i - repeaters;
+			var prevOid = pdu.varbinds[prevIndex].oid;
 
-					if (isVarbindError (pdu.varbinds[respIndex])) {
-						if (! varbinds[reqIndex])
-							varbinds[reqIndex] = [];
-						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					} else if ( ! backwardsGetNexts && ! oidFollowsOid (
-							req.message.pdu.varbinds[reqIndex].oid,
-							pdu.varbinds[respIndex].oid)) {
-						req.responseCb (new ResponseInvalidError ("OID '"
-								+ req.message.pdu.varbinds[reqIndex].oid
-								+ "' in request at positiion '" + (reqIndex)
-								+ "' does not precede OID '"
-								+ pdu.varbinds[respIndex].oid
-								+ "' in response at position '" + (respIndex) + "'"));
-						return;
-					} else {
-						if (! varbinds[reqIndex])
-							varbinds[reqIndex] = [];
-						varbinds[reqIndex].push (pdu.varbinds[respIndex]);
-					}
+			if (isVarbindError (pdu.varbinds[i])) {
+				if ( reportOidMismatchErrors && prevOid != pdu.varbinds[i].oid ) {
+					req.responseCb (new ResponseInvalidError ("OID '" + prevOid
+							+ "' in response at position '" + prevIndex + "' does not "
+							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
+					return;
+				}
+			} else {
+				if ( ! backwardsGetNexts && ! oidFollowsOid (prevOid, pdu.varbinds[i].oid)) {
+					req.responseCb (new ResponseInvalidError ("OID '" + prevOid
+							+ "' in response at positiion '" + prevIndex + "' does not "
+							+ "precede OID '" + pdu.varbinds[i].oid + "' in response "
+							+ "at position '" + i + "'", ResponseInvalidCode.EOutOfOrder));
+					return;
 				}
 			}
+			varbinds[reqIndex].push (pdu.varbinds[i]);
 		}
 
 		req.responseCb (null, varbinds);
@@ -1850,7 +1964,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (isVarbindError (pdu.varbinds[i])) {
@@ -1861,7 +1975,7 @@ Session.prototype.getNext = function (oids, responseCb) {
 							+ req.message.pdu.varbinds[i].oid + "' in request at "
 							+ "positiion '" + i + "' does not precede "
 							+ "OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.OutOfOrder));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -1927,7 +2041,7 @@ Session.prototype.inform = function () {
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Inform OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
 				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
@@ -1935,7 +2049,7 @@ Session.prototype.inform = function () {
 							+ req.message.pdu.varbinds[i].oid
 							+ "' in inform at positiion '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -1990,59 +2104,56 @@ Session.prototype.onError = function (error) {
 Session.prototype.onMsg = function (buffer) {
 	try {
 		var message = Message.createFromBuffer (buffer);
-
-		var req = this.unregisterRequest (message.getReqId ());
-		if ( ! req )
-			return;
-
-		if ( ! message.processIncomingSecurity (this.user, req.responseCb) )
-			return;
-
-		try {
-			if (message.version != req.message.version) {
-				req.responseCb (new ResponseInvalidError ("Version in request '"
-						+ req.message.version + "' does not match version in "
-						+ "response '" + message.version + "'"));
-			} else if (message.community != req.message.community) {
-				req.responseCb (new ResponseInvalidError ("Community '"
-						+ req.message.community + "' in request does not match "
-						+ "community '" + message.community + "' in response"));
-			} else if (message.pdu.type == PduType.Report) {
-				this.msgSecurityParameters = {
-					msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
-					msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
-					msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
-				};
-				if ( this.proxy ) {
-					this.msgSecurityParameters.msgUserName = this.proxy.user.name;
-					this.msgSecurityParameters.msgAuthenticationParameters = "";
-					this.msgSecurityParameters.msgPrivacyParameters = "";
-				} else {
-					if ( ! req.originalPdu || ! req.allowReport ) {
-						if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
-							this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
-							return;
-						}
-						req.responseCb (new ResponseInvalidError ("Unexpected Report PDU") );
-						return;
-					}
-					req.originalPdu.contextName = this.context;
-					var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots || ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
-					this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
-				}
-			} else if ( this.proxy ) {
-				this.onProxyResponse (req, message);
-			} else if (message.pdu.type == PduType.GetResponse) {
-				req.onResponse (req, message);
-			} else {
-				req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
-						+ message.pdu.type + "' in response"));
-			}
-		} catch (error) {
-			req.responseCb (error);
-		}
 	} catch (error) {
 		this.emit("error", error);
+		return;
+	}
+
+	var req = this.unregisterRequest (message.getReqId ());
+	if ( ! req )
+		return;
+
+	if ( ! message.processIncomingSecurity (this.user, req.responseCb) )
+		return;
+
+	if (message.version != req.message.version) {
+		req.responseCb (new ResponseInvalidError ("Version in request '"
+				+ req.message.version + "' does not match version in "
+				+ "response '" + message.version + "'", ResponseInvalidCode.EVersionNoMatch));
+	} else if (message.community != req.message.community) {
+		req.responseCb (new ResponseInvalidError ("Community '"
+				+ req.message.community + "' in request does not match "
+				+ "community '" + message.community + "' in response", ResponseInvalidCode.ECommunityNoMatch));
+	} else if (message.pdu.type == PduType.Report) {
+		this.msgSecurityParameters = {
+			msgAuthoritativeEngineID: message.msgSecurityParameters.msgAuthoritativeEngineID,
+			msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
+			msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
+		};
+		if ( this.proxy ) {
+			this.msgSecurityParameters.msgUserName = this.proxy.user.name;
+			this.msgSecurityParameters.msgAuthenticationParameters = "";
+			this.msgSecurityParameters.msgPrivacyParameters = "";
+		} else {
+			if ( ! req.originalPdu || ! req.allowReport ) {
+				if (Array.isArray(message.pdu.varbinds) && message.pdu.varbinds[0] && message.pdu.varbinds[0].oid.indexOf(UsmStatsBase) === 0) {
+					this.userSecurityModelError (req, message.pdu.varbinds[0].oid);
+					return;
+				}
+				req.responseCb (new ResponseInvalidError ("Unexpected Report PDU", ResponseInvalidCode.EUnexpectedReport) );
+				return;
+			}
+			req.originalPdu.contextName = this.context;
+			var timeSyncNeeded = ! message.msgSecurityParameters.msgAuthoritativeEngineBoots && ! message.msgSecurityParameters.msgAuthoritativeEngineTime;
+			this.sendV3Req (req.originalPdu, req.feedCb, req.responseCb, req.options, req.port, timeSyncNeeded);
+		}
+	} else if ( this.proxy ) {
+		this.onProxyResponse (req, message);
+	} else if (message.pdu.type == PduType.GetResponse) {
+		req.onResponse (req, message);
+	} else {
+		req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
+				+ message.pdu.type + "' in response", ResponseInvalidCode.EUnknownPduType));
 	}
 };
 
@@ -2116,21 +2227,23 @@ Session.prototype.send = function (req, noWait) {
 };
 
 Session.prototype.set = function (varbinds, responseCb) {
+	var reportOidMismatchErrors = this.reportOidMismatchErrors;
+
 	function feedCb (req, message) {
 		var pdu = message.pdu;
 		var varbinds = [];
 
 		if (req.message.pdu.varbinds.length != pdu.varbinds.length) {
 			req.responseCb (new ResponseInvalidError ("Requested OIDs do not "
-					+ "match response OIDs"));
+					+ "match response OIDs", ResponseInvalidCode.EReqResOidNoMatch));
 		} else {
 			for (var i = 0; i < req.message.pdu.varbinds.length; i++) {
-				if (req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid) {
+				if ( reportOidMismatchErrors && req.message.pdu.varbinds[i].oid != pdu.varbinds[i].oid ) {
 					req.responseCb (new ResponseInvalidError ("OID '"
 							+ req.message.pdu.varbinds[i].oid
-							+ "' in request at positiion '" + i + "' does not "
+							+ "' in request at position '" + i + "' does not "
 							+ "match OID '" + pdu.varbinds[i].oid + "' in response "
-							+ "at position '" + i + "'"));
+							+ "at position '" + i + "'", ResponseInvalidCode.EReqResOidNoMatch));
 					return;
 				} else {
 					varbinds.push (pdu.varbinds[i]);
@@ -2159,28 +2272,24 @@ Session.prototype.set = function (varbinds, responseCb) {
 
 Session.prototype.simpleGet = function (pduClass, feedCb, varbinds,
 		responseCb, options) {
-	try {
-		var id = _generateId (this.idBitsSize);
-		var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
-		var message;
-		var req;
+	var id = _generateId (this.idBitsSize);
+	options = Object.assign({}, options, { context: this.context });
+	var pdu = SimplePdu.createFromVariables (pduClass, id, varbinds, options);
+	var message;
+	var req;
 
-		if ( this.version == Version3 ) {
-			if ( this.msgSecurityParameters ) {
-				this.sendV3Req (pdu, feedCb, responseCb, options, this.port, true);
-			} else {
-				this.sendV3Discovery (pdu, feedCb, responseCb, options);
-			}
+	if ( this.version == Version3 ) {
+		if ( this.msgSecurityParameters ) {
+			this.sendV3Req (pdu, feedCb, responseCb, options, this.port, true);
 		} else {
-			message = Message.createCommunity (this.version, this.community, pdu);
-			req = new Req (this, message, feedCb, responseCb, options);
-			this.send (req);
+			this.sendV3Discovery (pdu, feedCb, responseCb, options);
 		}
-	} catch (error) {
-		if (responseCb)
-			responseCb (error);
+	} else {
+		message = Message.createCommunity (this.version, this.community, pdu);
+		req = new Req (this, message, feedCb, responseCb, options);
+		this.send (req);
 	}
-}
+};
 
 function subtreeCb (req, varbinds) {
 	var done = 0;
@@ -2247,7 +2356,7 @@ function tableColumnsResponseCb (req, error) {
 function tableColumnsFeedCb (req, varbinds) {
 	for (var i = 0; i < varbinds.length; i++) {
 		if (isVarbindError (varbinds[i])) {
-			req.error = new RequestFailedError (varbindError (varbind[i]));
+			req.error = new RequestFailedError (varbindError (varbinds[i]));
 			return true;
 		}
 
@@ -2309,7 +2418,7 @@ function tableResponseCb (req, error) {
 function tableFeedCb (req, varbinds) {
 	for (var i = 0; i < varbinds.length; i++) {
 		if (isVarbindError (varbinds[i])) {
-			req.error = new RequestFailedError (varbindError (varbind[i]));
+			req.error = new RequestFailedError (varbindError (varbinds[i]));
 			return true;
 		}
 
@@ -2356,104 +2465,99 @@ Session.prototype.table = function () {
 Session.prototype.trap = function () {
 	var req = {};
 
-	try {
-		var typeOrOid = arguments[0];
-		var varbinds, options = {}, responseCb;
-		var message;
+	var typeOrOid = arguments[0];
+	var varbinds, options = {}, responseCb;
+	var message;
 
-		/**
-		 ** Support the following signatures:
-		 ** 
-		 **    typeOrOid, varbinds, options, callback
-		 **    typeOrOid, varbinds, agentAddr, callback
-		 **    typeOrOid, varbinds, callback
-		 **    typeOrOid, agentAddr, callback
-		 **    typeOrOid, options, callback
-		 **    typeOrOid, callback
-		 **/
-		if (arguments.length >= 4) {
-			varbinds = arguments[1];
-			if (typeof arguments[2] == "string") {
-				options.agentAddr = arguments[2];
-			} else if (arguments[2].constructor != Array) {
-				options = arguments[2];
-			}
-			responseCb = arguments[3];
-		} else if (arguments.length >= 3) {
-			if (typeof arguments[1] == "string") {
-				varbinds = [];
-				options.agentAddr = arguments[1];
-			} else if (arguments[1].constructor != Array) {
-				varbinds = [];
-				options = arguments[1];
-			} else {
-				varbinds = arguments[1];
-				agentAddr = null;
-			}
-			responseCb = arguments[2];
-		} else {
+	/**
+	 ** Support the following signatures:
+		** 
+		**    typeOrOid, varbinds, options, callback
+		**    typeOrOid, varbinds, agentAddr, callback
+		**    typeOrOid, varbinds, callback
+		**    typeOrOid, agentAddr, callback
+		**    typeOrOid, options, callback
+		**    typeOrOid, callback
+		**/
+	if (arguments.length >= 4) {
+		varbinds = arguments[1];
+		if (typeof arguments[2] == "string") {
+			options.agentAddr = arguments[2];
+		} else if (arguments[2].constructor != Array) {
+			options = arguments[2];
+		}
+		responseCb = arguments[3];
+	} else if (arguments.length >= 3) {
+		if (typeof arguments[1] == "string") {
 			varbinds = [];
-			responseCb = arguments[1];
-		}
-
-		var pdu, pduVarbinds = [];
-
-		for (var i = 0; i < varbinds.length; i++) {
-			var varbind = {
-				oid: varbinds[i].oid,
-				type: varbinds[i].type,
-				value: varbinds[i].value
-			};
-			pduVarbinds.push (varbind);
-		}
-		
-		var id = _generateId (this.idBitsSize);
-
-		if (this.version == Version2c || this.version == Version3 ) {
-			if (typeof typeOrOid != "string")
-				typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
-
-			pduVarbinds.unshift (
-				{
-					oid: "1.3.6.1.2.1.1.3.0",
-					type: ObjectType.TimeTicks,
-					value: options.upTime || Math.floor (process.uptime () * 100)
-				},
-				{
-					oid: "1.3.6.1.6.3.1.1.4.1.0",
-					type: ObjectType.OID,
-					value: typeOrOid
-				}
-			);
-
-			pdu = TrapV2Pdu.createFromVariables (id, pduVarbinds, options);
+			options.agentAddr = arguments[1];
+		} else if (arguments[1].constructor != Array) {
+			varbinds = [];
+			options = arguments[1];
 		} else {
-			pdu = TrapPdu.createFromVariables (typeOrOid, pduVarbinds, options);
+			varbinds = arguments[1];
+			options.agentAddr = null;
 		}
-
-		if ( this.version == Version3 ) {
-			var msgSecurityParameters = {
-				msgAuthoritativeEngineID: this.user.engineID,
-				msgAuthoritativeEngineBoots: 0,
-				msgAuthoritativeEngineTime: 0
-			};
-			message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
-		} else {
-			message = Message.createCommunity (this.version, this.community, pdu);
-		}
-
-		req = {
-			id: id,
-			message: message,
-			responseCb: responseCb,
-			port: this.trapPort
-		};
-
-		this.send (req, true);
-	} catch (error) {
-		if (req.responseCb)
-			req.responseCb (error);
+		responseCb = arguments[2];
+	} else {
+		varbinds = [];
+		responseCb = arguments[1];
 	}
+
+	var pdu, pduVarbinds = [];
+
+	for (var i = 0; i < varbinds.length; i++) {
+		var varbind = {
+			oid: varbinds[i].oid,
+			type: varbinds[i].type,
+			value: varbinds[i].value
+		};
+		pduVarbinds.push (varbind);
+	}
+	
+	var id = _generateId (this.idBitsSize);
+
+	if (this.version == Version2c || this.version == Version3 ) {
+		if (typeof typeOrOid != "string")
+			typeOrOid = "1.3.6.1.6.3.1.1.5." + (typeOrOid + 1);
+
+		pduVarbinds.unshift (
+			{
+				oid: "1.3.6.1.2.1.1.3.0",
+				type: ObjectType.TimeTicks,
+				value: options.upTime || Math.floor (process.uptime () * 100)
+			},
+			{
+				oid: "1.3.6.1.6.3.1.1.4.1.0",
+				type: ObjectType.OID,
+				value: typeOrOid
+			}
+		);
+
+		pdu = TrapV2Pdu.createFromVariables (id, pduVarbinds, options);
+	} else {
+		pdu = TrapPdu.createFromVariables (typeOrOid, pduVarbinds, options);
+	}
+
+	if ( this.version == Version3 ) {
+		var msgSecurityParameters = {
+			msgAuthoritativeEngineID: this.engine.engineID,
+			msgAuthoritativeEngineBoots: 0,
+			msgAuthoritativeEngineTime: 0
+		};
+		message = Message.createRequestV3 (this.user, msgSecurityParameters, pdu);
+	} else {
+		message = Message.createCommunity (this.version, this.community, pdu);
+	}
+
+	req = {
+		id: id,
+		message: message,
+		responseCb: responseCb,
+		port: this.trapPort
+	};
+
+	this.send (req, true);
 
 	return this;
 };
@@ -2492,7 +2596,12 @@ function walkCb (req, error, varbinds) {
 		}
 	}
 
-	if (this.version == Version2c || this.version == Version3 ) {
+	if ( ! varbinds || ! varbinds.length ) {
+		req.doneCb(null);
+		return;
+	}
+
+	if (this.version == Version2c || this.version == Version3) {
 		for (var i = varbinds[0].length; i > 0; i--) {
 			if (varbinds[0][i - 1].type == ObjectType.EndOfMibView) {
 				varbinds[0].pop ();
@@ -2523,7 +2632,7 @@ function walkCb (req, error, varbinds) {
 Session.prototype.walk  = function () {
 	var me = this;
 	var oid = arguments[0];
-	var maxRepetitions, feedCb, doneCb, baseOid;
+	var maxRepetitions, feedCb, doneCb;
 
 	if (arguments.length < 4) {
 		maxRepetitions = 20;
@@ -2567,12 +2676,12 @@ Session.prototype.sendV3Discovery = function (originalPdu, feedCb, responseCb, o
 	discoveryReq.originalPdu = originalPdu;
 	discoveryReq.allowReport = true;
 	this.send (discoveryReq);
-}
+};
 
 Session.prototype.userSecurityModelError = function (req, oid) {
 	var oidSuffix = oid.replace (UsmStatsBase + '.', '').replace (/\.0$/, '');
 	var errorType = UsmStats[oidSuffix] || "Unexpected Report PDU";
-	req.responseCb (new ResponseInvalidError (errorType) );
+	req.responseCb (new ResponseInvalidError (errorType, ResponseInvalidCode.EAuthFailure) );
 };
 
 Session.prototype.onProxyResponse = function (req, message) {
@@ -2603,7 +2712,8 @@ Session.create = function (target, community, options) {
 	// Ensure that options may be optional
 	var version = (options && options.version) ? options.version : Version1;
 	if (version != Version1 && version != Version2c) {
-		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid");
+		throw new ResponseInvalidError ("SNMP community session requested but version '" + options.version + "' specified in options not valid",
+				ResponseInvalidCode.EVersionNoMatch);
 	} else {
 		if (!options)
 			options = {};
@@ -2615,7 +2725,8 @@ Session.create = function (target, community, options) {
 Session.createV3 = function (target, user, options) {
 	// Ensure that options may be optional
 	if ( options && options.version && options.version != Version3 ) {
-		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options");
+		throw new ResponseInvalidError ("SNMPv3 session requested but version '" + options.version + "' specified in options",
+				ResponseInvalidCode.EVersionNoMatch);
 	} else {
 		if (!options)
 			options = {};
@@ -2626,7 +2737,12 @@ Session.createV3 = function (target, user, options) {
 
 var Engine = function (engineID, engineBoots, engineTime) {
 	if ( engineID ) {
-		this.engineID = Buffer.from (engineID, 'hex');
+		if ( ! (engineID instanceof Buffer) ) {
+			engineID = engineID.replace('0x', '');
+			this.engineID = Buffer.from((engineID.toString().length % 2 == 1 ? '0' : '') + engineID.toString(), 'hex');
+		} else {
+			this.engineID = engineID;
+		}
 	} else {
 		this.generateEngineID ();
 	}
@@ -2636,17 +2752,18 @@ var Engine = function (engineID, engineBoots, engineTime) {
 
 Engine.prototype.generateEngineID = function() {
 	// generate a 17-byte engine ID in the following format:
-	// 0x80 + 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
+	// 0x80 | 0x00B983 (enterprise OID) | 0x80 (enterprise-specific format) | 12 bytes of random
 	this.engineID = Buffer.alloc (17);
 	this.engineID.fill ('8000B98380', 'hex', 0, 5);
 	this.engineID.fill (crypto.randomBytes (12), 5, 17, 'hex');
-}
+};
 
 var Listener = function (options, receiver) {
 	this.receiver = receiver;
 	this.callback = receiver.onMsg;
 	this.family = options.transport || 'udp4';
 	this.port = options.port || 161;
+	this.address = options.address;
 	this.disableAuthorization = options.disableAuthorization || false;
 };
 
@@ -2654,12 +2771,12 @@ Listener.prototype.startListening = function () {
 	var me = this;
 	this.dgram = dgram.createSocket (this.family);
 	this.dgram.on ("error", me.receiver.callback);
-	this.dgram.bind (this.port);
+	this.dgram.bind (this.port, this.address);
 	this.dgram.on ("message", me.callback.bind (me.receiver));
 };
 
 Listener.prototype.send = function (message, rinfo) {
-	var me = this;
+	// var me = this;
 	
 	var buffer = message.toBuffer ();
 
@@ -2711,6 +2828,16 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 				};
 			}
 		}
+		if ( (message.user.level == SecurityLevel.authNoPriv || message.user.level == SecurityLevel.authPriv) && ! message.hasAuthentication() ) {
+			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+					" requires authentication but message does not provide it"));
+			return;
+		}
+		if ( message.user.level == SecurityLevel.authPriv && ! message.hasPrivacy() ) {
+			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+					" requires privacy but message does not provide it"));
+			return;
+		}
 		if ( ! message.processIncomingSecurity (message.user, callback) ) {
 			return;
 		}
@@ -2731,17 +2858,27 @@ Listener.prototype.close = function () {
 	}
 };
 
-var Authorizer = function (disableAuthorization) {
+var Authorizer = function (options) {
 	this.communities = [];
 	this.users = [];
-	this.disableAuthorization = disableAuthorization;
-}
+	this.disableAuthorization = options.disableAuthorization;
+	this.accessControlModelType = options.accessControlModelType || AccessControlModelType.None;
+
+	if ( this.accessControlModelType == AccessControlModelType.None ) {
+		this.accessControlModel = null;
+	} else if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+		this.accessControlModel = new SimpleAccessControlModel ();
+	}
+};
 
 Authorizer.prototype.addCommunity = function (community) {
 	if ( this.getCommunity (community) ) {
 		return;
 	} else {
 		this.communities.push (community);
+		if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+			this.accessControlModel.setCommunityAccess (community, AccessLevel.ReadOnly);
+		}
 	}
 };
 
@@ -2765,6 +2902,9 @@ Authorizer.prototype.addUser = function (user) {
 		this.deleteUser (user.name);
 	}
 	this.users.push (user);
+	if ( this.accessControlModelType == AccessControlModelType.Simple ) {
+		this.accessControlModel.setUserAccess (user.name, AccessLevel.ReadOnly);
+	}
 };
 
 Authorizer.prototype.getUser = function (userName) {
@@ -2782,6 +2922,124 @@ Authorizer.prototype.deleteUser = function (userName) {
 	}
 };
 
+Authorizer.prototype.getAccessControlModelType = function () {
+	return this.accessControlModelType;
+};
+
+Authorizer.prototype.getAccessControlModel = function () {
+	return this.accessControlModel;
+};
+
+Authorizer.prototype.isAccessAllowed = function (securityModel, securityName, pduType) {
+	if ( this.accessControlModel ) {
+		return this.accessControlModel.isAccessAllowed (securityModel, securityName, pduType);
+	} else {
+		return true;
+	}
+};
+
+var SimpleAccessControlModel = function () {
+	this.communitiesAccess = [];
+	this.usersAccess = [];
+};
+
+SimpleAccessControlModel.prototype.getCommunityAccess = function (community) {
+	return this.communitiesAccess.find (entry => entry.community == community );
+};
+
+SimpleAccessControlModel.prototype.getCommunityAccessLevel = function (community) {
+	var communityAccessEntry = this.getCommunityAccess (community);
+	return communityAccessEntry ? communityAccessEntry.level : AccessLevel.None;
+};
+
+SimpleAccessControlModel.prototype.getCommunitiesAccess = function () {
+	return this.communitiesAccess;
+};
+
+SimpleAccessControlModel.prototype.setCommunityAccess = function (community, accessLevel) {
+	let accessEntry = this.getCommunityAccess (community);
+	if ( accessEntry ) {
+		accessEntry.level = accessLevel;
+	} else {
+		this.communitiesAccess.push ({
+			community: community,
+			level: accessLevel
+		});
+		this.communitiesAccess.sort ((a, b) => (a.community > b.community) ? 1 : -1);
+	}
+};
+
+SimpleAccessControlModel.prototype.removeCommunityAccess = function (community) {
+	this.communitiesAccess.splice ( this.communitiesAccess.findIndex (entry => entry.community == community), 1);
+};
+
+SimpleAccessControlModel.prototype.getUserAccess = function (userName) {
+	return this.usersAccess.find (entry => entry.userName == userName );
+};
+
+SimpleAccessControlModel.prototype.getUserAccessLevel = function (user) {
+	var userAccessEntry = this.getUserAccess (user);
+	return userAccessEntry ? userAccessEntry.level : AccessLevel.None;
+};
+
+SimpleAccessControlModel.prototype.getUsersAccess = function () {
+	return this.usersAccess;
+};
+
+SimpleAccessControlModel.prototype.setUserAccess = function (userName, accessLevel) {
+	let accessEntry = this.getUserAccess (userName);
+	if ( accessEntry ) {
+		accessEntry.level = accessLevel;
+	} else {
+		this.usersAccess.push ({
+			userName: userName,
+			level: accessLevel
+		});
+		this.usersAccess.sort ((a, b) => (a.userName > b.userName) ? 1 : -1);
+	}
+};
+
+SimpleAccessControlModel.prototype.removeUserAccess = function (userName) {
+	this.usersAccess.splice ( this.usersAccess.findIndex (entry => entry.userName == userName), 1);
+};
+
+SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, securityName, pduType) {
+	var accessLevelConfigured;
+	var accessLevelRequired;
+
+	switch ( securityModel ) {
+		case Version1:
+		case Version2c:
+			accessLevelConfigured = this.getCommunityAccessLevel (securityName);
+			break;
+		case Version3:
+			accessLevelConfigured = this.getUserAccessLevel (securityName);
+			break;
+	}
+	switch ( pduType ) {
+		case PduType.SetRequest:
+			accessLevelRequired = AccessLevel.ReadWrite;
+			break;
+		case PduType.GetRequest:
+		case PduType.GetNextRequest:
+		case PduType.GetBulkRequest:
+			accessLevelRequired = AccessLevel.ReadOnly;
+			break;
+		default:
+			accessLevelRequired = AccessLevel.None;
+			break;
+	}
+	switch ( accessLevelRequired ) {
+		case AccessLevel.ReadWrite:
+			return accessLevelConfigured == AccessLevel.ReadWrite;
+		case AccessLevel.ReadOnly:
+			return accessLevelConfigured == AccessLevel.ReadWrite || accessLevelConfigured == AccessLevel.ReadOnly;
+		case AccessLevel.None:
+			return true;
+		default:
+			return false;
+	}
+};
 
 
 /*****************************************************************************
@@ -2791,7 +3049,7 @@ Authorizer.prototype.deleteUser = function (userName) {
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-	this.authorizer = new Authorizer (options.disableAuthorization);
+	this.authorizer = new Authorizer (options);
 	this.engine = new Engine (options.engineID);
 
 	this.engineBoots = 0;
@@ -2803,6 +3061,7 @@ var Receiver = function (options, callback) {
 	this.port = options.port || 162;
 	options.port = this.port;
 	this.disableAuthorization = options.disableAuthorization || false;
+	this.includeAuthentication = options.includeAuthentication || false;
 	this.context = (options && options.context) ? options.context : "";
 	this.listener = new Listener (options, this);
 };
@@ -2831,37 +3090,46 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		var reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
-	};
+	}
 
 	// Inform/trap processing
-	debug (JSON.stringify (message.pdu, null, 2));
+	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.type == PduType.Trap || message.pdu.type == PduType.TrapV2 ) {
-		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+		this.callback (null, this.formatCallbackData (message, rinfo) );
 	} else if ( message.pdu.type == PduType.InformRequest ) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
 		message.setReportable (false);
 		this.listener.send (message, rinfo);
 		message.pdu.type = PduType.InformRequest;
-		this.callback (null, this.formatCallbackData (message.pdu, rinfo) );
+		this.callback (null, this.formatCallbackData (message, rinfo) );
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " + message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
-}
+};
 
-Receiver.prototype.formatCallbackData = function (pdu, rinfo) {
-	if ( pdu.contextEngineID ) {
-		pdu.contextEngineID = pdu.contextEngineID.toString('hex');
+Receiver.prototype.formatCallbackData = function (message, rinfo) {
+	if ( message.pdu.contextEngineID ) {
+		message.pdu.contextEngineID = message.pdu.contextEngineID.toString('hex');
 	}
-	delete pdu.nonRepeaters;
-	delete pdu.maxRepetitions;
-	return {
-		pdu: pdu,
-		rinfo: rinfo 
+	delete message.pdu.nonRepeaters;
+	delete message.pdu.maxRepetitions;
+	const formattedData = {
+		pdu: message.pdu,
+		rinfo: rinfo
 	};
+	if (this.includeAuthentication) {
+		if (message.community) {
+			formattedData.pdu.community = message.community;
+		} else if (message.user) {
+			formattedData.pdu.user = message.user.name;
+		}
+	}
+
+	return formattedData;
 };
 
 Receiver.prototype.close  = function() {
@@ -2883,10 +3151,9 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 	Object.assign (syntaxTypes, ObjectType);
 	var entryArray;
 
-	// var mibModule = this.parser.Modules[moduleName];
 	for ( var mibModule of Object.values (this.parser.Modules) ) {
 		entryArray = Object.values (mibModule);
-		for ( mibEntry of entryArray ) {
+		for ( var mibEntry of entryArray ) {
 			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
 				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
 					if ( typeof mibEntry.SYNTAX == "object" ) {
@@ -2936,6 +3203,11 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	var tables = [];
 	var mibEntry;
 	var syntaxTypes;
+	var entryArray;
+	var currentTableProvider;
+	var parentOid;
+	var constraintsResults;
+	var constraints;
 
 	if ( ! mibModule ) {
 		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
@@ -2943,13 +3215,17 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 	syntaxTypes = this.getSyntaxTypes ();
 	entryArray = Object.values (mibModule);
 	for ( var i = 0; i < entryArray.length ; i++ ) {
-		var mibEntry = entryArray[i];
+		mibEntry = entryArray[i];
 		var syntax = mibEntry.SYNTAX;
+		var access = mibEntry["ACCESS"];
+		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
+		var defVal = mibEntry["DEFVAL"];
 
 		if ( syntax ) {
-			if ( typeof syntax == "object" ) {
-				syntax = "INTEGER";
-			}
+			constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+			syntax = constraintsResults.syntax;
+			constraints = constraintsResults.constraints;
+
 			if ( syntax.startsWith ("SEQUENCE OF") ) {
 				// start of table
 				currentTableProvider = {
@@ -2957,24 +3233,32 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					type: MibProviderType.Table,
 					//oid: mibEntry.OID,
 					tableColumns: [],
-					tableIndex: [1]  // default - assume first column is index
+					tableIndex: [1]	 // default - assume first column is index
 				};
+				currentTableProvider.maxAccess = MaxAccess[maxAccess];
+
 				// read table to completion
 				while ( currentTableProvider || i >= entryArray.length ) {
 					i++;
 					mibEntry = entryArray[i];
 					if ( ! mibEntry ) {
+						tables.push (currentTableProvider);
+						currentTableProvider = null;
+						i--;
 						break;
 					}
-					syntax = mibEntry.SYNTAX
+					syntax = mibEntry.SYNTAX;
+					access = mibEntry["ACCESS"];
+					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
+					defVal = mibEntry["DEFVAL"];
 
-					if ( typeof syntax == "object" ) {
-						syntax = "INTEGER";
-					}
+					constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+					syntax = constraintsResults.syntax;
+					constraints = constraintsResults.constraints;
 
 					if ( mibEntry.MACRO == "SEQUENCE" ) {
 						// table entry sequence - ignore
-					} else  if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
+					} else if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
 						// unexpected
 					} else {
 						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
@@ -3011,11 +3295,32 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							}
 						} else if ( parentOid == currentTableProvider.name ) {
 							// table column
-							currentTableProvider.tableColumns.push ({
+							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
-								type: syntaxTypes[syntax]
-							});
+								type: syntaxTypes[syntax],
+								maxAccess: MaxAccess[maxAccess]
+							};
+							if ( constraints ) {
+								columnDefinition.constraints = constraints;
+							}
+							if (defVal) {
+								columnDefinition.defVal = defVal;
+							}
+							// If this column has syntax RowStatus and
+							// the MIB module imports RowStatus from
+							// SNMPv2-TC, mark this column as the
+							// rowStatus column so we can act on it.
+							// (See lib/mibs/SNMPv2-TC.mib#L186.)
+							if ( syntax == "RowStatus" &&
+									"IMPORTS" in mibModule &&
+									Array.isArray(mibModule.IMPORTS["SNMPv2-TC"]) && 
+									mibModule.IMPORTS["SNMPv2-TC"].includes("RowStatus") ) {
+
+								// Mark this column as being rowStatus
+								columnDefinition.rowStatus = true;
+							}
+							currentTableProvider.tableColumns.push (columnDefinition);
 						} else {
 							// table finished
 							tables.push (currentTableProvider);
@@ -3027,12 +3332,22 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				}
 			} else if ( mibEntry.MACRO == "OBJECT-TYPE" ) {
 				// OBJECT-TYPE entries not in a table are scalars
-				scalars.push ({
+				var scalarDefinition = {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,
 					oid: mibEntry.OID,
-					scalarType: syntaxTypes[syntax]
-				});
+					scalarType: syntaxTypes[syntax],
+					maxAccess: MaxAccess[maxAccess]
+				};
+
+				if (defVal) {
+					scalarDefinition.defVal = defVal;
+				}
+
+				if ( constraints ) {
+					scalarDefinition.constraints = constraints;
+				}
+				scalars.push (scalarDefinition);
 				// console.log ("Scalar: " + mibEntry.ObjectName);
 			}
 		}
@@ -3042,13 +3357,44 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 
 ModuleStore.prototype.loadBaseModules = function () {
 	for ( var mibModule of ModuleStore.BASE_MODULES ) {
-		this.parser.Import("mibs/" + mibModule + ".mib");
+		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
 };
 
+ModuleStore.getConstraintsFromSyntax = function (syntax) {
+	let constraints;
+
+	// detect INTEGER ranges, OCTET STRING sizes, and INTEGER enumerations
+	if ( typeof syntax == "object" ) {
+		let firstSyntaxKey = syntax[Object.keys(syntax)[0]];
+		if ( firstSyntaxKey.ranges ) {
+			constraints = {
+				ranges: firstSyntaxKey.ranges
+			};
+			syntax = Object.keys(syntax)[0];
+		} else if ( firstSyntaxKey.sizes ) {
+			constraints = {
+				size: firstSyntaxKey.sizes
+			};
+			syntax = Object.keys(syntax)[0];
+		} else {
+			constraints = {
+				enumeration: syntax.INTEGER
+			};
+			syntax = "INTEGER";
+		}
+	} else {
+		constraints = null;
+	}
+	return {
+		constraints: constraints,
+		syntax: syntax
+	};
+};
+
 ModuleStore.create = function () {
-	store = new ModuleStore ();
+	var store = new ModuleStore ();
 	store.loadBaseModules ();
 	return store;
 };
@@ -3066,7 +3412,7 @@ ModuleStore.BASE_MODULES = [
 
 var MibNode = function(address, parent) {
 	this.address = address;
-	this.oid = this.address.join('.');;
+	this.oid = this.address.join('.');
 	this.parent = parent;
 	this.children = {};
 };
@@ -3101,7 +3447,7 @@ MibNode.prototype.findChildImmediatelyBefore = function (index) {
 		return null;
 	}
 
-	for ( i = 0; i < sortedChildrenKeys.length; i++ ) {
+	for ( var i = 0; i < sortedChildrenKeys.length; i++ ) {
 		if ( index < sortedChildrenKeys[i] ) {
 			if ( i === 0 ) {
 				return null;
@@ -3110,7 +3456,7 @@ MibNode.prototype.findChildImmediatelyBefore = function (index) {
 			}
 		}
 	}
-	return this.children[sortedChildrenKeys[sortedChildrenKeys.length]];
+	return this.children[sortedChildrenKeys[sortedChildrenKeys.length - 1]];
 };
 
 MibNode.prototype.isDescendant = function (address) {
@@ -3131,6 +3477,85 @@ MibNode.prototype.getAncestorProvider = function () {
 	}
 };
 
+MibNode.prototype.getTableColumnFromInstanceNode = function () {
+	if ( this.parent && this.parent.provider ) {
+		return this.address[this.address.length - 1];
+	} else if ( ! this.parent ) {
+		return null;
+	} else {
+		return this.parent.getTableColumnFromInstanceNode ();
+	}
+};
+
+MibNode.prototype.getConstraintsFromProvider = function () {
+	var providerNode = this.getAncestorProvider ();
+	if ( ! providerNode ) {
+		return null;
+	}
+	var provider = providerNode.provider;
+	if ( provider.type == MibProviderType.Scalar ) {
+		return provider.constraints;
+	} else if ( provider.type == MibProviderType.Table ) {
+		var columnNumber = this.getTableColumnFromInstanceNode ();
+		if ( ! columnNumber ) {
+			return null;
+		}
+		var columnDefinition = provider.tableColumns.filter (column => column.number == columnNumber)[0];
+		return columnDefinition ? columnDefinition.constraints : null;
+	} else {
+		return null;
+	}
+};
+
+MibNode.prototype.setValue = function (newValue) {
+	var len;
+	var min;
+	var max;
+	var range;
+	var found = false;
+	var constraints = this.getConstraintsFromProvider ();
+	if ( ! constraints ) {
+		this.value = newValue;
+		return true;
+	}
+	if ( constraints.enumeration ) {
+		if ( ! constraints.enumeration[newValue] ) {
+			return false;
+		}
+	} else if ( constraints.ranges ) {
+		for ( range of constraints.ranges ) {
+			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( newValue >= min && newValue <= max ) {
+				found = true;
+				break;
+			}
+		}
+		if ( ! found ) {
+			return false;
+		}
+	} else if ( constraints.sizes ) {
+		// if size is constrained, value must have a length property
+		if ( ! ( "length" in newValue ) ) {
+			return false;
+		}
+		len = newValue.length;
+		for ( range of constraints.sizes ) {
+			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( len >= min && len <= max ) {
+				found = true;
+				break;
+			}
+		}
+		if ( ! found ) {
+			return false;
+		}
+	}
+	this.value = newValue;
+	return true;
+};
+
 MibNode.prototype.getInstanceNodeForTableRow = function () {
 	var childCount = Object.keys (this.children).length;
 	if ( childCount == 0 ) {
@@ -3148,6 +3573,8 @@ MibNode.prototype.getInstanceNodeForTableRow = function () {
 
 MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 	var childCount = Object.keys (this.children).length;
+	var remainingIndex;
+
 	if ( childCount == 0 ) {
 		if ( this.value != null ) {
 			return this;
@@ -3164,7 +3591,11 @@ MibNode.prototype.getInstanceNodeForTableRowIndex = function (index) {
 				return null;
 			}
 			remainingIndex = index.slice(1);
-			return this.children[nextChildIndexPart].getInstanceNodeForTableRowIndex(remainingIndex);
+			if ( this.children[nextChildIndexPart] ) {
+				return this.children[nextChildIndexPart].getInstanceNodeForTableRowIndex(remainingIndex);
+			} else {
+				return null;
+			}
 		}
 	}
 };
@@ -3184,8 +3615,10 @@ MibNode.prototype.getInstanceNodesForColumn = function () {
 };
 
 MibNode.prototype.getNextInstanceNode = function () {
+	var siblingIndex;
+	var childrenAddresses;
 
-	node = this;
+	var node = this;
 	if ( this.value != null ) {
 		// Need upwards traversal first
 		node = this;
@@ -3197,7 +3630,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 				return null;
 			} else {
 				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
-				siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
+				var siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
 				if ( siblingPosition + 1 < childrenAddresses.length ) {
 					node = node.children[childrenAddresses[siblingPosition + 1]];
 					break;
@@ -3223,14 +3656,14 @@ MibNode.prototype.delete = function () {
 	if ( Object.keys (this.children) > 0 ) {
 		throw new Error ("Cannot delete non-leaf MIB node");
 	}
-	addressLastPart = this.address.slice(-1)[0];
+	var addressLastPart = this.address.slice(-1)[0];
 	delete this.parent.children[addressLastPart];
 	this.parent = null;
 };
 
 MibNode.prototype.pruneUpwards = function () {
 	if ( ! this.parent ) {
-		return
+		return;
 	}
 	if ( Object.keys (this.children).length == 0 ) {
 		var lastAddressPart = this.address.splice(-1)[0].toString();
@@ -3238,7 +3671,7 @@ MibNode.prototype.pruneUpwards = function () {
 		this.parent.pruneUpwards();
 		this.parent = null;
 	}
-}
+};
 
 MibNode.prototype.dump = function (options) {
 	var valueString;
@@ -3254,7 +3687,7 @@ MibNode.prototype.dump = function (options) {
 		}
 		console.log (this.oid + valueString);
 	}
-	for ( node of Object.keys (this.children).sort ((a, b) => a - b)) {
+	for ( var node of Object.keys (this.children).sort ((a, b) => a - b)) {
 		this.children[node].dump (options);
 	}
 };
@@ -3278,9 +3711,24 @@ MibNode.oidIsDescended = function (oid, ancestor) {
 };
 
 var Mib = function () {
+	var providersByOid;
 	this.root = new MibNode ([], null);
-	this.providers = {};
 	this.providerNodes = {};
+
+	// this.providers will be modified throughout this code.
+	// Keep this.providersByOid in sync with it
+	providersByOid = this.providersByOid = {};
+	this.providers = new Proxy({}, {
+		set: function (target, key, value) {
+			target[key] = value;
+			providersByOid[value.oid] = value;
+		},
+
+		deleteProperty: function (target, key) {
+			delete providersByOid[target[key].oid];
+			delete target[key];
+		}
+	});
 };
 
 Mib.prototype.addNodesForOid = function (oidString) {
@@ -3289,7 +3737,6 @@ Mib.prototype.addNodesForOid = function (oidString) {
 };
 
 Mib.prototype.addNodesForAddress = function (address) {
-	var address;
 	var node;
 	var i;
 
@@ -3319,7 +3766,7 @@ Mib.prototype.lookupAddress = function (address) {
 	node = this.root;
 	for (i = 0; i < address.length; i++) {
 		if ( ! node.children.hasOwnProperty (address[i])) {
-			return null
+			return null;
 		}
 		node = node.children[address[i]];
 	}
@@ -3338,15 +3785,24 @@ Mib.prototype.getTreeNode = function (oid) {
 	}
 
 	while ( address.length > 0 ) {
-		last = address.pop ();
-		parent = this.lookupAddress (address);
+		var last = address.pop ();
+		var parent = this.lookupAddress (address);
 		if ( parent ) {
-			return (parent.findChildImmediatelyBefore (last) || parent);
+			node = parent.findChildImmediatelyBefore (last);
+			if ( !node )
+				return parent;
+			while ( true ) {
+				// Find the last descendant
+				var childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
+				if ( childrenAddresses.length == 0 )
+					return node;
+				node = node.children[childrenAddresses[childrenAddresses.length - 1]];
+			}
 		}
 	}
 	return this.root;
 
-}
+};
 
 Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 	if ( instanceNode.provider ) {
@@ -3373,13 +3829,13 @@ Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
 	var column = null;
 	if ( indexEntry.columnName ) {
 		column = provider.tableColumns.filter (column => column.name == indexEntry.columnName )[0];
-	} else if ( indexEntry.columnName ) {
+	} else if ( indexEntry.columnNumber !== undefined && indexEntry.columnNumber !== null  ) {
 		column = provider.tableColumns.filter (column => column.number == indexEntry.columnNumber )[0];
 	}
 	return column;
 };
 
-Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry) {
+Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry, i) {
 	var column = null;
 	var tableProviders;
 	if ( ! indexEntry.columnName && ! indexEntry.columnNumber ) {
@@ -3408,11 +3864,11 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 		throw new Error ("Could not find column for index entry with column " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnName && indexEntry.columnName != column.name ) {
-		throw new Error ("Index entry " + i + ": Calculated column name " + calculatedColumnName +
+		throw new Error ("Index entry " + i + ": Calculated column name " + column.name +
 				"does not match supplied column name " + indexEntry.columnName);
 	}
 	if ( indexEntry.columnNumber && indexEntry.columnNumber != column.number ) {
-		throw new Error ("Index entry " + i + ": Calculated column number " + calculatedColumnNumber +
+		throw new Error ("Index entry " + i + ": Calculated column number " + column.number +
 				" does not match supplied column number " + indexEntry.columnNumber);
 	}
 	if ( ! indexEntry.columnName ) {
@@ -3432,7 +3888,7 @@ Mib.prototype.registerProvider = function (provider) {
 			if ( provider.tableAugments == provider.name ) {
 				throw new Error ("Table " + provider.name + " cannot augment itself");
 			}
-			augmentProvider = this.providers[provider.tableAugments];
+			var augmentProvider = this.providers[provider.tableAugments];
 			if ( ! augmentProvider ) {
 				throw new Error ("Cannot find base table " + provider.tableAugments + " to augment");
 			}
@@ -3454,10 +3910,54 @@ Mib.prototype.registerProvider = function (provider) {
 					};
 				}
 				indexEntry = provider.tableIndex[i];
-				this.populateIndexEntryFromColumn (provider, indexEntry);
+				this.populateIndexEntryFromColumn (provider, indexEntry, i);
 			}
 		}
 	}
+};
+
+Mib.prototype.setScalarDefaultValue = function (name, value) {
+	let provider = this.getProvider(name);
+	provider.defVal = value;
+};
+
+Mib.prototype.setTableRowDefaultValues = function (name, values) {
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+
+	// We must be given an array of exactly the right number of columns
+	if (values.length != tc.length) {
+		throw new Error(`Incorrect values length: got ${values.length}; expected ${tc.length}`);
+	}
+
+	// Add defVal to each table column.
+	tc.forEach((entry, i) => {
+		if (typeof values[i] != "undefined") {
+			entry.defVal = values[i];
+		}
+	});
+};
+
+Mib.prototype.setScalarRanges = function (name, ranges ) {
+	let provider = this.getProvider(name);
+	provider.constraints = { ranges };
+};
+
+Mib.prototype.setTableColumnRanges = function(name, column, ranges ) {
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+	tc[column].constraints = { ranges };
+};
+
+Mib.prototype.setScalarSizes = function (name, sizes ) {
+	let provider = this.getProvider(name);
+	provider.constraints = { sizes };
+};
+
+Mib.prototype.setTableColumnSizes = function(name, column, sizes ) {
+	let provider = this.getProvider(name);
+	let tc = provider.tableColumns;
+	tc[column].constraints = { sizes };
 };
 
 Mib.prototype.registerProviders = function (providers) {
@@ -3469,7 +3969,7 @@ Mib.prototype.registerProviders = function (providers) {
 Mib.prototype.unregisterProvider = function (name) {
 	var providerNode = this.providerNodes[name];
 	if ( providerNode ) {
-		providerNodeParent = providerNode.parent;
+		var providerNodeParent = providerNode.parent;
 		providerNode.delete();
 		providerNodeParent.pruneUpwards();
 		delete this.providerNodes[name];
@@ -3509,6 +4009,7 @@ Mib.prototype.getScalarValue = function (scalarName) {
 Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	var providerNode;
 	var instanceNode;
+	var provider;
 
 	if ( ! this.providers[scalarName] ) {
 		throw new ReferenceError ("Provider " + scalarName + " not registered with this MIB");
@@ -3518,7 +4019,8 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	if ( ! providerNode ) {
 		providerNode = this.addProviderToNode (this.providers[scalarName]);
 	}
-	if ( ! providerNode || ! providerNode.provider || providerNode.provider.type != MibProviderType.Scalar ) {
+	provider = providerNode.provider;
+	if ( ! providerNode || ! provider || provider.type != MibProviderType.Scalar ) {
 		throw new ReferenceError ("Could not find MIB node for registered provider " + scalarName);
 	}
 	var instanceAddress = providerNode.address.concat ([0]);
@@ -3526,9 +4028,10 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 	if ( ! instanceNode ) {
 		this.addNodesForAddress (instanceAddress);
 		instanceNode = this.lookup (instanceAddress);
-		instanceNode.valueType = providerNode.provider.scalarType;
+		instanceNode.valueType = provider.scalarType;
 	}
 	instanceNode.value = newValue;
+	// return instanceNode.setValue (newValue);
 };
 
 Mib.prototype.getProviderNodeForTable = function (table) {
@@ -3557,7 +4060,13 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 			oidComponents = value.split (".");
 			break;
 		case ObjectType.OctetString:
-			oidComponents = [...value].map (c => c.charCodeAt());
+			if ( value instanceof Buffer ) {
+				// Buffer
+				oidComponents = Array.prototype.slice.call (value);
+			} else {
+				// string
+				oidComponents = [...value].map (c => c.charCodeAt());
+			}
 			break;
 		case ObjectType.IpAddress:
 			return value.split (".");
@@ -3570,9 +4079,11 @@ Mib.prototype.getOidAddressFromValue = function (value, indexPart) {
 	return oidComponents;
 };
 
+/* What is this empty function here for?
 Mib.prototype.getValueFromOidAddress = function (oid, indexPart) {
 
 };
+*/
 
 Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	var rowIndex = [];
@@ -3598,11 +4109,12 @@ Mib.prototype.getTableRowInstanceFromRow = function (provider, row) {
 	return rowIndex;
 };
 
-Mib.prototype.getRowIndexFromOid = function (oid, index) {
+Mib.getRowIndexFromOid = function (oid, index) {
 	var addressRemaining = oid.split (".");
 	var length = 0;
 	var values = [];
-	for ( indexPart of index ) {
+	var value;
+	for ( var indexPart of index ) {
 		switch ( indexPart.type ) {
 			case ObjectType.OID:
 				if ( indexPart.implied ) {
@@ -3636,7 +4148,9 @@ Mib.prototype.getRowIndexFromOid = function (oid, index) {
 };
 
 Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
-	rowIndexOid = [];
+	var rowIndexOid = [];
+	var indexPart;
+	var keyPart;
 	for ( var i = 0; i < provider.tableIndex.length ; i++ ) {
 		indexPart = provider.tableIndex[i];
 		keyPart = rowIndex[i];
@@ -3651,6 +4165,7 @@ Mib.prototype.addTableRow = function (table, row) {
 	var instance = [];
 	var instanceAddress;
 	var instanceNode;
+	var rowValueOffset;
 
 	if ( this.providers[table] && ! this.providerNodes[table] ) {
 		this.addProviderToNode (this.providers[table]);
@@ -3661,11 +4176,15 @@ Mib.prototype.addTableRow = function (table, row) {
 	instance = this.getTableRowInstanceFromRow (provider, row);
 	for ( var i = 0; i < provider.tableColumns.length ; i++ ) {
 		var column = provider.tableColumns[i];
-		instanceAddress = providerNode.address.concat (column.number).concat (instance);
-		this.addNodesForAddress (instanceAddress);
-		instanceNode = this.lookup (instanceAddress);
-		instanceNode.valueType = column.type;
-		instanceNode.value = row[rowValueOffset + i];
+		var isColumnIndex = provider.tableIndex.some ( indexPart => indexPart.columnNumber == column.number );
+		// prevent not-accessible and accessible-for-notify index entries from being added as columns in the row
+		if ( ! isColumnIndex || ! (column.maxAccess === MaxAccess['not-accessible'] || column.maxAccess === MaxAccess['accessible-for-notify']) ) {
+			instanceAddress = providerNode.address.concat (column.number).concat (instance);
+			this.addNodesForAddress (instanceAddress);
+			instanceNode = this.lookup (instanceAddress);
+			instanceNode.valueType = column.type;
+			instanceNode.value = row[rowValueOffset + i];
+		}
 	}
 };
 
@@ -3683,6 +4202,9 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstan
 	var providerIndex = provider.tableIndex;
 	var providerNode = this.getProviderNodeForTable (table);
 	var columnNode = providerNode.children[columnNumber];
+	if ( ! columnNode ) {
+		return null;
+	}
 	var instanceNodes = columnNode.getInstanceNodesForColumn ();
 	var instanceOid;
 	var indexValues = [];
@@ -3690,7 +4212,7 @@ Mib.prototype.getTableColumnCells = function (table, columnNumber, includeInstan
 
 	for ( var instanceNode of instanceNodes ) {
 		instanceOid = Mib.getSubOidFromBaseOid (instanceNode.oid, columnNode.oid);
-		indexValues.push (this.getRowIndexFromOid (instanceOid, providerIndex));
+		indexValues.push (Mib.getRowIndexFromOid (instanceOid, providerIndex));
 		columnValues.push (instanceNode.value);
 	}
 	if ( includeInstances ) {
@@ -3707,16 +4229,30 @@ Mib.prototype.getTableRowCells = function (table, rowIndex) {
 	var instanceAddress;
 	var instanceNode;
 	var row = [];
+	var rowFound = false;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
 	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	for ( var columnNumber of Object.keys (providerNode.children) ) {
 		columnNode = providerNode.children[columnNumber];
-		instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
-		row.push (instanceNode.value);
+		if ( columnNode ) {
+			instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
+			if ( instanceNode ) {
+				row.push (instanceNode.value);
+				rowFound = true;
+			} else {
+				row.push (null);
+			}
+		} else {
+			row.push (null);
+		}
 	}
-	return row;
+	if ( rowFound ) {
+		return row;
+	} else {
+		return null;
+	}
 };
 
 Mib.prototype.getTableCells = function (table, byRows, includeInstances) {
@@ -3765,6 +4301,7 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	var providerNode;
 	var columnNode;
 	var instanceNode;
+	var instanceAddress;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -3772,6 +4309,7 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	columnNode = providerNode.children[columnNumber];
 	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
 	instanceNode.value = value;
+	// return instanceNode.setValue (value);
 };
 
 Mib.prototype.deleteTableRow = function (table, rowIndex) {
@@ -3780,6 +4318,7 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 	var instanceAddress;
 	var columnNode;
 	var instanceNode;
+	var instanceParentNode;
 
 	provider = this.providers[table];
 	providerNode = this.getProviderNodeForTable (table);
@@ -3795,6 +4334,9 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 			throw new ReferenceError ("Cannot find row for index " + rowIndex + " at registered provider " + table);
 		}
 	}
+	if ( Object.keys (this.providerNodes[table].children).length === 0 ) {
+		delete this.providerNodes[table];
+	}
 	return true;
 };
 
@@ -3803,10 +4345,10 @@ Mib.prototype.dump = function (options) {
 		options = {};
 	}
 	var completedOptions = {
-		leavesOnly: options.leavesOnly || true,
-		showProviders: options.leavesOnly || true,
-		showValues: options.leavesOnly || true,
-		showTypes: options.leavesOnly || true
+		leavesOnly: options.leavesOnly === undefined ? true : options.leavesOnly,
+		showProviders: options.showProviders === undefined ? true : options.showProviders,
+		showValues: options.showValues === undefined ? true : options.showValues,
+		showTypes: options.showTypes === undefined ? true : options.showTypes
 	};
 	this.root.dump (completedOptions);
 };
@@ -3836,34 +4378,34 @@ Mib.convertOidToAddress = function (oid) {
 
 		if (address[i] === true || address[i] === false) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 
 		n = Number(address[i]);
 
 		if (isNaN(n)) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is malformed');
+				address[i] + ' is malformed');
 		}
 		if (n % 1 !== 0) {
 			throw new TypeError('object identifier component ' +
-			    address[i] + ' is not an integer');
+				address[i] + ' is not an integer');
 		}
 		if (i === 0 && n > 2) {
 			throw new RangeError('object identifier does not ' +
-			    'begin with 0, 1, or 2');
+				'begin with 0, 1, or 2');
 		}
 		if (i === 1 && n > 39) {
 			throw new RangeError('object identifier second ' +
-			    'component ' + n + ' exceeds encoding limit of 39');
+				'component ' + n + ' exceeds encoding limit of 39');
 		}
 		if (n < 0) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is negative');
+				address[i] + ' is negative');
 		}
-		if (n > MAX_INT32) {
+		if (n > MAX_SIGNED_INT32) {
 			throw new RangeError('object identifier component ' +
-			    address[i] + ' is too large');
+				address[i] + ' is too large');
 		}
 		oidArray.push(n);
 	}
@@ -3874,7 +4416,11 @@ Mib.convertOidToAddress = function (oid) {
 
 Mib.getSubOidFromBaseOid = function (oid, base) {
 	return oid.substring (base.length + 1);
-}
+};
+
+Mib.create = function () {
+	return new Mib (); 
+};
 
 var MibRequest = function (requestDefinition) {
 	this.operation = requestDefinition.operation;
@@ -3894,19 +4440,23 @@ MibRequest.prototype.isTabular = function () {
 		this.providerNode.provider.type == MibProviderType.Table;
 };
 
-var Agent = function (options, callback) {
+var Agent = function (options, callback, mib) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
-	this.authorizer = new Authorizer (options.disableAuthorization);
-	this.mib = new Mib ();
+	this.authorizer = new Authorizer (options);
 	this.callback = callback || function () {};
+	this.mib = mib || new Mib ();
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
 };
 
 Agent.prototype.getMib = function () {
 	return this.mib;
+};
+
+Agent.prototype.setMib = function (mib) {
+	this.mib = mib;
 };
 
 Agent.prototype.getAuthorizer = function () {
@@ -3921,16 +4471,68 @@ Agent.prototype.registerProviders = function (providers) {
 	this.mib.registerProviders (providers);
 };
 
-Agent.prototype.unregisterProvider = function (provider) {
-	this.mib.unregisterProvider (provider);
+Agent.prototype.unregisterProvider = function (name) {
+	this.mib.unregisterProvider (name);
 };
 
-Agent.prototype.getProvider = function (provider) {
-	return this.mib.getProvider (provider);
+Agent.prototype.getProvider = function (name) {
+	return this.mib.getProvider (name);
 };
 
 Agent.prototype.getProviders = function () {
 	return this.mib.getProviders ();
+};
+
+Agent.prototype.scalarReadCreateHandlerInternal = function (createRequest) {
+	let provider = createRequest.provider;
+	// If there's a default value specified...
+	if ( provider && typeof provider.defVal != "undefined" ) {
+		// ... then use it
+		return provider.defVal;
+	}
+
+	// We don't have enough information to auto-create the scalar
+	return undefined;
+};
+
+Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
+	let provider = createRequest.provider;
+	let action = createRequest.action;
+	let row = createRequest.row;
+	let values = [];
+	let missingDefVal = false;
+	let rowIndexValues = Array.isArray( row ) ? row.slice(0) : [ row ];
+	const tc = provider.tableColumns;
+
+	tc.forEach(
+		(columnInfo) => {
+			let entries;
+
+			// Index columns get successive values from the rowIndexValues array.
+			// RowStatus columns get either "active" or "notInService" values.
+			// Every other column requires a defVal.
+			entries = provider.tableIndex.filter( entry => columnInfo.number === entry.columnNumber );
+			if (entries.length > 0 ) {
+				// It's an index column. Use the next index value
+				values.push(rowIndexValues.shift());
+			} else if ( columnInfo.rowStatus ) {
+				// It's the RowStatus column. Retain the action value for now; replaced later
+				values.push( RowStatus[action] );
+			} else if ( "defVal" in columnInfo ) {
+				// Neither index nor RowStatus column, so use the default value
+				values.push( columnInfo.defVal );
+			} else {
+				// Default value was required but not found
+				console.log("No defVal defined for column:", columnInfo);
+				missingDefVal = true;
+				values.push( undefined ); // just for debugging; never gets returned
+			}
+		}
+	);
+
+	// If a default value was missing, we can't auto-create the table row.
+	// Otherwise, we're good to go: give 'em the column values.
+	return missingDefVal ? undefined : values;
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
@@ -3950,7 +4552,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	}
 
 	// Request processing
-	debug (JSON.stringify (message.pdu, null, 2));
+	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
 		this.onProxyRequest (message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
@@ -3965,7 +4567,229 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " +
 			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
 	}
+};
 
+Agent.prototype.castSetValue = function ( type, value ) {
+	switch (type) {
+		case ObjectType.Boolean:
+			return !! value;
+
+		case ObjectType.Integer:
+			if ( typeof value != "number" && typeof value != "string" ) {
+				throw new Error("Invalid Integer", value);
+			}
+			return typeof value == "number" ? value : parseInt(value, 10);
+
+		case ObjectType.OctetString:
+			if ( value instanceof Buffer) {
+				return value.toString();
+			} else if ( typeof value != "string" ) {
+				throw new Error("Invalid OctetString", value);
+			} else {
+				return value;
+			}
+
+		case ObjectType.OID:
+			if ( typeof value != "string" || ! value.match(/[0-9]+\([.][0-9]+\)+/) ) {
+				throw new Error("Invalid OID", value);
+			}
+			return value;
+
+		case ObjectType.Counter:
+		case ObjectType.Counter64:
+			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
+			// We'll do so.
+			return 0;
+
+		case ObjectType.IpAddress:
+			// A 32-bit internet address represented as OCTET STRING of length 4
+			if ( typeof value != "string" || value.length != 4 ) {
+				throw new Error("Invalid IpAddress", value);
+			}
+			return value;
+
+		default :
+			// Assume the caller knows what he's doing
+			return value;
+	}
+};
+
+
+Agent.prototype.tryCreateInstance = function (varbind, requestType) {
+	var row;
+	var column;
+	var value;
+	var subOid;
+	var subAddr;
+	var address;
+	var fullAddress;
+	var rowStatusColumn;
+	var provider;
+	var providersByOid = this.mib.providersByOid;
+	var oid = varbind.oid;
+	var createRequest;
+
+	// Look for the provider.
+	fullAddress = Mib.convertOidToAddress (oid);
+	for ( address = fullAddress.slice(0) ; address.length > 0; address.pop() ) {
+		subOid = address.join("."); // create an oid from the current address
+
+		// Does this oid have a provider?
+		provider = providersByOid[subOid];
+		if (provider) {
+			// Yup. Figure out what to do with it.
+			// console.log(`FOUND MATCH TO ${oid}:\n`, providersByOid[subOid]);
+
+			//
+			// Scalar
+			//
+			if ( provider.type === MibProviderType.Scalar ) {
+
+				// Does this provider support "read-create"?
+				if ( provider.maxAccess != MaxAccess["read-create"] ) {
+					// Nope. Nothing we can do to help 'em.
+					return undefined;
+				}
+
+				// See if the provider says not to auto-create this scalar
+				if ( provider.createHandler === null ) {
+					return undefined;
+				}
+
+				// Call the provider-provided handler if available, or the default one if not
+				createRequest = {
+					provider: provider
+				};
+				value = ( provider.createHandler || this.scalarReadCreateHandlerInternal ) ( createRequest );
+				if ( typeof value == "undefined" ) {
+					// Handler said do not create instance
+					return undefined;
+				}
+
+				// Ensure the value is of the correct type, and save it
+				value = this.castSetValue ( provider.scalarType, value );
+				this.mib.setScalarValue ( provider.name, value );
+
+				// Now there should be an instanceNode available.
+				return {
+					instanceNode: this.mib.lookup (oid),
+					providerType: MibProviderType.Scalar
+				};
+			}
+
+			//
+			// Table
+			//
+
+			// This is where we would support "read-create" of table
+			// columns. RFC2578 section 7.1.12.1, however, implies
+			// that rows should be created only via use of the
+			// RowStatus column. We'll therefore avoid creating rows
+			// based solely on any other column's "read-create"
+			// max-access value.
+
+			//
+			// RowStatus setter (actions)
+			//
+			subOid = Mib.getSubOidFromBaseOid (oid, provider.oid);
+			subAddr = subOid.split(".");
+			column = parseInt(subAddr.shift(), 10);
+			row = Mib.getRowIndexFromOid(subAddr.join("."), provider.tableIndex);
+			rowStatusColumn = provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null );
+
+			if ( requestType === PduType.SetRequest &&
+					typeof rowStatusColumn == "number" &&
+					column === rowStatusColumn ) {
+
+				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
+						provider.createHandler !== null ) {
+
+					// The create handler will return an array
+					// containing all table column values for the
+					// table row to be added.
+					createRequest = {
+						provider: provider,
+						action: RowStatus[varbind.value],
+						row: row
+					};
+					value = ( provider.createHandler || this.tableRowStatusHandlerInternal )( createRequest );
+					if ( typeof value == "undefined") {
+						// Handler said do not create instance
+						return undefined;
+					}
+
+					if (! Array.isArray( value ) ) {
+						throw new Error("createHandler must return an array or undefined; got", value);
+					}
+
+					if ( value.length != provider.tableColumns.length ) {
+						throw new Error("createHandler's returned array must contain a value for for each column" );
+					}
+
+					// Map each column's value to the appropriate type
+					value = value.map( (v, i) => this.castSetValue ( provider.tableColumns[i].type, v ) );
+
+					// Add the table row
+					this.mib.addTableRow ( provider.name, value );
+
+					// Now there should be an instanceNode available.
+					return {
+						instanceNode: this.mib.lookup (oid),
+						providerType: MibProviderType.Table,
+						action: RowStatus[varbind.value],
+						rowIndex: row,
+						row: value
+					};
+
+				}
+			}
+
+			return undefined;
+		}
+	}
+
+//	console.log(`NO MATCH TO ${oid}`);
+	return undefined;
+};
+
+Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
+	var column;
+	var maxAccess;
+	var columnEntry;
+
+	if (provider.type === MibProviderType.Scalar) {
+		// It's a scalar. We'll use the provider's maxAccess
+		maxAccess = provider.maxAccess;
+	} else {
+		// It's a table column. Use that column's maxAccess.
+		column = instanceNode.getTableColumnFromInstanceNode();
+
+		// In the typical case, we could use (column - 1) to index
+		// into tableColumns to get to the correct entry. There is no
+		// guarantee, however, that column numbers in the OID are
+		// necessarily consecutive; theoretically some could be
+		// missing. We'll therefore play it safe and search for the
+		// specified column entry.
+
+		columnEntry = provider.tableColumns.find(entry => entry.number === column);
+		maxAccess = columnEntry ? columnEntry.maxAccess || MaxAccess['not-accessible'] : MaxAccess['not-accessible'];
+	}
+
+	switch ( PduType[pduType] ) {
+		case "SetRequest":
+			// SetRequest requires at least read-write access
+			return maxAccess >= MaxAccess["read-write"];
+
+		case "GetRequest":
+		case "GetNextRequest":
+		case "GetBulkRequest":
+			// GetRequests require at least read-only access
+			return maxAccess >= MaxAccess["read-only"];
+
+		default:
+			// Disallow other pdu types
+			return false;
+	}
 };
 
 Agent.prototype.request = function (requestMessage, rinfo) {
@@ -3974,90 +4798,292 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
 	var responsePdu = requestPdu.getResponsePduForRequest ();
+	var mibRequests = [];
+	var handlers = [];
+	var createResult = [];
+	var oldValues = [];
+	var securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
 
-	for ( var i = 0; i < requestPdu.varbinds.length; i++ ) {
-		var requestVarbind = requestPdu.varbinds[i];
-		var instanceNode = this.mib.lookup (requestVarbind.oid);
-		var providerNode;
-		var mibRequest;
-		var handler;
-		var responseVarbindType;
+	for ( let i = 0; i < requestPdu.varbinds.length; i++ ) {
+		let instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
+		let providerNode;
+		let rowStatusColumn;
+		let getIcsHandler;
+
+		// If we didn't find an instance node, see if we can
+		// automatically create it, either because it has
+		// "read-create" MAX-ACCESS, or because it's a RowStatus SET
+		// indicating create.
+		if ( ! instanceNode ) {
+			createResult[i] = this.tryCreateInstance(requestPdu.varbinds[i], requestPdu.type);
+			if ( createResult[i] ) {
+				instanceNode = createResult[i].instanceNode;
+			}
+		}
 
 		// workaround re-write of OIDs less than 4 digits due to asn1-ber length limitation
-		if ( requestVarbind.oid.split('.').length < 4 ) {
-			requestVarbind.oid = "1.3.6.1";
+		if ( requestPdu.varbinds[i].oid.split('.').length < 4 ) {
+			requestPdu.varbinds[i].oid = "1.3.6.1";
 		}
 
 		if ( ! instanceNode ) {
-			mibRequest = new MibRequest ({
+			mibRequests[i] = new MibRequest ({
 				operation: requestPdu.type,
-				oid: requestVarbind.oid
+				oid: requestPdu.varbinds[i].oid
 			});
-			handler = function getNsoHandler (mibRequestForNso) {
+			handlers[i] = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
 					errorStatus: ErrorStatus.NoError,
-					errorIndex: 0,
 					type: ObjectType.NoSuchObject,
 					value: null
 				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			if ( ! providerNode ) {
-				mibRequest = new MibRequest ({
+			if ( ! providerNode || instanceNode.value === undefined ) {
+				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
-					oid: requestVarbind.oid
+					oid: requestPdu.varbinds[i].oid
 				});
-				handler = function getNsiHandler (mibRequestForNsi) {
+				handlers[i] = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
-						errorIndex: 0,
 						type: ObjectType.NoSuchInstance,
 						value: null
 					});
 				};
-			} else {
-				mibRequest = new MibRequest ({
+			} else if ( ! this.isAllowed(requestPdu.type, providerNode.provider, instanceNode ) ) {
+				// requested access not allowed (by MAX-ACCESS)
+				mibRequests[i] = new MibRequest ({
+					operation: requestPdu.type,
+					oid: requestPdu.varbinds[i].oid
+				});
+				handlers[i] = function getRanaHandler (mibRequestForRana) {
+					mibRequestForRana.done ({
+						errorStatus: ErrorStatus.NoAccess,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
+			} else if ( this.authorizer.getAccessControlModelType () == AccessControlModelType.Simple &&
+					! this.authorizer.getAccessControlModel ().isAccessAllowed (requestMessage.version, securityName, requestMessage.pdu.type) ) {
+				// Access control check
+				mibRequests[i] = new MibRequest ({
+					operation: requestPdu.type,
+					oid: requestPdu.varbinds[i].oid
+				});
+				handlers[i] = function getAccessDeniedHandler (mibRequestForAccessDenied) {
+					mibRequestForAccessDenied.done ({
+						errorStatus: ErrorStatus.NoAccess,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
+			} else if ( requestPdu.type === PduType.SetRequest &&
+					providerNode.provider.type == MibProviderType.Table &&
+					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
+								(acc, current) => current.rowStatus ? current.number : acc, null )) == "number" &&
+					instanceNode.getTableColumnFromInstanceNode() === rowStatusColumn) {
+
+				getIcsHandler = function (mibRequestForIcs) {
+					mibRequestForIcs.done ({
+						errorStatus: ErrorStatus.InconsistentValue,
+						type: ObjectType.Null,
+						value: null
+					});
+				};
+
+				requestPdu.varbinds[i].requestValue = this.castSetValue (requestPdu.varbinds[i].type, requestPdu.varbinds[i].value);
+				switch ( requestPdu.varbinds[i].value ) {
+					case RowStatus["active"]:
+					case RowStatus["notInService"]:
+						// Setting either of these states, when the
+						// row already exists, is fine
+						break;
+
+					case RowStatus["destroy"]:
+						// This case is handled later
+						break;
+
+					case RowStatus["createAndGo"]:
+						// Valid if this was a new row creation, but now set to active
+						if ( instanceNode.value === RowStatus["createAndGo"] ) {
+							requestPdu.varbinds[i].value = RowStatus["active"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+						}
+						break;
+
+					case RowStatus["createAndWait"]:
+						// Valid if this was a new row creation, but now set to notInService
+						if ( instanceNode.value === RowStatus["createAndWait"] ) {
+							requestPdu.varbinds[i].value = RowStatus["notInService"];
+						} else {
+							// Row already existed
+							mibRequests[i] = new MibRequest ({
+								operation: requestPdu.type,
+								oid: requestPdu.varbinds[i].oid
+							});
+							handlers[i] = getIcsHandler;
+						}
+						break;
+
+					case RowStatus["notReady"]:
+					default:
+						// It's not ever legal to set the RowStatus to
+						// any value but the six that are defined, and
+						// it's not legal to change the state to
+						// "notReady".
+						//
+						// The row already exists, as determined by
+						// the fact that we have an instanceNode, so
+						// we can not apply a create action to the
+						// RowStatus column, as dictated RFC-2579.
+						// (See the summary state table on Page 8
+						// (inconsistent value)
+						mibRequests[i] = new MibRequest ({
+							operation: requestPdu.type,
+							oid: requestPdu.varbinds[i].oid
+						});
+						handlers[i] = getIcsHandler;
+						break;
+				}
+			}
+
+			if ( requestPdu.type === PduType.SetRequest && ! createResult[i] ) {
+				oldValues[i] = instanceNode.value;
+			}
+
+			if ( ! handlers[i] ) {
+				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
 					providerNode: providerNode,
 					instanceNode: instanceNode,
-					oid: requestVarbind.oid
+					oid: requestPdu.varbinds[i].oid
 				});
+
 				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequest.setType = requestVarbind.type;
-					mibRequest.setValue = requestVarbind.value;
+					mibRequests[i].setType = requestPdu.varbinds[i].type;
+					mibRequests[i].setValue = requestPdu.varbinds[i].requestValue || requestPdu.varbinds[i].value;
 				}
-				handler = providerNode.provider.handler;
+				handlers[i] = providerNode.provider.handler;
 			}
 		}
 
 		(function (savedIndex) {
-			mibRequest.done = function (error) {
+			let responseVarbind;
+			mibRequests[savedIndex].done = function (error) {
+				let rowIndex = null;
+				let row = null;
+				let deleted = false;
+				let column = -1;
+				responseVarbind = {
+					oid: mibRequests[savedIndex].oid
+				};
 				if ( error ) {
-					if ( responsePdu.errorStatus == ErrorStatus.NoError && error.errorStatus != ErrorStatus.NoError ) {
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
-						responsePdu.errorIndex = error.errorIndex;
+						responsePdu.errorIndex = savedIndex + 1;
 					}
-					responseVarbind = {
-						oid: mibRequest.oid,
-						type: error.type,
-						value: error.value || null
-					};
+					responseVarbind.type = error.type || ObjectType.Null;
+					responseVarbind.value = error.value || null;
+					//responseVarbind.errorStatus: error.errorStatus
+					if ( error.errorStatus != ErrorStatus.NoError ) {
+						responseVarbind.errorStatus = error.errorStatus;
+					}
 				} else {
+					let provider = providerNode ? providerNode.provider : null;
+					let providerName = provider ? provider.name : null;
+					let subOid;
+					let subAddr;
+					if ( providerNode && providerNode.provider && providerNode.provider.type == MibProviderType.Table ) {
+						column = instanceNode.getTableColumnFromInstanceNode();
+						subOid = Mib.getSubOidFromBaseOid (instanceNode.oid, provider.oid);
+						subAddr = subOid.split(".");
+						subAddr.shift(); // shift off the column number, leaving the row index values
+						rowIndex = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
+						row = me.mib.getTableRowCells ( providerName, rowIndex );
+					}
 					if ( requestPdu.type == PduType.SetRequest ) {
-						mibRequest.instanceNode.value = requestVarbind.value;
+						// Is this a RowStatus column with a value of 6 (delete)?
+						let rowStatusColumn = provider.type == MibProviderType.Table
+							? provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null )
+							: null;
+						if ( requestPdu.varbinds[savedIndex].value === RowStatus["destroy"] &&
+							typeof rowStatusColumn == "number" &&
+							column === rowStatusColumn ) {
+
+							// Yup. Do the deletion.
+							me.mib.deleteTableRow ( providerName, rowIndex );
+							deleted = true;
+
+							// This is going to return the prior state of the RowStatus column,
+							// i.e., either "active" or "notInService". That feels wrong, but there
+							// is no value we can set it to to indicate just-deleted. One would
+							// think we could set it to "notReady", but that is explicitly defined
+							// in RFC-2579 as "the conceptual row exists in the agent", which is
+							// no longer the case now that we've deleted the row. We're not allowed
+							// to ever return "destroy" as a status, so that doesn't give us an
+							// option either.
+
+						} else {
+							// No special handling required. Just save the new value.
+							let setResult = mibRequests[savedIndex].instanceNode.setValue (me.castSetValue (
+								requestPdu.varbinds[savedIndex].type,
+								requestPdu.varbinds[savedIndex].value
+							));
+							if ( ! setResult ) {
+								if ( typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError ) {
+									responsePdu.errorStatus = ErrorStatus.WrongValue;
+									responsePdu.errorIndex = savedIndex + 1;
+								}
+								responseVarbind.errorStatus = ErrorStatus.WrongValue;
+							}
+						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
-							requestVarbind.type == ObjectType.EndOfMibView ) {
-						responseVarbindType = ObjectType.EndOfMibView;
+							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
+						responseVarbind.type = ObjectType.EndOfMibView;
 					} else {
-						responseVarbindType = mibRequest.instanceNode.valueType;
+						responseVarbind.type = mibRequests[savedIndex].instanceNode.valueType;
 					}
-					responseVarbind = {
-						oid: mibRequest.oid,
-						type: responseVarbindType,
-						value: mibRequest.instanceNode.value
-					};
+					responseVarbind.value = mibRequests[savedIndex].instanceNode.value;
+				}
+				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
+					responseVarbind.providerName = providerNode.provider.name;
+				}
+				if ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetNextRequest ) {
+					responseVarbind.previousOid = requestPdu.varbinds[savedIndex].previousOid;
+				}
+				if ( requestPdu.type == PduType.SetRequest ) {
+					if ( oldValues[savedIndex] !== undefined ) {
+						responseVarbind.oldValue = oldValues[savedIndex];
+					}
+					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
+					if ( requestPdu.varbinds[savedIndex].requestValue ) {
+						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].requestValue);
+					} else {
+						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].value);
+					}
+				}
+				if ( createResult[savedIndex] ) {
+					responseVarbind.autoCreated = true;
+				} else if ( deleted ) {
+					responseVarbind.deleted = true;
+				}
+				if ( providerNode && providerNode.provider.type == MibProviderType.Table ) {
+					responseVarbind.column = column;
+					responseVarbind.columnPosition = providerNode.provider.tableColumns.findIndex(tc => tc.number == column);
+					responseVarbind.rowIndex = rowIndex;
+					if ( ! deleted && rowIndex ) {
+						row = me.mib.getTableRowCells ( providerNode.provider.name, rowIndex );
+					}
+					responseVarbind.row = row;
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
 				if ( ++varbindsCompleted == varbindsLength) {
@@ -4065,12 +5091,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				}
 			};
 		})(i);
-		if ( handler ) {
-			handler (mibRequest);
+		if ( handlers[i] ) {
+			handlers[i] (mibRequests[i]);
 		} else {
-			mibRequest.done ();
+			mibRequests[i].done ();
 		}
-	};
+	}
 };
 
 Agent.prototype.getRequest = function (requestMessage, rinfo) {
@@ -4100,6 +5126,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	if ( ! getNextNode ) {
 		// End of MIB
 		targetVarbinds.push ({
+			previousOid: startOid,
 			oid: startOid,
 			type: ObjectType.EndOfMibView,
 			value: null
@@ -4107,6 +5134,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	} else {
 		// Normal response
 		targetVarbinds.push ({
+			previousOid: startOid,
 			oid: getNextNode.oid,
 			type: getNextNode.valueType,
 			value: getNextNode.value
@@ -4137,22 +5165,25 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	var getNextNode;
 	var endOfMib = false;
 
-	for (var n = 0 ; n < requestPdu.nonRepeaters ; n++ ) {
+	for (var n = 0 ; n < Math.min (requestPdu.nonRepeaters, requestVarbinds.length) ; n++ ) {
 		this.addGetNextVarbind (getBulkVarbinds, requestVarbinds[n].oid);
 	}
 
-	for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
-		startOid.push (requestVarbinds[v].oid);
-	}
-
-	while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
+	if ( requestPdu.nonRepeaters < requestVarbinds.length ) {
+	
 		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
-			if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - requestPdu.nonRepeaters]);
-				if ( getNextNode ) {
-					startOid[v - requestPdu.nonRepeaters] = getNextNode.oid;
-					if ( getNextNode.type == ObjectType.EndOfMibView ) {
-						endOfMib = true;
+			startOid.push (requestVarbinds[v].oid);
+		}
+
+		while ( getBulkVarbinds.length < requestPdu.maxRepetitions && ! endOfMib ) {
+			for (var w = requestPdu.nonRepeaters ; w < requestVarbinds.length ; w++ ) {
+				if (getBulkVarbinds.length < requestPdu.maxRepetitions ) {
+					getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - requestPdu.nonRepeaters]);
+					if ( getNextNode ) {
+						startOid[w - requestPdu.nonRepeaters] = getNextNode.oid;
+						if ( getNextNode.type == ObjectType.EndOfMibView ) {
+							endOfMib = true;
+						}
 					}
 				}
 			}
@@ -4220,8 +5251,8 @@ Agent.prototype.close  = function() {
 	this.listener.close ();
 };
 
-Agent.create = function (options, callback) {
-	var agent = new Agent (options, callback);
+Agent.create = function (options, callback, mib) {
+	var agent = new Agent (options, callback, mib);
 	agent.listener.startListening ();
 	return agent;
 };
@@ -4270,7 +5301,7 @@ Forwarder.prototype.dumpProxies = function () {
 			target: proxy.target,
 			user: proxy.user,
 			port: proxy.port
-		}
+		};
 	}
 	console.log (JSON.stringify (dump, null, 2));
 };
@@ -4448,6 +5479,7 @@ AgentXPdu.createFromBuffer = function (socketBuffer) {
 };
 
 AgentXPdu.writeOid = function (buffer, oid, include = 0) {
+	var prefix;
 	if ( oid ) {
 		var address = oid.split ('.').map ( Number );
 		if ( address.length >= 5 && address.slice (0, 4).join('.') == '1.3.6.1' ) {
@@ -4700,6 +5732,7 @@ Subagent.prototype.registerProvider = function (provider, callback) {
 };
 
 Subagent.prototype.unregisterProvider = function (name, callback) {
+	var provider = this.getProvider (name);
 	var pdu = AgentXPdu.createFromVariables ({
 		pduType: AgentXPduType.Unregister,
 		sessionID: this.sessionID,
@@ -4717,8 +5750,8 @@ Subagent.prototype.registerProviders = function (providers, callback) {
 	}
 };
 
-Subagent.prototype.getProvider = function (provider) {
-	return this.mib.getProvider (provider);
+Subagent.prototype.getProvider = function (name) {
+	return this.mib.getProvider (name);
 };
 
 Subagent.prototype.getProviders = function () {
@@ -4866,14 +5899,16 @@ Subagent.prototype.response = function (pdu) {
 				break;
 			default:
 				// Response PDU for request type not handled
-				throw new ResponseInvalidError ("Response PDU for type '" + requestPdu.pduType + "' not handled");
+				throw new ResponseInvalidError ("Response PDU for type '" + requestPdu.pduType + "' not handled",
+						ResponseInvalidCode.EResponseNotHandled);
 		}
 		if (requestPdu.callback) {
 			requestPdu.callback(null, pdu);
 		}
 	} else {
 		// unexpected Response PDU - has no matching request
-		throw new ResponseInvalidError ("Unexpected Response PDU with packetID " + pdu.packetID);
+		throw new ResponseInvalidError ("Unexpected Response PDU with packetID " + pdu.packetID,
+				ResponseInvalidCode.EUnexpectedResponse);
 	}
 };
 
@@ -4898,34 +5933,50 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 			});
 			handler = function getNsoHandler (mibRequestForNso) {
 				mibRequestForNso.done ({
-					errorStatus: ErrorStatus.NoSuchName,
-					errorIndex: i
+					errorStatus: ErrorStatus.NoError,
+					errorIndex: 0,
+					type: ObjectType.NoSuchObject,
+					value: null
 				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
-			mibRequest = new MibRequest ({
-				operation: pdu.pduType,
-				providerNode: providerNode,
-				instanceNode: instanceNode,
-				oid: requestVarbind.oid
-			});
-			if ( pdu.pduType == AgentXPduType.TestSet ) {
-				mibRequest.setType = requestVarbind.type;
-				mibRequest.setValue = requestVarbind.value;
+			if ( ! providerNode ) {
+				mibRequest = new MibRequest ({
+					operation: pdu.pduType,
+					oid: requestVarbind.oid
+				});
+				handler = function getNsiHandler (mibRequestForNsi) {
+					mibRequestForNsi.done ({
+						errorStatus: ErrorStatus.NoError,
+						errorIndex: 0,
+						type: ObjectType.NoSuchInstance,
+						value: null
+					});
+				};
+			} else {
+				mibRequest = new MibRequest ({
+					operation: pdu.pduType,
+					providerNode: providerNode,
+					instanceNode: instanceNode,
+					oid: requestVarbind.oid
+				});
+				if ( pdu.pduType == AgentXPduType.TestSet ) {
+					mibRequest.setType = requestVarbind.type;
+					mibRequest.setValue = requestVarbind.value;
+				}
+				handler = providerNode.provider.handler;
 			}
-			handler = providerNode.provider.handler;
 		}
 
 		(function (savedIndex) {
+			var responseVarbind;
 			mibRequest.done = function (error) {
 				if ( error ) {
-					responsePdu.errorStatus = error.errorStatus;
-					responsePdu.errorIndex = error.errorIndex;
 					responseVarbind = {
 						oid: mibRequest.oid,
-						type: ObjectType.Null,
-						value: null
+						type: error.type || ObjectType.Null,
+						value: error.value || null
 					};
 				} else {
 					if ( pdu.pduType == AgentXPduType.TestSet ) {
@@ -4964,7 +6015,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		} else {
 			mibRequest.done ();
 		}
-	};
+	}
 };
 
 Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
@@ -5040,11 +6091,11 @@ Subagent.prototype.getBulkRequest = function (pdu) {
 	}
 
 	while ( getBulkVarbinds.length < pdu.maxRepetitions && ! endOfMib ) {
-		for (var v = pdu.nonRepeaters ; v < pdu.searchRangeList.length ; v++ ) {
+		for (var w = pdu.nonRepeaters ; w < pdu.searchRangeList.length ; w++ ) {
 			if (getBulkVarbinds.length < pdu.maxRepetitions ) {
-				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[v - pdu.nonRepeaters]);
+				getNextNode = this.addGetNextVarbind (getBulkVarbinds, startOid[w - pdu.nonRepeaters]);
 				if ( getNextNode ) {
-					startOid[v - pdu.nonRepeaters] = getNextNode.oid;
+					startOid[w - pdu.nonRepeaters] = getNextNode.oid;
 					if ( getNextNode.type == ObjectType.EndOfMibView ) {
 						endOfMib = true;
 					}
@@ -5132,6 +6183,7 @@ exports.createReceiver = Receiver.create;
 exports.createAgent = Agent.create;
 exports.createModuleStore = ModuleStore.create;
 exports.createSubagent = Subagent.create;
+exports.createMib = Mib.create;
 
 exports.isVarbindError = isVarbindError;
 exports.varbindError = varbindError;
@@ -5150,18 +6202,24 @@ exports.MibProviderType = MibProviderType;
 exports.SecurityLevel = SecurityLevel;
 exports.AuthProtocols = AuthProtocols;
 exports.PrivProtocols = PrivProtocols;
+exports.AccessControlModelType = AccessControlModelType;
+exports.AccessLevel = AccessLevel;
+exports.MaxAccess = MaxAccess;
+exports.RowStatus = RowStatus;
 
+exports.ResponseInvalidCode = ResponseInvalidCode;
 exports.ResponseInvalidError = ResponseInvalidError;
 exports.RequestInvalidError = RequestInvalidError;
 exports.RequestFailedError = RequestFailedError;
 exports.RequestTimedOutError = RequestTimedOutError;
 
 /**
- ** We've added this for testing.
+ ** Added for testing
  **/
 exports.ObjectParser = {
-	readInt: readInt,
-	readUint: readUint
+	readInt32: readInt32,
+	readUint32: readUint32,
+	readVarbindValue: readVarbindValue
 };
 exports.Authentication = Authentication;
 exports.Encryption = Encryption;
