@@ -3219,6 +3219,10 @@ Example programs are included under the module's `example` directory.
 
  * Add bit string type to varbind reading
 
+## Version 3.8.2 - 21/06/2022
+
+ * Fix PDU error status field writing
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

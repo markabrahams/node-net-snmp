@@ -799,7 +799,7 @@ SimpleResponsePdu.prototype.toBuffer = function (writer) {
 	writer.startSequence (this.type);
 
 	writeInt32 (writer, ObjectType.Integer, this.id);
-	writeInt32 (writer, this.errorStatus || 0);
+	writeInt32 (writer, ObjectType.Integer, this.errorStatus || 0);
 	writeInt32 (writer, ObjectType.Integer, this.errorIndex || 0);
 	writeVarbinds (writer, this.varbinds);
 	writer.endSequence ();
