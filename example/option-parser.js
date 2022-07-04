@@ -1,7 +1,9 @@
 var snmp = require ("../");
 var getopts = require ("getopts");
 
-var options = getopts(process.argv.slice(2));
+var options = getopts(process.argv.slice(2), {
+    string: ["e"]
+});
 var community;
 var user;
 var session;
@@ -18,16 +20,14 @@ if ( ! options.v ) {
 
 snmpOptions.version = snmp.Version[options.v];
 snmpOptions.debug = options.d;
-snmpOptions.transport = options.t
+snmpOptions.transport = options.t;
 if ( snmpOptions.version == snmp.Version3 ) {
-    var engineID;
     if ( options.e ) {
-        engineID = Buffer.from((options.e.toString().length % 2 == 1 ? '0' : '') + options.e.toString(), 'hex');
+        snmpOptions.engineID = options.e.toString();
     }
 	user = {
 		name: options.u,
-		level: snmp.SecurityLevel[options.l],
-        engineID: engineID
+		level: snmp.SecurityLevel[options.l]
     };
     if ( options.a ) {
         user.authProtocol = snmp.AuthProtocols[options.a.toLowerCase()];
@@ -67,14 +67,14 @@ if ( command.includes('snmp-set') ) {
     }
 } else {
     oids = [];
-    for (var i = 1; i < options._.length; i++) {
-        oids.push (options._[i]);
+    for (var j = 1; j < options._.length; j++) {
+        oids.push (options._[j]);
     }
 }
 if ( command.includes('snmp-trap') || command.includes('snmp-inform') || command.includes('snmp-receiver') ) {
-    snmpOptions.trapPort = options.p
+    snmpOptions.trapPort = options.p;
 } else {
-    snmpOptions.port = options.p
+    snmpOptions.port = options.p;
 }
 
 if ( snmpOptions.version == snmp.Version3 ) {

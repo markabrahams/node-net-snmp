@@ -26,12 +26,12 @@ session.getBulk (oids, nonRepeaters, maxRepetitions, function (error,
 		}
 		
 		// then step through the repeaters which are varbind arrays
-		for (var i = nonRepeaters; i < varbinds.length; i++) {
-			for (var j = 0; j < varbinds[i].length; j++) {
-				if (snmp.isVarbindError (varbinds[i][j]))
-					console.error (snmp.varbindError (varbinds[i][j]));
+		for (var j = nonRepeaters; j < varbinds.length; j++) {
+			for (var k = 0; k < varbinds[j].length; k++) {
+				if (snmp.isVarbindError (varbinds[j][k]))
+					console.error (snmp.varbindError (varbinds[j][k]));
 				else
-					console.log (varbinds[i][j].oid + "|" + varbinds[i][j].value);
+					console.log (varbinds[j][k].oid + "|" + varbinds[j][k].value);
 			}
 		}
 	}

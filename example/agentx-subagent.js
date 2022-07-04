@@ -72,7 +72,7 @@ agent.open(function (error, data) {
 // setTimeout( function() {
 //     agent.open();
 //     agent.close();
-//     agent.unregisterProvider (intProvider, null);
+//     agent.unregisterProvider (intProvider.name, null);
 //     agent.addAgentCaps ("1.3.6.1.4.1.8072.9999.9999", "Marks funk");
 //     agent.removeAgentCaps ("1.3.6.1.4.1.8072.9999.9999");
 //     agent.ping (function(error, pdu) {
