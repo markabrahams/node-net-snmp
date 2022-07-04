@@ -1028,7 +1028,7 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 	var hmacAlgorithm = crypto.createHmac (cryptoAlgorithm, authKey);
 	hmacAlgorithm.update (messageBuffer);
 	var digest = hmacAlgorithm.digest ();
-	return digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH);
+	return Buffer.from(digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH));
 };
 
 var Encryption = {};
