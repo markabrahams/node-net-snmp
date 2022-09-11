@@ -1566,7 +1566,7 @@ Message.prototype.createCommunityResponseFromRequest = function (responsePdu) {
 Message.prototype.createV3ResponseFromRequest = function (responsePdu) {
 	var responseUser = {
 		name: this.user.name,
-		level: this.user.name,
+		level: this.user.level,
 		authProtocol: this.user.authProtocol,
 		authKey: this.user.authKey,
 		privProtocol: this.user.privProtocol,

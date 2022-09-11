@@ -3223,6 +3223,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix PDU error status field writing
 
+## Version 3.8.3 - 12/09/2022
+
+ * Fix incorrect user level assignment
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
