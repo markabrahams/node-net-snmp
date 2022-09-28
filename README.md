@@ -3227,6 +3227,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix incorrect user level assignment
 
+## Version 3.8.4 - 29/09/2022
+
+ * Fix IpAddress byte array set request handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
