@@ -4603,7 +4603,8 @@ Agent.prototype.castSetValue = function ( type, value ) {
 
 		case ObjectType.IpAddress:
 			// A 32-bit internet address represented as OCTET STRING of length 4
-			if ( typeof value != "string" || value.length != 4 ) {
+			var bytes = value.split(".");
+			if ( typeof value != "string" || bytes.length != 4 ) {
 				throw new Error("Invalid IpAddress", value);
 			}
 			return value;
