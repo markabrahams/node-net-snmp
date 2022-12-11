@@ -315,6 +315,16 @@ function RequestTimedOutError (message) {
 }
 util.inherits (RequestTimedOutError, Error);
 
+function ProcessingError (message, error, rinfo, buffer) {
+	this.name = "ProcessingError";
+	this.message = message;
+	this.error = error;
+	this.rinfo = rinfo;
+	this.buffer = buffer;
+	Error.captureStackTrace(this, ProcessingError);
+}
+util.inherits (ProcessingError, Error);
+
 /*****************************************************************************
  ** OID and varbind helper functions
  **/
@@ -3071,8 +3081,15 @@ Receiver.prototype.getAuthorizer = function () {
 };
 
 Receiver.prototype.onMsg = function (buffer, rinfo) {
-	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
-	var reportMessage;
+
+	let message;
+
+	try {
+		message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+	} catch (error) {
+		this.callback (new ProcessingError ("Failure to process incoming message", error, rinfo, buffer));
+		return;
+	}
 
 	if ( ! message ) {
 		return;
@@ -3090,7 +3107,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
 	}
@@ -4536,8 +4553,15 @@ Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
 };
 
 Agent.prototype.onMsg = function (buffer, rinfo) {
-	var message = Listener.processIncoming (buffer, this.authorizer, this.callback);
-	var reportMessage;
+
+	let message;
+
+	try {
+		message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+	} catch (error) {
+		this.callback (new ProcessingError ("Failure to process incoming message", error, rinfo, buffer));
+		return;
+	}
 
 	if ( ! message ) {
 		return;
@@ -4546,7 +4570,7 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	// SNMPv3 discovery
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
-		reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
 		this.listener.send (reportMessage, rinfo);
 		return;
 	}

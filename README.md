@@ -517,6 +517,14 @@ supplemental information. An authentication error, for example -- code
 `ResponseInvalidCode.EAuthFailure` -- will contain a map in `info`
 with the attempted authentication data which failed to authenticate.
 
+## snmp.ProcessingError
+
+If a receiver or an agent receives a packet it is unable to decode,
+then it will produce a `ProcessingError` containing:
+* `rinfo` information on the origin of the packet,
+* a `buffer` containing the packet contents, and
+* an `error` containing the original error encountered during processing.
+
 # Using This Module: Command & Notification Generator
 
 This library provides a `Session` class to provide support for building
@@ -3230,6 +3238,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.8.4 - 29/09/2022
 
  * Fix IpAddress byte array set request handling
+
+## Version 3.9.0 - 11/12/2022
+
+ * Add ProcessingError to handle agent/receiver decode failures
 
 # License
 

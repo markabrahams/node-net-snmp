@@ -15,7 +15,8 @@ var cb = function(error, trap) {
     var now = new Date().toLocaleString();
     var trapType;
     if (error) {
-        console.log(now + ": " + error.message);
+        console.log (now + ": " + error.message);
+        console.error (error);
     } else {
         trapType = snmp.PduType[trap.pdu.type] || "Unknown";
         if ( verbose ) {
