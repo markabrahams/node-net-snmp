@@ -3243,6 +3243,10 @@ Example programs are included under the module's `example` directory.
 
  * Add ProcessingError to handle agent/receiver decode failures
 
+## Version 3.9.1 - 16/03/2023
+
+ * Fix MIB parsing of unclosed brackets in comments
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
