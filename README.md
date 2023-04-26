@@ -3247,6 +3247,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix MIB parsing of unclosed brackets in comments
 
+## Version 3.9.2 - 26/04/2023
+
+ * Fix MIB parsing of non-comments in descriptions and unmatched quotations
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
