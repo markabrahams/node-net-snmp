@@ -66,6 +66,9 @@ agent.open(function (error, data) {
         agent.registerProvider (tableProvider, null);
         agent.getMib ().addTableRow ("smallIfTable", [1, "lo", 24]);
         agent.getMib ().addTableRow ("smallIfTable", [2, "eth0", 6]);
+        agent.on("close", function() {
+            console.log ("Subagent socket closed");
+        });
     }
 });
 

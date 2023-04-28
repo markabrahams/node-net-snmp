@@ -5708,6 +5708,16 @@ var Subagent = function (options) {
 	this.setTransactions = {};
 };
 
+util.inherits (Subagent, events.EventEmitter);
+
+Subagent.prototype.onClose = function () {
+	this.emit ("close");
+};
+
+Subagent.prototype.onError = function (error) {
+	this.emit ("error", error);
+};
+
 Subagent.prototype.getMib = function () {
 	return this.mib;
 };
@@ -5720,9 +5730,8 @@ Subagent.prototype.connectSocket = function () {
 	});
 
 	this.socket.on ("data", me.onMsg.bind (me));
-	this.socket.on ("error", function (error) {
-		console.error (error);
-	});
+	this.socket.on ("error", me.onError.bind (me));
+	this.socket.on ("close", me.onClose.bind (me));
 };
 
 Subagent.prototype.open = function (callback) {

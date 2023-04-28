@@ -655,7 +655,7 @@ for v1 and v2c.
 
 ## session.on ("close", callback)
 
-The `close` event is emitted by the session when the sessions underlying UDP
+The `close` event is emitted by the session when the session's underlying UDP
 socket is closed.
 
 No arguments are passed to the callback.
@@ -665,7 +665,7 @@ in the failure of each outstanding request.  The error passed back through to
 each request will be an instance of the `Error` class with the errors
 `message` attribute set to `Socket forcibly closed`.
 
-The following example prints a message to the console when a sessions
+The following example prints a message to the console when a session's
 underlying UDP socket is closed:
 
 ```js
@@ -676,7 +676,7 @@ session.on ("close", function () {
 
 ## session.on ("error", callback)
 
-The `error` event is emitted by the session when the sessions underlying UDP
+The `error` event is emitted by the session when the session's underlying UDP
 socket emits an error.
 
 The following arguments will be passed to the `callback` function:
@@ -685,7 +685,7 @@ The following arguments will be passed to the `callback` function:
    will contain a detailed error message.
 
 The following example prints a message to the console when an error occurs
-with a sessions underlying UDP socket, the session is then closed:
+with a session's underlying UDP socket, the session is then closed:
 
 ```js
 session.on ("error", function (error) {
@@ -2704,6 +2704,40 @@ Sends a "ping" to the master agent using a `Ping` PDU, to confirm that the maste
 responsive.  The supplied `callback` is called on reception of the subsequent
 `Response` PDU from the master to the `Ping` PDU.
 
+## subagent.on ("close", callback)
+
+The `close` event is emitted by the subagent when its underlying TCP socket is closed.
+
+No arguments are passed to the callback.
+
+The following example prints a message to the console when a subagent's
+underlying TCP socket is closed:
+
+```js
+subagent.on ("close", function () {
+    console.log ("Subagent socket closed");
+});
+```
+
+## subagent.on ("error", callback)
+
+The `error` event is emitted by the subagent when its underlying TCP socket emits an error.
+
+The following argument will be passed to the `callback` function:
+
+ * `error` - An instance of the `Error` class, the exposed `message` attribute
+   will contain a detailed error message.
+
+The following example prints a message to the console when an error occurs
+with a subagent's underlying TCP socket, and the subagent is then closed:
+
+```js
+subagent.on ("error", function (error) {
+    console.log (error.toString ());
+    subagent.close ();
+});
+```
+
 
 # Example Programs
 
@@ -3250,6 +3284,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.9.2 - 26/04/2023
 
  * Fix MIB parsing of non-comments in descriptions and unmatched quotations
+
+## Version 3.9.3 - 28/04/2023
+
+ * Add AgentX subagent "error" and "close" events
 
 # License
 
