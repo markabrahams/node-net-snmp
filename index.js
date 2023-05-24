@@ -3278,7 +3278,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					} else if ( ! mibEntry["OBJECT IDENTIFIER"] ) {
 						// unexpected
 					} else {
-						parentOid = mibEntry["OBJECT IDENTIFIER"].split (" ")[0];
+						parentOid = mibEntry["OBJECT IDENTIFIER"].split (/\s+/)[0];
 						if ( parentOid == currentTableProvider.tableName ) {
 							// table entry
 							currentTableProvider.name = mibEntry.ObjectName;
@@ -3288,15 +3288,15 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 								for ( var indexEntry of mibEntry.INDEX ) {
 									indexEntry = indexEntry.trim ();
 									if ( indexEntry.includes(" ") ) {
-										if ( indexEntry.split(" ")[0] == "IMPLIED" ) {
+										if ( indexEntry.split(/\s+/)[0] == "IMPLIED" ) {
 											currentTableProvider.tableIndex.push ({
-												columnName: indexEntry.split(" ")[1],
+												columnName: indexEntry.split(/\s+/)[1],
 												implied: true
 											});
 										} else {
 											// unknown condition - guess that last token is name
 											currentTableProvider.tableIndex.push ({
-												columnName: indexEntry.split(" ").slice(-1)[0],
+												columnName: indexEntry.split(/\s+/).slice(-1)[0],
 											});
 										}
 									} else {
@@ -3313,7 +3313,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 						} else if ( parentOid == currentTableProvider.name ) {
 							// table column
 							var columnDefinition = {
-								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
+								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (/\s+/)[1]),
 								name: mibEntry.ObjectName,
 								type: syntaxTypes[syntax],
 								maxAccess: MaxAccess[maxAccess]
