@@ -3289,6 +3289,10 @@ Example programs are included under the module's `example` directory.
 
  * Add AgentX subagent "error" and "close" events
 
+## Version 3.9.4 - 26/05/2023
+
+ * Fix syntax constraints tokenization and fix applying of size constraints
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
