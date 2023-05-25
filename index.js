@@ -3392,7 +3392,7 @@ ModuleStore.getConstraintsFromSyntax = function (syntax) {
 			syntax = Object.keys(syntax)[0];
 		} else if ( firstSyntaxKey.sizes ) {
 			constraints = {
-				size: firstSyntaxKey.sizes
+				sizes: firstSyntaxKey.sizes
 			};
 			syntax = Object.keys(syntax)[0];
 		} else {
@@ -3553,7 +3553,7 @@ MibNode.prototype.setValue = function (newValue) {
 		}
 	} else if ( constraints.sizes ) {
 		// if size is constrained, value must have a length property
-		if ( ! ( "length" in newValue ) ) {
+		if ( newValue.length === undefined ) {
 			return false;
 		}
 		len = newValue.length;
