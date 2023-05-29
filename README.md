@@ -3293,6 +3293,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix syntax constraints tokenization and fix applying of size constraints
 
+## Version 3.9.5 - 30/05/2023
+
+ * Normalize whitespace parsing for OBJECT IDENTIFIER value
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
