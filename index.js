@@ -88,22 +88,6 @@ ObjectType.Integer32 = ObjectType.Integer;
 ObjectType.Counter32 = ObjectType.Counter;
 ObjectType.Gauge32 = ObjectType.Gauge;
 ObjectType.Unsigned32 = ObjectType.Gauge32;
-// SNMPv2-TC
-ObjectType.AutonomousType = ObjectType["OBJECT IDENTIFIER"];
-ObjectType.DateAndTime = ObjectType["OCTET STRING"];
-ObjectType.DisplayString = ObjectType["OCTET STRING"];
-ObjectType.InstancePointer = ObjectType["OBJECT IDENTIFIER"];
-ObjectType.MacAddress = ObjectType["OCTET STRING"];
-ObjectType.PhysAddress = ObjectType["OCTET STRING"];
-ObjectType.RowPointer = ObjectType["OBJECT IDENTIFIER"];
-ObjectType.RowStatus = ObjectType.INTEGER;
-ObjectType.StorageType = ObjectType.INTEGER;
-ObjectType.TestAndIncr = ObjectType.INTEGER;
-ObjectType.TimeStamp = ObjectType.TimeTicks;
-ObjectType.TruthValue = ObjectType.INTEGER;
-ObjectType.TAddress = ObjectType["OCTET STRING"];
-ObjectType.TDomain = ObjectType["OBJECT IDENTIFIER"];
-ObjectType.VariablePointer = ObjectType["OBJECT IDENTIFIER"];
 
 var PduType = {
 	160: "GetRequest",
@@ -3174,7 +3158,7 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
 				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
 					if ( typeof mibEntry.SYNTAX == "object" ) {
-						syntaxTypes[mibEntry.ObjectName] = syntaxTypes.Integer;
+						syntaxTypes[mibEntry.ObjectName] = mibEntry.SYNTAX;
 					} else {
 						syntaxTypes[mibEntry.ObjectName] = syntaxTypes[mibEntry.SYNTAX];
 					}
@@ -3239,7 +3223,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 		var defVal = mibEntry["DEFVAL"];
 
 		if ( syntax ) {
-			constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+			constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax, syntaxTypes);
 			syntax = constraintsResults.syntax;
 			constraints = constraintsResults.constraints;
 
@@ -3269,7 +3253,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
 					defVal = mibEntry["DEFVAL"];
 
-					constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax);
+					constraintsResults = ModuleStore.getConstraintsFromSyntax (syntax, syntaxTypes);
 					syntax = constraintsResults.syntax;
 					constraints = constraintsResults.constraints;
 
@@ -3349,11 +3333,14 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 				}
 			} else if ( mibEntry.MACRO == "OBJECT-TYPE" ) {
 				// OBJECT-TYPE entries not in a table are scalars
+				let scalarType = syntaxTypes[syntax];
+				if (typeof scalarType === 'object')
+					scalarType = syntaxTypes[Object.keys(scalarType)[0]];
 				var scalarDefinition = {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,
 					oid: mibEntry.OID,
-					scalarType: syntaxTypes[syntax],
+					scalarType: scalarType,
 					maxAccess: MaxAccess[maxAccess]
 				};
 
@@ -3379,9 +3366,11 @@ ModuleStore.prototype.loadBaseModules = function () {
 	this.parser.Serialize ();
 };
 
-ModuleStore.getConstraintsFromSyntax = function (syntax) {
+ModuleStore.getConstraintsFromSyntax = function (syntax, syntaxTypes) {
 	let constraints;
-
+	if ( typeof syntaxTypes[syntax] === 'object' ) {
+		syntax = syntaxTypes[syntax];
+	}
 	// detect INTEGER ranges, OCTET STRING sizes, and INTEGER enumerations
 	if ( typeof syntax == "object" ) {
 		let firstSyntaxKey = syntax[Object.keys(syntax)[0]];
