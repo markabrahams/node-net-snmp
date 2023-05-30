@@ -3297,6 +3297,10 @@ Example programs are included under the module's `example` directory.
 
  * Normalize whitespace parsing for OBJECT IDENTIFIER value
 
+## Version 3.9.6 - 30/05/2023
+
+ * Add type constraint support for textual conventions
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
