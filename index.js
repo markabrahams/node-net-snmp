@@ -392,6 +392,7 @@ function readUint32 (buffer) {
 	if ( ! Number.isInteger(parsedInt) ) {
 		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
 	}
+	parsedInt = (parsedInt>>>0);
 	if ( parsedInt < MIN_UNSIGNED_INT32 || parsedInt > MAX_UNSIGNED_INT32 ) {
 		throw new RangeError('Read integer ' + parsedInt + ' is outside the unsigned 32-bit range');
 	}
