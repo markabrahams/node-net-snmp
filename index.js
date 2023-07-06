@@ -3344,8 +3344,27 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 					maxAccess: MaxAccess[maxAccess]
 				};
 
-				if (defVal) {
-					scalarDefinition.defVal = defVal;
+				// If a default is given in the MIB, resolve it to the appropriate
+				// type and set it on the scalarDefinition.  JSON.parse is used to
+				// resolve quoted strings and numbers to appropriate JS types.
+				if ( defVal ) {
+					let resolvedDefault;
+					if ( constraints && constraints.enumeration ) {
+						for ( const [key, value] of Object.entries(constraints.enumeration) ) {
+							// It is valid for either the enumerator name or its integral
+							// value to be specified as a default.
+							if ( value === defVal || key === defVal ) {
+								resolvedDefault = JSON.parse(key);
+								break;
+							}
+						}
+						if ( resolvedDefault === undefined )
+							console.error(`Default "${defVal}" not found in enumeration ${JSON.stringify(constraints.enumeration)}`);
+					} else {
+						resolvedDefault = JSON.parse(defVal);
+					}
+					if ( resolvedDefault !== undefined )
+						scalarDefinition.defVal = resolvedDefault;
 				}
 
 				if ( constraints ) {
@@ -3919,6 +3938,9 @@ Mib.prototype.registerProvider = function (provider) {
 				this.populateIndexEntryFromColumn (provider, indexEntry, i);
 			}
 		}
+	} else if ( provider.defVal !== undefined ) {
+		// If scalar type has a default value then set it
+		this.setScalarValue ( provider.name, provider.defVal );
 	}
 };
 
