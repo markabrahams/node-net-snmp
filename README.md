@@ -3301,6 +3301,10 @@ Example programs are included under the module's `example` directory.
 
  * Add type constraint support for textual conventions
 
+## Version 3.9.7 - 13/07/2023
+
+ * Add tolerance for reading malformed 32-bit unsigned integers
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
