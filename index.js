@@ -3148,6 +3148,44 @@ var ModuleStore = function () {
 	this.parser = mibparser ();
 };
 
+ModuleStore.prototype.getTrapOIDsForModule = function (moduleName) {
+	var mibModule = this.parser.Modules[moduleName];
+
+	var traps = [];
+	var mibEntry;
+	var syntaxTypes;
+	var entryArray;
+	var constraintsResults;
+	var constraints;
+
+	if ( ! mibModule ) {
+		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
+	}
+	syntaxTypes = this.getSyntaxTypes ();
+	entryArray = Object.values (mibModule);
+	for ( var i = 0; i < entryArray.length ; i++ ) {
+		mibEntry = entryArray[i];
+		var syntax = mibEntry.SYNTAX;
+		var access = mibEntry["ACCESS"];
+		var maxAccess = (typeof mibEntry["MAX-ACCESS"] != "undefined" ? mibEntry["MAX-ACCESS"] : (access ? AccessToMaxAccess[access] : "not-accessible"));
+		var defVal = mibEntry["DEFVAL"];
+
+		if ( !syntax ) {
+			if ( mibEntry.MACRO == "NOTIFICATION-TYPE" ) {
+
+				var curTrap = {
+					name: mibEntry.ObjectName,
+					OID: mibEntry.OID,
+					objects: mibEntry.OBJECTS
+				};
+
+				traps[mibEntry.OID] = curTrap;
+			}
+		}
+	}
+	return traps
+};
+
 ModuleStore.prototype.getSyntaxTypes = function () {
 	var syntaxTypes = {};
 	Object.assign (syntaxTypes, ObjectType);
