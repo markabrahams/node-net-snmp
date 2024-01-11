@@ -2296,8 +2296,11 @@ function subtreeCb (req, varbinds) {
 		}
 	}
 
-	if (varbinds.length > 0)
-		req.feedCb (varbinds);
+	if (varbinds.length > 0) {
+		if (req.feedCb (varbinds)) {
+			done = 1;
+		}
+	}
 
 	if (done)
 		return true;
