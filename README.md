@@ -3305,6 +3305,10 @@ Example programs are included under the module's `example` directory.
 
  * Add tolerance for reading malformed 32-bit unsigned integers
 
+## Version 3.9.8 - 13/01/2024
+
+ * Fix subtree callback termination
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
