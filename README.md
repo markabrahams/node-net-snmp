@@ -3309,6 +3309,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix subtree callback termination
 
+## Version 3.9.9 - 17/01/2024
+
+ * Add SMIv1 integer enumeration support
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
