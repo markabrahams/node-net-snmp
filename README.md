@@ -83,6 +83,7 @@ for each shown in this table:
  * SNMPv3 context support
  * Notification receiver for traps and informs
  * MIB parsing and MIB module store
+ * Translation between numeric and named OIDs
  * SNMP agent with MIB management for both scalar and tabular data
  * Agent table index support for non-integer keys, foreign keys, composite keys and table augmentation
  * Agent support for "RowStatus" protocol-based creation and deletion of table rows
@@ -322,6 +323,11 @@ Actions
 - `11 -  EUnexpectedReport`
 - `12 -  EResponseNotHandled`
 - `13 -  EUnexpectedResponse`
+
+## snmp.OidFormat
+- `oid - oid`
+- `path - path`
+- `module - module`
 
 # OID Strings & Varbinds
 
@@ -2475,6 +2481,26 @@ objects contained in the named MIB module.  The list of provider definitions are
 ready to be registered to an agent's MIB by using the `agent.getMib().registerProviders()`
 call.
 
+## store.translate (oid, destinationFormat)
+
+Takes an OID in one of the three supported formats (the library automatically detects the given OID's format):
+- **OidFormat.oid** - canonical (numerical) OID format e.g. 1.3.6.1.2.1.1.1
+- **OidFormat.path** - named OID path format e.g. iso.org.dod.internet.mgmt.mib-2.system.sysDescr
+- **OidFormat.module** - module-qualified format e.g. RFC1158-MIB::sysDescr
+
+Returns the given OID translated to the provided destination format - also one of the above three formats.
+
+For example:
+
+```js
+var numericOid = store.translate ('SNMPv2-MIB::sysDescr', snmp.OidFormat.oid);
+    => '1.3.6.1.2.1.1.1'
+var moduleQualifiedName = store.translate ('1.3.6.1.2.1.1.1', snmp.OidFormat.module);
+    => 'SNMPv2-MIB::sysDescr'
+var namedOid = store.translate ('1.3.6.1.2.1.1.1', snmp.OidFormat.path);
+    => 'iso.org.dod.internet.mgmt.mib-2.system.sysDescr'
+```
+
 # Forwarder Module
 
 An `Agent` instance, when created, in turn creates an instance of the `Forwarder` class.
@@ -3312,6 +3338,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.9.9 - 17/01/2024
 
  * Add SMIv1 integer enumeration support
+
+## Version 3.10.0 - 17/01/2024
+
+ * Add numeric/named OID translate function
 
 # License
 

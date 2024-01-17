@@ -264,6 +264,12 @@ var ResponseInvalidCode = {
 
 _expandConstantObject (ResponseInvalidCode);
 
+var OidFormat = {
+	"oid": "oid",
+	"path": "path",
+	"module": "module"
+};
+
 /*****************************************************************************
  ** Exception class definitions
  **/
@@ -3149,6 +3155,14 @@ Receiver.create = function (options, callback) {
 
 var ModuleStore = function () {
 	this.parser = mibparser ();
+	this.translations = {
+		oidToPath: {},
+		oidToModule: {},
+		pathToOid: {},
+		pathToModule: {},
+		moduleToOid: {},
+		moduleToPath: {}
+	};
 };
 
 ModuleStore.prototype.getSyntaxTypes = function () {
@@ -3174,8 +3188,44 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 };
 
 ModuleStore.prototype.loadFromFile = function (fileName) {
+	var modulesBeforeLoad = this.getModuleNames();
 	this.parser.Import (fileName);
 	this.parser.Serialize ();
+	var modulesAfterLoad = this.getModuleNames();
+	var newModulesForTranslation = modulesAfterLoad.filter (moduleName => modulesBeforeLoad.indexOf (moduleName) === -1);
+	newModulesForTranslation.forEach ( moduleName => this.addTranslationsForModule (moduleName) );
+};
+
+ModuleStore.prototype.addTranslationsForModule = function (moduleName) {
+	var mibModule = this.parser.Modules[moduleName];
+
+	if ( ! mibModule ) {
+		throw new ReferenceError ("MIB module " + moduleName + " not loaded");
+	}
+	var entryArray = Object.values (mibModule);
+	for ( var i = 0; i < entryArray.length ; i++ ) {
+		var mibEntry = entryArray[i];
+		var oid = mibEntry.OID;
+		var namedPath = mibEntry.NameSpace;
+		var moduleQualifiedName;
+		if ( mibEntry.ObjectName ) {
+			moduleQualifiedName = moduleName + "::" + mibEntry.ObjectName;
+		} else {
+			moduleQualifiedName = undefined;
+		}
+		if ( oid && namedPath ) {
+			this.translations.oidToPath[oid] = namedPath;
+			this.translations.pathToOid[namedPath] = oid;
+		}
+		if ( oid && moduleQualifiedName ) {
+			this.translations.oidToModule[oid] = moduleQualifiedName;
+			this.translations.moduleToOid[moduleQualifiedName] = oid;
+		}
+		if ( namedPath && moduleQualifiedName ) {
+			this.translations.pathToModule[namedPath] = moduleQualifiedName;
+			this.translations.moduleToPath[moduleQualifiedName] = namedPath;
+		}
+	}
 };
 
 ModuleStore.prototype.getModule = function (moduleName) {
@@ -3368,6 +3418,7 @@ ModuleStore.prototype.loadBaseModules = function () {
 		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
+	this.getModuleNames (true).forEach( moduleName => this.addTranslationsForModule (moduleName) );
 };
 
 ModuleStore.getConstraintsFromSyntax = function (syntax, syntaxTypes) {
@@ -3401,6 +3452,50 @@ ModuleStore.getConstraintsFromSyntax = function (syntax, syntaxTypes) {
 		constraints: constraints,
 		syntax: syntax
 	};
+};
+
+ModuleStore.prototype.translate = function (name, destinationFormat) {
+	var sourceFormat;
+	if ( name.includes ("::") ) {
+		sourceFormat = OidFormat.module;
+	} else if ( name.startsWith ("1.") ) {
+		sourceFormat = OidFormat.oid;
+	} else {
+		sourceFormat = OidFormat.path;
+	}
+	var lowercaseDestinationFormat = destinationFormat.toLowerCase();
+	if ( sourceFormat === lowercaseDestinationFormat ) {
+		var testMap;
+		switch ( sourceFormat ) {
+			case OidFormat.oid: {
+				testMap = "oidToPath";
+				break;
+			}
+			case OidFormat.path: {
+				testMap = "pathToOid";
+				break;
+			}
+			case OidFormat.module: {
+				testMap = "moduleToOid";
+				break;
+			}
+		}
+		var entryExists = this.translations[testMap][name];
+		if ( entryExists === undefined ) {
+			throw new Error ("No translation found for " + name);
+		} else {
+			return name;
+		}
+	} else {
+		var capitalizedDestinationFormat = destinationFormat.charAt(0).toUpperCase() + destinationFormat.slice(1).toLowerCase();
+		var translationMap = sourceFormat + "To" + capitalizedDestinationFormat;
+		var translation = this.translations[translationMap][name];
+		if ( ! translation ) {
+			throw new Error ("No '" + destinationFormat + "' translation found for " + name);
+		} else {
+			return translation;
+		}
+	}
 };
 
 ModuleStore.create = function () {
@@ -6233,6 +6328,7 @@ exports.AccessControlModelType = AccessControlModelType;
 exports.AccessLevel = AccessLevel;
 exports.MaxAccess = MaxAccess;
 exports.RowStatus = RowStatus;
+exports.OidFormat = OidFormat;
 
 exports.ResponseInvalidCode = ResponseInvalidCode;
 exports.ResponseInvalidError = ResponseInvalidError;
