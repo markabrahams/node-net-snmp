@@ -3350,10 +3350,14 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							}
 						} else if ( parentOid == currentTableProvider.name ) {
 							// table column
+							let columnType = syntaxTypes[syntax];
+							if (typeof columnType === 'object') {
+								columnType = syntaxTypes[Object.keys(columnType)[0]];
+							}
 							var columnDefinition = {
 								number: parseInt (mibEntry["OBJECT IDENTIFIER"].split (" ")[1]),
 								name: mibEntry.ObjectName,
-								type: syntaxTypes[syntax],
+								type: columnType,
 								maxAccess: MaxAccess[maxAccess]
 							};
 							if ( constraints ) {
@@ -3388,8 +3392,9 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 			} else if ( mibEntry.MACRO == "OBJECT-TYPE" ) {
 				// OBJECT-TYPE entries not in a table are scalars
 				let scalarType = syntaxTypes[syntax];
-				if (typeof scalarType === 'object')
+				if (typeof scalarType === 'object') {
 					scalarType = syntaxTypes[Object.keys(scalarType)[0]];
+				}
 				var scalarDefinition = {
 					name: mibEntry.ObjectName,
 					type: MibProviderType.Scalar,

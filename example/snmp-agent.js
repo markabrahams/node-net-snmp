@@ -190,8 +190,13 @@ var tableProvider = {
             number: 2,
             name: "ifDescr",
             type: snmp.ObjectType.OctetString,
-			maxAccess: snmp.MaxAccess['read-write'],
-			defVal: "Hello world!"
+            maxAccess: snmp.MaxAccess['read-write'],
+            constraints: {
+                sizes: [
+                    { min: 1, max: 255 },
+                ]
+            },
+            defVal: "Hello world!"
         },
         {
             number: 3,

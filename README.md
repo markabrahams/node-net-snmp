@@ -2486,7 +2486,7 @@ call.
 Takes an OID in one of the three supported formats (the library automatically detects the given OID's format):
 - **OidFormat.oid** - canonical (numerical) OID format e.g. 1.3.6.1.2.1.1.1
 - **OidFormat.path** - named OID path format e.g. iso.org.dod.internet.mgmt.mib-2.system.sysDescr
-- **OidFormat.module** - module-qualified format e.g. RFC1158-MIB::sysDescr
+- **OidFormat.module** - module-qualified format e.g. SNMPv2-MIB::sysDescr
 
 Returns the given OID translated to the provided destination format - also one of the above three formats.
 
@@ -3342,6 +3342,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.10.0 - 17/01/2024
 
  * Add numeric/named OID translate function
+
+## Version 3.10.1 - 30/01/2024
+
+ * Fix table column type in provider definition with column type constraints
 
 # License
 
