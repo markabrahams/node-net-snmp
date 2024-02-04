@@ -3351,6 +3351,10 @@ Example programs are included under the module's `example` directory.
 
  * Add MIB parsing support for OID values with intermediate entries in list
 
+## Version 3.10.3 - 05/02/2024
+
+ * Add MIB parsing support for final member of OID value list containing identifier/descriptor pair
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
