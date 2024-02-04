@@ -3347,6 +3347,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix table column type in provider definition with column type constraints
 
+## Version 3.10.2 - 05/02/2024
+
+ * Add MIB parsing support for OID values with intermediate entries in list
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
