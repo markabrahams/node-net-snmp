@@ -3359,6 +3359,10 @@ Example programs are included under the module's `example` directory.
 
  * Add MIB parsing support for middle member of OID value list containing identifier only
 
+## Version 3.11.0 - 23/03/2024
+
+ * Fix parent object retrieval to respect MIB module imports
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
