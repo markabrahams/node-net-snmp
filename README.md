@@ -3363,6 +3363,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix parent object retrieval to respect MIB module imports
 
+## Version 3.11.1 - 30/03/2024
+
+ * Add error status and index handling to AgentX subagent
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

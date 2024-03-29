@@ -5506,6 +5506,19 @@ AgentXPdu.prototype.readHeader = function (buffer) {
 	this.payloadLength = buffer.readUInt32BE ();
 };
 
+AgentXPdu.prototype.getResponsePduForRequest = function () {
+	const responsePdu = AgentXPdu.createFromVariables({
+		pduType: AgentXPduType.Response,
+		sessionID: this.sessionID,
+		transactionID: this.transactionID,
+		packetID: this.packetID,
+		sysUpTime: 0,
+		error: 0,
+		index: 0
+	});
+	return responsePdu;
+};
+
 AgentXPdu.createFromVariables = function (vars) {
 	var pdu = new AgentXPdu ();
 	pdu.flags = vars.flags ? vars.flags | 0x10 : 0x10;  // set NETWORK_BYTE_ORDER to big endian
@@ -6040,13 +6053,14 @@ Subagent.prototype.response = function (pdu) {
 };
 
 Subagent.prototype.request = function (pdu, requestVarbinds) {
-	var me = this;
-	var varbindsCompleted = 0;
-	var varbindsLength = requestVarbinds.length;
-	var responseVarbinds = [];
+	const me = this;
+	const varbindsLength = requestVarbinds.length;
+	const responseVarbinds = [];
+	const responsePdu = pdu.getResponsePduForRequest ();
+	let varbindsCompleted = 0;
 
-	for ( var i = 0; i < requestVarbinds.length; i++ ) {
-		var requestVarbind = requestVarbinds[i];
+	for ( let i = 0; i < varbindsLength; i++ ) {
+		const requestVarbind = requestVarbinds[i];
 		var instanceNode = this.mib.lookup (requestVarbind.oid);
 		var providerNode;
 		var mibRequest;
@@ -6097,14 +6111,21 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 		}
 
 		(function (savedIndex) {
-			var responseVarbind;
 			mibRequest.done = function (error) {
+				let responseVarbind;
 				if ( error ) {
 					responseVarbind = {
 						oid: mibRequest.oid,
 						type: error.type || ObjectType.Null,
 						value: error.value || null
 					};
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
+						responsePdu.error = error.errorStatus;
+						responsePdu.index = savedIndex + 1;
+					}
+					if ( error.errorStatus != ErrorStatus.NoError ) {
+						responseVarbind.errorStatus = error.errorStatus;
+					}
 				} else {
 					if ( pdu.pduType == AgentXPduType.TestSet ) {
 						// more tests?
@@ -6130,9 +6151,9 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 				if ( ++varbindsCompleted == varbindsLength) {
 					if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
 							|| pdu.pduType == AgentXPduType.UndoSet) {
-						me.sendSetResponse.call (me, pdu);
+						me.sendResponse.call (me, responsePdu);
 					} else {
-						me.sendGetResponse.call (me, pdu, responseVarbinds);
+						me.sendResponse.call (me, responsePdu, responseVarbinds);
 					}
 				}
 			};
@@ -6234,30 +6255,10 @@ Subagent.prototype.getBulkRequest = function (pdu) {
 	this.request (pdu, getBulkVarbinds);
 };
 
-Subagent.prototype.sendGetResponse = function (requestPdu, varbinds) {
-	var pdu = AgentXPdu.createFromVariables ({
-		pduType: AgentXPduType.Response,
-		sessionID: requestPdu.sessionID,
-		transactionID: requestPdu.transactionID,
-		packetID: requestPdu.packetID,
-		sysUpTime: 0,
-		error: 0,
-		index: 0,
-		varbinds: varbinds
-	});
-	this.sendPdu (pdu, null);
-};
-
-Subagent.prototype.sendSetResponse = function (setPdu) {
-	var responsePdu = AgentXPdu.createFromVariables ({
-		pduType: AgentXPduType.Response,
-		sessionID: setPdu.sessionID,
-		transactionID: setPdu.transactionID,
-		packetID: setPdu.packetID,
-		sysUpTime: 0,
-		error: 0,
-		index: 0,
-	});
+Subagent.prototype.sendResponse = function (responsePdu, varbinds) {
+	if ( varbinds ) {
+		responsePdu.varbinds = varbinds;
+	}
 	this.sendPdu (responsePdu, null);
 };
 
