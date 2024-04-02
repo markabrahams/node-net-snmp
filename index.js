@@ -4537,6 +4537,7 @@ var MibRequest = function (requestDefinition) {
 	this.address = Mib.convertOidToAddress (requestDefinition.oid);
 	this.oid = this.address.join ('.');
 	this.providerNode = requestDefinition.providerNode;
+	this.provider = this.providerNode ? this.providerNode.provider : null;
 	this.instanceNode = requestDefinition.instanceNode;
 };
 

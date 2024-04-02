@@ -3367,6 +3367,10 @@ Example programs are included under the module's `example` directory.
 
  * Add error status and index handling to AgentX subagent
 
+## Version 3.11.2 - 03/04/2024
+
+ * Add provider to MIB request
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
