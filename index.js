@@ -2709,7 +2709,7 @@ Session.prototype.onProxyResponse = function (req, message) {
 	message.pdu.contextEngineID = message.msgSecurityParameters.msgAuthoritativeEngineID;
 	message.pdu.contextName = this.proxy.context;
 	message.pdu.id = req.proxiedPduId;
-	this.proxy.listener.send (message, req.proxiedRinfo);
+	this.proxy.listener.send (message, req.proxiedRinfo, req.proxiedSocket);
 };
 
 Session.create = function (target, community, options) {
@@ -2765,27 +2765,50 @@ Engine.prototype.generateEngineID = function() {
 var Listener = function (options, receiver) {
 	this.receiver = receiver;
 	this.callback = receiver.onMsg;
-	this.family = options.transport || 'udp4';
-	this.port = options.port || 161;
-	this.address = options.address;
+	// this.transport = options.transport || 'udp4';
+	// this.port = options.port || 161;
+	// this.address = options.address;
 	this.disableAuthorization = options.disableAuthorization || false;
+	if ( options.sockets ) {
+		this.socketOptions = options.sockets;
+	} else {
+		this.socketOptions = [
+			{
+				transport: options.transport,
+				address: options.address,
+				port: options.port
+			}
+		];
+	}
+	for ( const socketOption of this.socketOptions ) {
+		socketOption.transport = socketOption.transport || 'udp4';
+		socketOption.address = socketOption.address || null;
+		socketOption.port = socketOption.port || 161;
+	}
 };
 
 Listener.prototype.startListening = function () {
 	var me = this;
-	this.dgram = dgram.createSocket (this.family);
-	this.dgram.on ("error", me.receiver.callback);
-	this.dgram.bind (this.port, this.address);
-	this.dgram.on ("message", me.callback.bind (me.receiver));
+	this.sockets = {};
+	for ( const socketOptions of this.socketOptions ) {
+		const socket = dgram.createSocket (socketOptions.transport);
+		socket.on ("error", me.receiver.callback);
+		socket.bind (socketOptions.port, socketOptions.address);
+		socket.on ("message", me.callback.bind (me.receiver, socket));
+		const socketKey = socketOptions.transport + ':' + socketOptions.address + ':' + socketOptions.port;
+		if ( this.sockets[socketKey] ) {
+			throw new Error ("Duplicate socket exists for " + socketKey);
+		}
+		this.sockets[socketKey] = socket;
+	}
 };
 
-Listener.prototype.send = function (message, rinfo) {
+Listener.prototype.send = function (message, rinfo, socket) {
 	// var me = this;
 	
 	var buffer = message.toBuffer ();
 
-	this.dgram.send (buffer, 0, buffer.length, rinfo.port, rinfo.address,
-			function (error, bytes) {
+	socket.send (buffer, 0, buffer.length, rinfo.port, rinfo.address, function (error, bytes) {
 		if (error) {
 			// me.callback (error);
 			console.error ("Error sending: " + error.message);
@@ -2803,7 +2826,7 @@ Listener.formatCallbackData = function (pdu, rinfo) {
 	delete pdu.maxRepetitions;
 	return {
 		pdu: pdu,
-		rinfo: rinfo 
+		rinfo: rinfo
 	};
 };
 
@@ -2857,8 +2880,8 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 };
 
 Listener.prototype.close = function () {
-	if ( this.dgram ) {
-		this.dgram.close ();
+	for ( const socket of Object.values(this.sockets) ) {
+		socket.close ();
 	}
 };
 
@@ -3052,7 +3075,6 @@ SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, se
 
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
-	this.listener = new Listener (options, this);
 	this.authorizer = new Authorizer (options);
 	this.engine = new Engine (options.engineID);
 
@@ -3074,7 +3096,7 @@ Receiver.prototype.getAuthorizer = function () {
 	return this.authorizer;
 };
 
-Receiver.prototype.onMsg = function (buffer, rinfo) {
+Receiver.prototype.onMsg = function (socket, buffer, rinfo) {
 
 	let message;
 
@@ -3102,7 +3124,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 			return;
 		}
 		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
-		this.listener.send (reportMessage, rinfo);
+		this.listener.send (reportMessage, rinfo, socket);
 		return;
 	}
 
@@ -3114,7 +3136,7 @@ Receiver.prototype.onMsg = function (buffer, rinfo) {
 		message.pdu.type = PduType.GetResponse;
 		message.buffer = null;
 		message.setReportable (false);
-		this.listener.send (message, rinfo);
+		this.listener.send (message, rinfo, socket);
 		message.pdu.type = PduType.InformRequest;
 		this.callback (null, this.formatCallbackData (message, rinfo) );
 	} else {
@@ -4646,7 +4668,7 @@ Agent.prototype.tableRowStatusHandlerInternal = function (createRequest) {
 	return missingDefVal ? undefined : values;
 };
 
-Agent.prototype.onMsg = function (buffer, rinfo) {
+Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 
 	let message;
 
@@ -4665,22 +4687,22 @@ Agent.prototype.onMsg = function (buffer, rinfo) {
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
 		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
-		this.listener.send (reportMessage, rinfo);
+		this.listener.send (reportMessage, rinfo, socket);
 		return;
 	}
 
 	// Request processing
 	// debug (JSON.stringify (message.pdu, null, 2));
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
-		this.onProxyRequest (message, rinfo);
+		this.onProxyRequest (socket, message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
-		this.getRequest (message, rinfo);
+		this.getRequest (socket, message, rinfo);
 	} else if ( message.pdu.type == PduType.SetRequest ) {
-		this.setRequest (message, rinfo);
+		this.setRequest (socket, message, rinfo);
 	} else if ( message.pdu.type == PduType.GetNextRequest ) {
-		this.getNextRequest (message, rinfo);
+		this.getNextRequest (socket, message, rinfo);
 	} else if ( message.pdu.type == PduType.GetBulkRequest ) {
-		this.getBulkRequest (message, rinfo);
+		this.getBulkRequest (socket, message, rinfo);
 	} else {
 		this.callback (new RequestInvalidError ("Unexpected PDU type " +
 			message.pdu.type + " (" + PduType[message.pdu.type] + ")"));
@@ -4911,7 +4933,7 @@ Agent.prototype.isAllowed = function (pduType, provider, instanceNode) {
 	}
 };
 
-Agent.prototype.request = function (requestMessage, rinfo) {
+Agent.prototype.request = function (socket, requestMessage, rinfo) {
 	var me = this;
 	var varbindsCompleted = 0;
 	var requestPdu = requestMessage.pdu;
@@ -5206,7 +5228,7 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
 				if ( ++varbindsCompleted == varbindsLength) {
-					me.sendResponse.call (me, rinfo, requestMessage, responsePdu);
+					me.sendResponse.call (me, socket, rinfo, requestMessage, responsePdu);
 				}
 			};
 		})(i);
@@ -5218,12 +5240,12 @@ Agent.prototype.request = function (requestMessage, rinfo) {
 	}
 };
 
-Agent.prototype.getRequest = function (requestMessage, rinfo) {
-	this.request (requestMessage, rinfo);
+Agent.prototype.getRequest = function (socket, requestMessage, rinfo) {
+	this.request (socket, requestMessage, rinfo);
 };
 
-Agent.prototype.setRequest = function (requestMessage, rinfo) {
-	this.request (requestMessage, rinfo);
+Agent.prototype.setRequest = function (socket, requestMessage, rinfo) {
+	this.request (socket, requestMessage, rinfo);
 };
 
 Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
@@ -5263,7 +5285,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	return getNextNode;
 };
 
-Agent.prototype.getNextRequest = function (requestMessage, rinfo) {
+Agent.prototype.getNextRequest = function (socket, requestMessage, rinfo) {
 	var requestPdu = requestMessage.pdu;
 	var varbindsLength = requestPdu.varbinds.length;
 	var getNextVarbinds = [];
@@ -5273,10 +5295,10 @@ Agent.prototype.getNextRequest = function (requestMessage, rinfo) {
 	}
 
 	requestMessage.pdu.varbinds = getNextVarbinds;
-	this.request (requestMessage, rinfo);
+	this.request (socket, requestMessage, rinfo);
 };
 
-Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
+Agent.prototype.getBulkRequest = function (socket, requestMessage, rinfo) {
 	var requestPdu = requestMessage.pdu;
 	var requestVarbinds = requestPdu.varbinds;
 	var getBulkVarbinds = [];
@@ -5310,20 +5332,20 @@ Agent.prototype.getBulkRequest = function (requestMessage, rinfo) {
 	}
 
 	requestMessage.pdu.varbinds = getBulkVarbinds;
-	this.request (requestMessage, rinfo);
+	this.request (socket, requestMessage, rinfo);
 };
 
 Agent.prototype.setSingleVarbind = function (responsePdu, index, responseVarbind) {
 	responsePdu.varbinds[index] = responseVarbind;
 };
 
-Agent.prototype.sendResponse = function (rinfo, requestMessage, responsePdu) {
+Agent.prototype.sendResponse = function (socket, rinfo, requestMessage, responsePdu) {
 	var responseMessage = requestMessage.createResponseForRequest (responsePdu);
-	this.listener.send (responseMessage, rinfo);
+	this.listener.send (responseMessage, rinfo, socket);
 	this.callback (null, Listener.formatCallbackData (responseMessage.pdu, rinfo) );
 };
 
-Agent.prototype.onProxyRequest = function (message, rinfo) {
+Agent.prototype.onProxyRequest = function (socket, message, rinfo) {
 	var contextName = message.pdu.contextName;
 	var proxy;
 	var proxiedPduId;
@@ -5358,6 +5380,7 @@ Agent.prototype.onProxyRequest = function (message, rinfo) {
 		req.proxiedPduId = proxiedPduId;
 		req.proxiedUser = proxiedUser;
 		req.proxiedEngine = this.engine;
+		req.proxiedSocket = socket;
 		proxy.session.send (req);
 	}
 };

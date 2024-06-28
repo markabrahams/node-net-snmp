@@ -67,11 +67,11 @@ for each shown in this table:
 
 | Application | Common Use | Documentation |
 | ----------- | ---------- | ------------- |
-| Command Generator | NMS / SNMP tools | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Command Responder | SNMP agents | [Using This Module: SNMP Agent](#using-this-module-snmp-agent) |
-| Notification Originator | SNMP agents / NMS-to-NMS notifications | [Using This Module: Command & Notification Generator](#using-this-module-command--notification-generator) |
-| Notification Receiver | NMS | [Using This Module: Notification Receiver](#using-this-module-notification-receiver) |
-| Proxy Forwarder | SNMP agents | [Forwarder Module](#forwarder-module) |
+| Command Generator | NMS / SNMP tools | [Application: Command & Notification Generator](#application-command--notification-generator) |
+| Command Responder | SNMP agents | [Application: SNMP Agent](#application-snmp-agent) |
+| Notification Originator | SNMP agents / NMS-to-NMS notifications | [Application: Command & Notification Generator](#application-command--notification-generator) |
+| Notification Receiver | NMS | [Application: Notification Receiver](#application-notification-receiver) |
+| Proxy Forwarder | SNMP agents | [Agent Forwarder Module](#agent-forwarder-module) |
 
 # Features
 
@@ -531,7 +531,7 @@ then it will produce a `ProcessingError` containing:
 * a `buffer` containing the packet contents, and
 * an `error` containing the original error encountered during processing.
 
-# Using This Module: Command & Notification Generator
+# Application: Command & Notification Generator
 
 This library provides a `Session` class to provide support for building
 "Command Generator" and "Notification Originator" SNMP applications.
@@ -1448,7 +1448,7 @@ var maxRepetitions = 20;
 session.walk (oid, maxRepetitions, feedCb, doneCb);
 ```
 
-# Using This Module: Notification Receiver
+# Application: Notification Receiver
 
 RFC 3413 classifies a "Notification Receiver" SNMP application that receives
 "Notification-Class" PDUs. Notifications include both SNMP traps and informs.
@@ -1510,6 +1510,9 @@ an object, possibly empty, and can contain the following fields:
  addresses
  * `includeAuthentication` - adds the community (v1/2c) or user name (v3) information
  to the notification callback - defaults to `false`
+ * `sockets` - an array of objects containing triples of `transport`, `address` and `port` that
+ can be used to specify multiple socket listeners.  This option overrides any individual
+ `transport`, `address` and `port` options.
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
@@ -1555,7 +1558,7 @@ to the receiver.  See the `Authorizer` section for further details.
 
 Closes the receiver's listening socket, ending the operation of the receiver.
 
-# Using This Module: SNMP Agent
+# Application: SNMP Agent
 
 The SNMP agent responds to all four "request class" PDUs relevant to a Command Responder
 application:
@@ -1565,7 +1568,7 @@ application:
  * **GetBulkRequest** - request a series of "next" OID instances in the MIB tree
  * **SetRequest** - set values for specified OIDs
 
-The agent sends a **GetResponse** PDU to all four request PDU types, in conformance to RFC 3416.
+The agent sends a **GetResponse** PDU to all four request PDU types, in conformance with RFC 3416.
 
 The agent - like the notification receiver - maintains an `Authorizer` instance
 to control access to the agent, details of which are in the [Authorizer Module](#authorizer-module)
@@ -1625,6 +1628,9 @@ an object, possibly empty, and can contain the following fields:
  * `transport` - the transport family to use - defaults to `udp4`
  * `address` - the IP address to bind to - default to `null`, which means bind to all IP
  addresses
+ * `sockets` - an array of objects containing triples of `transport`, `address` and `port` that
+ can be used to specify multiple socket listeners.  This option overrides any individual
+ `transport`, `address` and `port` options.
 
 The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
 If not supplied, the agent creates itself a new empty `Mib` singleton.  If supplied,
@@ -2391,7 +2397,7 @@ methods `Mib.setScalarDefaultValue` and `Mib.setTableRowDefaultValues`
 may be used to conveniently add defaults after the MIB files are
 loaded.
 
-# Using This Module: Module Store
+# Application: Module Store
 
 The library supports MIB parsing by providing an interface to a `ModuleStore` instance into which
 you can load MIB modules from files, and fetch the resulting JSON MIB module representations.
@@ -2501,7 +2507,7 @@ var namedOid = store.translate ('1.3.6.1.2.1.1.1', snmp.OidFormat.path);
     => 'iso.org.dod.internet.mgmt.mib-2.system.sysDescr'
 ```
 
-# Forwarder Module
+# Agent Forwarder Module
 
 An `Agent` instance, when created, in turn creates an instance of the `Forwarder` class.
 There is no direct API call to create a `Forwarder` instance; this creation is the
@@ -2523,7 +2529,7 @@ forwarder.addProxy({
         level: snmp.SecurityLevel.authNoPriv,
         authProtocol: snmp.AuthProtocols.sha,
         authKey: "quarryandgravel"
-    },
+    }
 });
 ```
 
@@ -2577,7 +2583,7 @@ Returns an object containing a list of all registered proxies, keyed by context 
 
 Prints a dump of all proxy definitions to the console.
 
-# Using This Module: AgentX Subagent
+# Application: AgentX Subagent
 
 The AgentX subagent implements the functionality specified in RFC 2741 to become a "subagent"
 of an AgentX "master agent".  The goal of AgentX is to extend the functionality of an existing
@@ -3370,6 +3376,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.11.2 - 03/04/2024
 
  * Add provider to MIB request
+
+## Version 3.12.0 - 28/06/2024
+
+ * Add multiple socket listener support for agent and receiver
 
 # License
 
