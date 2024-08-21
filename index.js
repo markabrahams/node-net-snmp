@@ -2617,6 +2617,9 @@ function walkCb (req, error, varbinds) {
 		if (! done)
 			oid = varbinds[0][varbinds[0].length - 1].oid;
 	} else {
+		if (varbinds[0].type == ObjectType.EndOfMibView) {
+			done = 1;
+		}
 		if (! done) {
 			if (req.feedCb (varbinds)) {
 				done = 1;

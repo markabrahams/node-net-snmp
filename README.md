@@ -3381,6 +3381,10 @@ Example programs are included under the module's `example` directory.
 
  * Add multiple socket listener support for agent and receiver
 
+## Version 3.12.1 - 21/08/2024
+
+ * Fix SNMPv1 session walk infinite loop condition
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
