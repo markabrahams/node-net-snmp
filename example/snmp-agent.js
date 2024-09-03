@@ -31,8 +31,8 @@ if (options.s) {
 				mib.setScalarValue(providerName, change);
 			}
 		}
-	} catch (e) {
-		console.log("Could not parse persistent storage");
+	} catch (error) {
+		console.log("Could not parse persistent storage", error);
 		changes = {};
 	}
 }

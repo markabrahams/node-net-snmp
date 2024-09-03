@@ -3385,6 +3385,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix SNMPv1 session walk infinite loop condition
 
+## Version 3.13.0 - 03/09/2024
+
+ * Add support for out-of-order MIB dependencies
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

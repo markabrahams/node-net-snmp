@@ -1,6 +1,9 @@
 language: node_js
 node_js:
   - lts/*
+  - 20
+  - 18
+  - 16
   - 14
   - 12
   - 10

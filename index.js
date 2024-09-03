@@ -5257,6 +5257,7 @@ Agent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 
 	try {
 		startNode = this.mib.lookup (startOid);
+	// eslint-disable-next-line no-unused-vars
 	} catch ( error ) {
 		startOid = '1.3.6.1';
 		startNode = this.mib.lookup (startOid);
@@ -6199,6 +6200,7 @@ Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 
 	try {
 		startNode = this.mib.lookup (startOid);
+	// eslint-disable-next-line no-unused-vars
 	} catch ( error ) {
 		startOid = '1.3.6.1';
 		startNode = this.mib.lookup (startOid);
