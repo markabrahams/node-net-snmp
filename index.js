@@ -2882,9 +2882,17 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 	return message;
 };
 
-Listener.prototype.close = function () {
+Listener.prototype.close = function (callback) {
 	for ( const socket of Object.values(this.sockets) ) {
-		socket.close ();
+		if ( callback ) {
+			const socketInfo = socket.address();
+			const socketCallback = () => {
+				callback(socketInfo);
+			};
+			socket.close (socketCallback);
+		} else {
+			socket.close();
+		}
 	}
 };
 
@@ -3168,8 +3176,8 @@ Receiver.prototype.formatCallbackData = function (message, rinfo) {
 	return formattedData;
 };
 
-Receiver.prototype.close  = function() {
-	this.listener.close ();
+Receiver.prototype.close  = function (callback) {
+	this.listener.close (callback);
 };
 
 Receiver.create = function (options, callback) {
@@ -3764,6 +3772,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 				// end of MIB
 				return null;
 			} else {
+				// Move to next sibling
 				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
 				var siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
 				if ( siblingPosition + 1 < childrenAddresses.length ) {
@@ -3773,11 +3782,11 @@ MibNode.prototype.getNextInstanceNode = function () {
 			}
 		}
 	}
-	// Descent
 	while ( node ) {
 		if ( node.value != null ) {
 			return node;
 		}
+		// Descend to first child if not at leaf
 		childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
 		node = node.children[childrenAddresses[0]];
 		if ( ! node ) {
@@ -5393,8 +5402,8 @@ Agent.prototype.getForwarder = function () {
 	return this.forwarder;
 };
 
-Agent.prototype.close  = function() {
-	this.listener.close ();
+Agent.prototype.close = function (callback) {
+	this.listener.close (callback);
 };
 
 Agent.create = function (options, callback, mib) {

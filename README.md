@@ -1554,9 +1554,12 @@ in the `rinfo` field.  For example:
 Returns the receiver's `Authorizer` instance, used to control access
 to the receiver.  See the `Authorizer` section for further details.
 
-## receiver.close ()
+## receiver.close (callback)
 
-Closes the receiver's listening socket, ending the operation of the receiver.
+Closes the receiver's listening socket(s), ending the operation of the receiver.  The optionnal
+`callback` parameter is a callback function of the form `function (socket)`, which will be
+called once for each socket that the receiver is listening on, after the socket is closed.
+The `socket` argument will be given as an object triple of `address`, `family` and `port`.
 
 # Application: SNMP Agent
 
@@ -1657,9 +1660,12 @@ its existing `Mib` instance.
 Returns the agent's singleton `Forwarder` instance, which holds a list of registered
 proxies that specify context-based forwarding to remote hosts.
 
-## agent.close ()
+## agent.close (callback)
 
-Closes the agent's listening socket, ending the operation of the agent.
+Closes the agent's listening socket(s), ending the operation of the agent.  The optionnal
+`callback` parameter is a callback function of the form `function (socket)`, which will be
+called once for each socket that the agent is listening on, after the socket is closed.
+The `socket` argument will be given as an object triple of `address`, `family` and `port`.
 
 # Authorizer Module
 
@@ -3388,6 +3394,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.13.0 - 03/09/2024
 
  * Add support for out-of-order MIB dependencies
+
+## Version 3.13.1 - 03/09/2024
+
+ * Add close callback for agent and receiver
 
 # License
 
