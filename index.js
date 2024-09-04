@@ -5685,7 +5685,9 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 	if (varbind.type && varbind.oid) {
 
 		switch (varbind.type) {
-			case ObjectType.Integer: // also Integer32
+			case ObjectType.Integer: // also Integer32 (signed 32-bit)
+				buffer.writeInt32BE (varbind.value);
+				break;
 			case ObjectType.Counter: // also Counter32
 			case ObjectType.Gauge: // also Gauge32 & Unsigned32
 			case ObjectType.TimeTicks:
