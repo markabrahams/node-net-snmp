@@ -3399,6 +3399,10 @@ Example programs are included under the module's `example` directory.
 
  * Add close callback for agent and receiver
 
+## Version 3.13.2 - 05/09/2024
+
+ * Fix AgentX signed integer writing
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
