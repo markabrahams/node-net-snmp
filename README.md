@@ -3403,6 +3403,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix AgentX signed integer writing
 
+## Version 3.14.0 - 10/09/2024
+
+ * Add support for SMIv1 defined types and TRAP-TYPE SMIv1 macro
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

@@ -3206,6 +3206,7 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 	for ( var mibModule of Object.values (this.parser.Modules) ) {
 		entryArray = Object.values (mibModule);
 		for ( var mibEntry of entryArray ) {
+			// SMIv2 Textual Conventions
 			if ( mibEntry.MACRO == "TEXTUAL-CONVENTION" ) {
 				if ( mibEntry.SYNTAX && ! syntaxTypes[mibEntry.ObjectName] ) {
 					if ( typeof mibEntry.SYNTAX == "object" ) {
@@ -3213,6 +3214,13 @@ ModuleStore.prototype.getSyntaxTypes = function () {
 					} else {
 						syntaxTypes[mibEntry.ObjectName] = syntaxTypes[mibEntry.SYNTAX];
 					}
+				}
+			// SMIv1 Defined Types
+			} else if ( ! mibEntry.OID && ! syntaxTypes[mibEntry.ObjectName] ) {
+				if ( mibEntry.SYNTAX ) {
+					syntaxTypes[mibEntry.ObjectName] = mibEntry.SYNTAX;
+				} else {
+					syntaxTypes[mibEntry.ObjectName] = syntaxTypes[mibEntry.MACRO];
 				}
 			}
 		}
