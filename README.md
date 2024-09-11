@@ -2450,6 +2450,7 @@ pre-loaded "base" modules is:
  * RFC1158-MIB
  * RFC-1212
  * RFC1213-MIB
+ * RFC-1215
  * SNMPv2-SMI
  * SNMPv2-CONF
  * SNMPv2-TC
@@ -3406,6 +3407,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.14.0 - 10/09/2024
 
  * Add support for SMIv1 defined types and TRAP-TYPE SMIv1 macro
+
+## Version 3.14.1 - 11/09/2024
+
+ * Add RFC-1215 to base MIB modules to provide TRAP-TYPE macro
 
 # License
 
