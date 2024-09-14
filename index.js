@@ -3771,17 +3771,16 @@ MibNode.prototype.getNextInstanceNode = function () {
 	var childrenAddresses;
 
 	var node = this;
-	if ( this.value != null ) {
-		// Need upwards traversal first
-		node = this;
+	// If we start on a leaf node, we need next (right) sibling or upwards traversal first
+	if ( ! node.children || Object.keys (node.children).length === 0 ) {
 		while ( node ) {
 			siblingIndex = node.address.slice(-1)[0];
 			node = node.parent;
 			if ( ! node ) {
-				// end of MIB
+				// End of MIB
 				return null;
 			} else {
-				// Move to next sibling
+				// Move to next sibling if we are not last child
 				childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
 				var siblingPosition = childrenAddresses.indexOf(siblingIndex.toString());
 				if ( siblingPosition + 1 < childrenAddresses.length ) {
@@ -3792,7 +3791,8 @@ MibNode.prototype.getNextInstanceNode = function () {
 		}
 	}
 	while ( node ) {
-		if ( node.value != null ) {
+		// Return if at leaf
+		if ( ! node.children || Object.keys (node.children).length === 0 ) {
 			return node;
 		}
 		// Descend to first child if not at leaf
@@ -5215,6 +5215,9 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 						responseVarbind.type = mibRequests[savedIndex].instanceNode.valueType;
 					}
 					responseVarbind.value = mibRequests[savedIndex].instanceNode.value;
+					if ( responseVarbind.value === undefined || responseVarbind.value === null ) {
+						responseVarbind.type = ObjectType.NoSuchInstance;
+					}
 				}
 				if ( providerNode && providerNode.provider && providerNode.provider.name ) {
 					responseVarbind.providerName = providerNode.provider.name;

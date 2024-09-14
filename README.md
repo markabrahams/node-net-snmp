@@ -3412,6 +3412,10 @@ Example programs are included under the module's `example` directory.
 
  * Add RFC-1215 to base MIB modules to provide TRAP-TYPE macro
 
+## Version 3.15.0 - 14/09/2024
+
+ * Change return of undefined or null MIB values to NoSuchInstance
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
