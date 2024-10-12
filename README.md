@@ -3416,6 +3416,10 @@ Example programs are included under the module's `example` directory.
 
  * Change return of undefined or null MIB values to NoSuchInstance
 
+## Version 3.15.1 - 12/10/2024
+
+ * Fix bundler failure due to unnecessary string length assignment
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
