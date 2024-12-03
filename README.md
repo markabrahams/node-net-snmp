@@ -3424,6 +3424,10 @@ Example programs are included under the module's `example` directory.
 
  * Change return of non-existing OIDs under table from NoSuchObject to NoSuchInstance
 
+## Version 3.15.3 - 04/12/2024
+
+ * Fix agent SNMP SetRequest for OIDs
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

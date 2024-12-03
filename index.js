@@ -4763,7 +4763,7 @@ Agent.prototype.castSetValue = function ( type, value ) {
 			}
 
 		case ObjectType.OID:
-			if ( typeof value != "string" || ! value.match(/[0-9]+\([.][0-9]+\)+/) ) {
+			if ( typeof value != "string" || ! value.match(/^([0-9]+)(\.[0-9]+)+$/) ) {
 				throw new Error("Invalid OID", value);
 			}
 			return value;

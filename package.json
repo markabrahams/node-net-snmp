@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "3.15.2",
+  "version": "3.15.3",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {
@@ -47,6 +47,6 @@
   "author": "Mark Abrahams <mark@abrahams.co.nz>",
   "license": "MIT",
   "scripts": {
-    "lint": "./node_modules/.bin/eslint . ./**/*.js"
+    "lint": "eslint . ./**/*.js"
   }
 }
