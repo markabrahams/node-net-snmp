@@ -18,4 +18,9 @@ session.get (oids, function (error, varbinds) {
 				console.log (varbinds[i].oid + "|" + varbinds[i].value);
 		}
 	}
+	session.close();
+});
+
+session.on("error", function (error) {
+	console.error (error.toString ());
 });

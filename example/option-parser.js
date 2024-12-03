@@ -9,6 +9,7 @@ var user;
 var session;
 var nonRepeaters;
 var maxRepetitions;
+var sourcePort;
 var oids;
 var varbinds;
 var columns;
@@ -44,6 +45,7 @@ if ( snmpOptions.version == snmp.Version3 ) {
 
 nonRepeaters = options.o;
 maxRepetitions = options.r;
+sourcePort = options.s;
 
 if (options._.length < 2) {
 	console.log ("usage: " + process.argv[1] + " [<options>] <target> <oid>");
@@ -76,6 +78,8 @@ if ( command.includes('snmp-trap') || command.includes('snmp-inform') || command
 } else {
     snmpOptions.port = options.p;
 }
+
+snmpOptions.sourcePort = sourcePort;
 
 if ( snmpOptions.version == snmp.Version3 ) {
 	session = snmp.createV3Session (target, user, snmpOptions);

@@ -4493,6 +4493,18 @@ Mib.prototype.deleteTableRow = function (table, rowIndex) {
 	return true;
 };
 
+Mib.prototype.getAncestorProviderFromOid = function (oid) {
+	const address = Mib.convertOidToAddress (oid);
+	for ( let i = address.length - 1 ; i >= 0 ; i-- ) {
+		const oidToCheck = address.slice(0, i).join('.');
+		const provider = this.providersByOid[oidToCheck];
+		if ( provider ) {
+			return provider;
+		}
+	}
+	return null;
+};
+
 Mib.prototype.dump = function (options) {
 	if ( ! options ) {
 		options = {};
@@ -4993,13 +5005,24 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 				operation: requestPdu.type,
 				oid: requestPdu.varbinds[i].oid
 			});
-			handlers[i] = function getNsoHandler (mibRequestForNso) {
-				mibRequestForNso.done ({
-					errorStatus: ErrorStatus.NoError,
-					type: ObjectType.NoSuchObject,
-					value: null
-				});
-			};
+			const ancestorProvider = this.mib.getAncestorProviderFromOid(requestPdu.varbinds[i].oid);
+			if ( ancestorProvider ) {
+				handlers[i] = function getNsiHandler (mibRequestForNsi) {
+					mibRequestForNsi.done ({
+						errorStatus: ErrorStatus.NoError,
+						type: ObjectType.NoSuchInstance,
+						value: null
+					});
+				};
+			} else {
+				handlers[i] = function getNsoHandler (mibRequestForNso) {
+					mibRequestForNso.done ({
+						errorStatus: ErrorStatus.NoError,
+						type: ObjectType.NoSuchObject,
+						value: null
+					});
+				};
+			}
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
 			if ( ! providerNode || instanceNode.value === undefined ) {

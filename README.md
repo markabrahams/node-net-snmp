@@ -3420,6 +3420,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix bundler failure due to unnecessary string length assignment
 
+## Version 3.15.2 - 03/12/2024
+
+ * Change return of non-existing OIDs under table from NoSuchObject to NoSuchInstance
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
