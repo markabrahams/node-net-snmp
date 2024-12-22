@@ -585,6 +585,106 @@ function writeVarbinds (buffer, varbinds) {
 	buffer.endSequence ();
 }
 
+const ObjectTypeUtil = {};
+
+ObjectTypeUtil.castSetValue = function (type, value) {
+
+	switch (type) {
+		case ObjectType.Boolean:
+			return !! value;
+
+		case ObjectType.Integer:
+			if ( typeof value != "number" && typeof value != "string" ) {
+				throw new Error("Invalid Integer", value);
+			}
+			return typeof value == "number" ? value : parseInt(value, 10);
+
+		case ObjectType.OctetString:
+			if ( value instanceof Buffer) {
+				return value.toString();
+			} else if ( typeof value != "string" ) {
+				throw new Error("Invalid OctetString", value);
+			} else {
+				return value;
+			}
+
+		case ObjectType.OID:
+			if ( typeof value != "string" || ! value.match(/^([0-9]+)(\.[0-9]+)+$/) ) {
+				throw new Error("Invalid OID", value);
+			}
+			return value;
+
+		case ObjectType.Counter:
+		case ObjectType.Counter64:
+			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
+			// We'll do so.
+			return 0;
+
+		case ObjectType.IpAddress:
+			// A 32-bit internet address represented as OCTET STRING of length 4
+			var bytes = value.split(".");
+			if ( typeof value != "string" || bytes.length != 4 ) {
+				throw new Error("Invalid IpAddress", value);
+			}
+			return value;
+
+		default :
+			// Assume the caller knows what he's doing
+			return value;
+	}
+
+};
+
+ObjectTypeUtil.isValid = function (type, value) {
+
+	switch (type) {
+		case ObjectType.Boolean: {
+			return typeof value == "boolean";
+		}
+		case ObjectType.Integer: {
+			// Allow strings that can be parsed as integers
+			const parsed = Number(value);
+			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= MIN_SIGNED_INT32 && parsed <= MAX_SIGNED_INT32;
+		}
+		case ObjectType.OctetString: {
+			// Allow string or buffer
+			return typeof value == "string" || value instanceof Buffer;
+		}
+		case ObjectType.OID: {
+			return typeof value == "string" && value.match (/^([0-9]+)(\.[0-9]+)+$/);
+		}
+		case ObjectType.Counter: {
+			// Allow strings that can be parsed as integers
+			const parsed = Number(value);
+			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= 0 && parsed <= MAX_UNSIGNED_INT32;
+		}
+		case ObjectType.Counter64: {
+			// Allow strings that can be parsed as integers
+			const parsed = Number(value);
+			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= 0;
+		}
+		case ObjectType.IpAddress: {
+			const octets = value.split(".");
+			if ( octets.length !== 4 ) {
+				return false;
+			}
+			for ( const octet of octets ) {
+				if ( isNaN (octet) ) {
+					return false;
+				}
+				if ( parseInt (octet) < 0 || parseInt (octet) > 255) {
+					return false;
+				}
+			}
+			return true;
+		}
+		default: {
+			return false;
+		}
+	}
+
+};
+
 /*****************************************************************************
  ** PDU class definitions
  **/
@@ -4742,53 +4842,6 @@ Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 	}
 };
 
-Agent.prototype.castSetValue = function ( type, value ) {
-	switch (type) {
-		case ObjectType.Boolean:
-			return !! value;
-
-		case ObjectType.Integer:
-			if ( typeof value != "number" && typeof value != "string" ) {
-				throw new Error("Invalid Integer", value);
-			}
-			return typeof value == "number" ? value : parseInt(value, 10);
-
-		case ObjectType.OctetString:
-			if ( value instanceof Buffer) {
-				return value.toString();
-			} else if ( typeof value != "string" ) {
-				throw new Error("Invalid OctetString", value);
-			} else {
-				return value;
-			}
-
-		case ObjectType.OID:
-			if ( typeof value != "string" || ! value.match(/^([0-9]+)(\.[0-9]+)+$/) ) {
-				throw new Error("Invalid OID", value);
-			}
-			return value;
-
-		case ObjectType.Counter:
-		case ObjectType.Counter64:
-			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
-			// We'll do so.
-			return 0;
-
-		case ObjectType.IpAddress:
-			// A 32-bit internet address represented as OCTET STRING of length 4
-			var bytes = value.split(".");
-			if ( typeof value != "string" || bytes.length != 4 ) {
-				throw new Error("Invalid IpAddress", value);
-			}
-			return value;
-
-		default :
-			// Assume the caller knows what he's doing
-			return value;
-	}
-};
-
-
 Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 	var row;
 	var column;
@@ -4841,7 +4894,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 				}
 
 				// Ensure the value is of the correct type, and save it
-				value = this.castSetValue ( provider.scalarType, value );
+				value = ObjectTypeUtil.castSetValue ( provider.scalarType, value );
 				this.mib.setScalarValue ( provider.name, value );
 
 				// Now there should be an instanceNode available.
@@ -4901,7 +4954,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					}
 
 					// Map each column's value to the appropriate type
-					value = value.map( (v, i) => this.castSetValue ( provider.tableColumns[i].type, v ) );
+					value = value.map( (v, i) => ObjectTypeUtil.castSetValue ( provider.tableColumns[i].type, v ) );
 
 					// Add the table row
 					this.mib.addTableRow ( provider.name, value );
@@ -5078,7 +5131,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					});
 				};
 
-				requestPdu.varbinds[i].requestValue = this.castSetValue (requestPdu.varbinds[i].type, requestPdu.varbinds[i].value);
+				requestPdu.varbinds[i].requestValue = ObjectTypeUtil.castSetValue (requestPdu.varbinds[i].type, requestPdu.varbinds[i].value);
 				switch ( requestPdu.varbinds[i].value ) {
 					case RowStatus["active"]:
 					case RowStatus["notInService"]:
@@ -5218,7 +5271,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 
 						} else {
 							// No special handling required. Just save the new value.
-							let setResult = mibRequests[savedIndex].instanceNode.setValue (me.castSetValue (
+							let setResult = mibRequests[savedIndex].instanceNode.setValue (ObjectTypeUtil.castSetValue (
 								requestPdu.varbinds[savedIndex].type,
 								requestPdu.varbinds[savedIndex].value
 							));
@@ -5254,9 +5307,9 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					}
 					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
 					if ( requestPdu.varbinds[savedIndex].requestValue ) {
-						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].requestValue);
+						responseVarbind.requestValue = ObjectTypeUtil.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].requestValue);
 					} else {
-						responseVarbind.requestValue = me.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].value);
+						responseVarbind.requestValue = ObjectTypeUtil.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].value);
 					}
 				}
 				if ( createResult[savedIndex] ) {
@@ -6425,5 +6478,6 @@ exports.ObjectParser = {
 	readUint32: readUint32,
 	readVarbindValue: readVarbindValue
 };
+exports.ObjectTypeUtil = ObjectTypeUtil;
 exports.Authentication = Authentication;
 exports.Encryption = Encryption;

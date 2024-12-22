@@ -61,6 +61,9 @@ if ( command.includes('snmp-set') ) {
         type: snmp.ObjectType[options._[2]],
         value: options._[3]
     }];
+    if ( varbinds[0].type == snmp.ObjectType.Integer ) {
+        varbinds[0].value = Number(varbinds[0].value);
+    }
 } else if ( command.includes('snmp-table-columns') ) {
     oids = [options._[1]];
     columns = [];
