@@ -4066,14 +4066,8 @@ Mib.prototype.getProviderNodeForInstance = function (instanceNode) {
 };
 
 Mib.prototype.addProviderToNode = function (provider) {
-	var node = this.addNodesForOid (provider.oid);
-
+	const node = this.addNodesForOid (provider.oid);
 	node.provider = provider;
-	if ( provider.type == MibProviderType.Table ) {
-		if ( ! provider.tableIndex ) {
-			provider.tableIndex = [1];
-		}
-	}
 	this.providerNodes[provider.name] = node;
 	return node;
 };
@@ -4283,8 +4277,11 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 		instanceNode = this.lookup (instanceAddress);
 		instanceNode.valueType = provider.scalarType;
 	}
+	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, newValue);
+	if ( ! isValidValue ) {
+		throw new TypeError(`Invalid value for ${scalarName} of type ${instanceNode.valueType}: ${newValue}`);
+	}
 	instanceNode.value = newValue;
-	// return instanceNode.setValue (newValue);
 };
 
 Mib.prototype.getProviderNodeForTable = function (table) {
@@ -4412,6 +4409,23 @@ Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	return rowIndexOid;
 };
 
+Mib.prototype.validateTableRow = function (table, row) {
+	const provider = this.providers[table];
+	const tableIndex = provider.tableIndex;
+	const foreignIndexOffset = tableIndex.filter ( indexPart => indexPart.foreign ).length;
+	for ( let i = 0; i < provider.tableColumns.length ; i++ ) {
+		const column = provider.tableColumns[i];
+		const isColumnIndex = tableIndex.some ( indexPart => indexPart.columnNumber == column.number );
+		if ( ! isColumnIndex || ! (column.maxAccess === MaxAccess['not-accessible'] || column.maxAccess === MaxAccess['accessible-for-notify']) ) {
+			const rowValueIndex = foreignIndexOffset + i;
+			const isValidValue = ObjectTypeUtil.isValid(column.type, row[rowValueIndex]);
+			if ( ! isValidValue ) {
+				throw new TypeError(`Invalid value for ${table} column ${column.name} (index ${rowValueIndex}): ${row[rowValueIndex]} (in row [${row}])`);
+			}
+		}
+	}
+};
+
 Mib.prototype.addTableRow = function (table, row) {
 	var providerNode;
 	var provider;
@@ -4420,7 +4434,11 @@ Mib.prototype.addTableRow = function (table, row) {
 	var instanceNode;
 	var rowValueOffset;
 
-	if ( this.providers[table] && ! this.providerNodes[table] ) {
+	if ( ! this.providers[table] ) {
+		throw new ReferenceError ("Provider " + table + " not registered with this MIB");
+	}
+	this.validateTableRow (table, row);
+	if ( ! this.providerNodes[table] ) {
 		this.addProviderToNode (this.providers[table]);
 	}
 	providerNode = this.getProviderNodeForTable (table);
@@ -4550,19 +4568,16 @@ Mib.prototype.getTableSingleCell = function (table, columnNumber, rowIndex) {
 };
 
 Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, value) {
-	var provider;
-	var providerNode;
-	var columnNode;
-	var instanceNode;
-	var instanceAddress;
-
-	provider = this.providers[table];
-	providerNode = this.getProviderNodeForTable (table);
-	instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
-	columnNode = providerNode.children[columnNumber];
-	instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
+	const provider = this.providers[table];
+	const providerNode = this.getProviderNodeForTable (table);
+	const instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
+	const columnNode = providerNode.children[columnNumber];
+	const instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
+	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, value);
+	if ( ! isValidValue ) {
+		throw new TypeError(`Invalid value for ${table} column ${columnNumber} of type ${instanceNode.valueType}: ${value}`);
+	}
 	instanceNode.value = value;
-	// return instanceNode.setValue (value);
 };
 
 Mib.prototype.deleteTableRow = function (table, rowIndex) {

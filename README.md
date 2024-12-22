@@ -3428,6 +3428,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix agent SNMP SetRequest for OIDs
 
+## Version 3.16.0 - 23/12/2024
+
+ * Add MIB object validation to set/add MIB API calls
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
