@@ -3432,6 +3432,10 @@ Example programs are included under the module's `example` directory.
 
  * Add MIB object validation to set/add MIB API calls
 
+## Version 3.16.1 - 01/01/2025
+
+ * Fix loading of MIB directory paths with periods
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
