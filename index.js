@@ -641,7 +641,8 @@ ObjectTypeUtil.isValid = function (type, value) {
 		case ObjectType.Boolean: {
 			return typeof value == "boolean";
 		}
-		case ObjectType.Integer: {
+		case ObjectType.Integer:
+		case ObjectType.Integer32: {
 			// Allow strings that can be parsed as integers
 			const parsed = Number(value);
 			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= MIN_SIGNED_INT32 && parsed <= MAX_SIGNED_INT32;
@@ -653,15 +654,24 @@ ObjectTypeUtil.isValid = function (type, value) {
 		case ObjectType.OID: {
 			return typeof value == "string" && value.match (/^([0-9]+)(\.[0-9]+)+$/);
 		}
-		case ObjectType.Counter: {
+		case ObjectType.Counter:
+		case ObjectType.Counter32:
+		case ObjectType.Gauge:
+		case ObjectType.Gauge32:
+		case ObjectType.Unsigned32: {
 			// Allow strings that can be parsed as integers
 			const parsed = Number(value);
 			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= 0 && parsed <= MAX_UNSIGNED_INT32;
 		}
 		case ObjectType.Counter64: {
-			// Allow strings that can be parsed as integers
-			const parsed = Number(value);
-			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= 0;
+			if ( value instanceof Buffer ) {
+				// Allow buffers of 8 bytes - should do further check to see if it translates to a valid integer
+				return value.length == 8;
+			} else {
+				// Allow strings that can be parsed as integers
+				const parsed = Number(value);
+				return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= 0;
+			}
 		}
 		case ObjectType.IpAddress: {
 			const octets = value.split(".");
@@ -678,8 +688,9 @@ ObjectTypeUtil.isValid = function (type, value) {
 			}
 			return true;
 		}
+		// return true for all other types until we are certain all object types are covered with specific rules
 		default: {
-			return false;
+			return true;
 		}
 	}
 

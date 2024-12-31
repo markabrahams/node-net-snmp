@@ -8,7 +8,7 @@ var providers;
 var mibDir = '/var/tmp/mibs/';
 
 var counter64 = function (num) {
-    var buf = Buffer.alloc (4);
+    var buf = Buffer.alloc (8);
     buf.writeUInt32BE (num);
     return buf;
 };

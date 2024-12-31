@@ -3436,6 +3436,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix loading of MIB directory paths with periods
 
+## Version 3.17.0 - 01/01/2025
+
+ * Relax validation of unknown object types
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
