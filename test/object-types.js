@@ -1,5 +1,5 @@
 const assert = require('assert');
-const snmp   = require('../');
+const snmp = require('..');
 
 describe('isValid() - Boolean', function() {
 	describe('JS true is a Boolean type', function() {

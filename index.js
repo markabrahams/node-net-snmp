@@ -587,55 +587,79 @@ function writeVarbinds (buffer, varbinds) {
 
 const ObjectTypeUtil = {};
 
-ObjectTypeUtil.castSetValue = function (type, value) {
+ObjectTypeUtil.castSetValue = function (type, value, constraints) {
 
 	switch (type) {
-		case ObjectType.Boolean:
+
+		case ObjectType.Boolean: {
 			return !! value;
+		}
 
 		case ObjectType.Integer:
+		case ObjectType.Integer32: {
 			if ( typeof value != "number" && typeof value != "string" ) {
 				throw new Error("Invalid Integer", value);
 			}
-			return typeof value == "number" ? value : parseInt(value, 10);
+			const parsedValue = typeof value == "number" ? value : parseInt(value, 10);
+			if ( isNaN(parsedValue) ) {
+				throw new Error("Invalid Integer", value);
+			}
+			if ( constraints && ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
+				throw new Error("Integer does not meet constraints", value);
+			}
+			return parsedValue;
+		}
 
-		case ObjectType.OctetString:
-			if ( value instanceof Buffer) {
-				return value.toString();
-			} else if ( typeof value != "string" ) {
+		case ObjectType.OctetString: {
+			if ( ! value instanceof Buffer && typeof value != "string" ) {
 				throw new Error("Invalid OctetString", value);
+			}
+			if ( constraints && ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
+				throw new Error("OctetString does not meet constraints", value);
+			}
+			if ( value instanceof Buffer ) {
+				return value.toString();
 			} else {
 				return value;
 			}
+		}
 
-		case ObjectType.OID:
+		case ObjectType.OID: {
 			if ( typeof value != "string" || ! value.match(/^([0-9]+)(\.[0-9]+)+$/) ) {
 				throw new Error("Invalid OID", value);
 			}
 			return value;
+		}
 
 		case ObjectType.Counter:
-		case ObjectType.Counter64:
+		case ObjectType.Counter32:
+		case ObjectType.Gauge:
+		case ObjectType.Gauge32:
+		case ObjectType.Unsigned32:
+		case ObjectType.Counter64: {
 			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
 			// We'll do so.
 			return 0;
+		}
 
-		case ObjectType.IpAddress:
+		case ObjectType.IpAddress: {
 			// A 32-bit internet address represented as OCTET STRING of length 4
 			var bytes = value.split(".");
 			if ( typeof value != "string" || bytes.length != 4 ) {
 				throw new Error("Invalid IpAddress", value);
 			}
 			return value;
+		}
 
-		default :
+		default: {
 			// Assume the caller knows what he's doing
 			return value;
+		}
 	}
 
 };
 
-ObjectTypeUtil.isValid = function (type, value) {
+ObjectTypeUtil.isValid = function (type, value, constraints) {
 
 	switch (type) {
 		case ObjectType.Boolean: {
@@ -644,12 +668,24 @@ ObjectTypeUtil.isValid = function (type, value) {
 		case ObjectType.Integer:
 		case ObjectType.Integer32: {
 			// Allow strings that can be parsed as integers
-			const parsed = Number(value);
-			return ! isNaN (parsed) && Number.isInteger (parsed) && parsed >= MIN_SIGNED_INT32 && parsed <= MAX_SIGNED_INT32;
+			const parsedValue = Number(value);
+			if ( isNaN(parsedValue) || ! Number.isInteger(parsedValue) || parsedValue < MIN_SIGNED_INT32 || parsedValue > MAX_SIGNED_INT32 ) {
+				return false;
+			}
+			if ( constraints && ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
+				return false;
+			}
+			return true;
 		}
 		case ObjectType.OctetString: {
 			// Allow string or buffer
-			return typeof value == "string" || value instanceof Buffer;
+			if ( typeof value != "string" && ! (value instanceof Buffer) ) {
+				return false;
+			}
+			if ( constraints && ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
+				return false;
+			}
+			return true;
 		}
 		case ObjectType.OID: {
 			return typeof value == "string" && value.match (/^([0-9]+)(\.[0-9]+)+$/);
@@ -694,6 +730,57 @@ ObjectTypeUtil.isValid = function (type, value) {
 		}
 	}
 
+};
+
+ObjectTypeUtil.doesIntegerMeetConstraints = function (value, constraints) {
+
+	if ( ! constraints ) {
+		return true;
+	}
+
+	if ( constraints.enumeration ) {
+		if ( constraints.enumeration[value] ) {
+			return true;
+		} else {
+			return false;
+		}
+	} else if ( constraints.ranges ) {
+		for ( const range of constraints.ranges ) {
+			const min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			const max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( value >= min && value <= max ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	return true;
+};
+
+ObjectTypeUtil.doesStringMeetConstraints = function (value, constraints) {
+
+	if ( ! constraints ) {
+		return true;
+	}
+
+	if ( constraints.sizes ) {
+		// if size is constrained, value must have a length property
+		if ( value.length === undefined ) {
+			return false;
+		}
+		const len = value.length;
+		for ( const range of constraints.sizes ) {
+			const min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
+			const max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
+			if ( len >= min && len <= max ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	return true;
 };
 
 /*****************************************************************************
@@ -3770,53 +3857,17 @@ MibNode.prototype.getConstraintsFromProvider = function () {
 	}
 };
 
-MibNode.prototype.setValue = function (newValue) {
-	var len;
-	var min;
-	var max;
-	var range;
-	var found = false;
-	var constraints = this.getConstraintsFromProvider ();
-	if ( ! constraints ) {
-		this.value = newValue;
+MibNode.prototype.setValue = function (typeFromSet, valueFromSet) {
+	const constraints = this.getConstraintsFromProvider ();
+	try {
+		const castValue = ObjectTypeUtil.castSetValue (typeFromSet, valueFromSet, constraints);
+		this.value = castValue;
 		return true;
+	} catch (error) {
+		console.error ("Error setting value: " + error.message);
+		return false;
 	}
-	if ( constraints.enumeration ) {
-		if ( ! constraints.enumeration[newValue] ) {
-			return false;
-		}
-	} else if ( constraints.ranges ) {
-		for ( range of constraints.ranges ) {
-			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
-			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
-			if ( newValue >= min && newValue <= max ) {
-				found = true;
-				break;
-			}
-		}
-		if ( ! found ) {
-			return false;
-		}
-	} else if ( constraints.sizes ) {
-		// if size is constrained, value must have a length property
-		if ( newValue.length === undefined ) {
-			return false;
-		}
-		len = newValue.length;
-		for ( range of constraints.sizes ) {
-			min = "min" in range ? range.min : Number.MIN_SAFE_INTEGER;
-			max = "max" in range ? range.max : Number.MAX_SAFE_INTEGER;
-			if ( len >= min && len <= max ) {
-				found = true;
-				break;
-			}
-		}
-		if ( ! found ) {
-			return false;
-		}
-	}
-	this.value = newValue;
-	return true;
+
 };
 
 MibNode.prototype.getInstanceNodeForTableRow = function () {
@@ -4083,8 +4134,13 @@ Mib.prototype.addProviderToNode = function (provider) {
 	return node;
 };
 
-Mib.prototype.getColumnFromProvider = function (provider, indexEntry) {
-	var column = null;
+Mib.prototype.getColumnForColumnNumberFromTableProvider = function (provider, columnNumber) {
+	const column = provider.tableColumns.find (column => column.number == columnNumber );
+	return column;
+};
+
+Mib.prototype.getColumnForIndexEntryFromTableProvider = function (provider, indexEntry) {
+	let column = null;
 	if ( indexEntry.columnName ) {
 		column = provider.tableColumns.filter (column => column.name == indexEntry.columnName )[0];
 	} else if ( indexEntry.columnNumber !== undefined && indexEntry.columnNumber !== null  ) {
@@ -4101,16 +4157,16 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 	}
 	if ( indexEntry.foreign ) {
 		// Explicit foreign table is first to search
-		column = this.getColumnFromProvider (this.providers[indexEntry.foreign], indexEntry);
+		column = this.getColumnForIndexEntryFromTableProvider (this.providers[indexEntry.foreign], indexEntry);
 	} else {
 		// If foreign table isn't given, search the local table next
-		column = this.getColumnFromProvider (localProvider, indexEntry);
+		column = this.getColumnForIndexEntryFromTableProvider (localProvider, indexEntry);
 		if ( ! column ) {
 			// as a last resort, try to find the column in a foreign table
 			tableProviders = Object.values(this.providers).
 					filter ( prov => prov.type == MibProviderType.Table );
 			for ( var provider of tableProviders ) {
-				column = this.getColumnFromProvider (provider, indexEntry);
+				column = this.getColumnForIndexEntryFromTableProvider (provider, indexEntry);
 				if ( column ) {
 					indexEntry.foreign = provider.name;
 					break;
@@ -4288,7 +4344,7 @@ Mib.prototype.setScalarValue = function (scalarName, newValue) {
 		instanceNode = this.lookup (instanceAddress);
 		instanceNode.valueType = provider.scalarType;
 	}
-	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, newValue);
+	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, newValue, provider.constraints);
 	if ( ! isValidValue ) {
 		throw new TypeError(`Invalid value for ${scalarName} of type ${instanceNode.valueType}: ${newValue}`);
 	}
@@ -4425,13 +4481,13 @@ Mib.prototype.validateTableRow = function (table, row) {
 	const tableIndex = provider.tableIndex;
 	const foreignIndexOffset = tableIndex.filter ( indexPart => indexPart.foreign ).length;
 	for ( let i = 0; i < provider.tableColumns.length ; i++ ) {
-		const column = provider.tableColumns[i];
-		const isColumnIndex = tableIndex.some ( indexPart => indexPart.columnNumber == column.number );
-		if ( ! isColumnIndex || ! (column.maxAccess === MaxAccess['not-accessible'] || column.maxAccess === MaxAccess['accessible-for-notify']) ) {
+		const providerColumn = provider.tableColumns[i];
+		const isColumnIndex = tableIndex.some ( indexPart => indexPart.columnNumber == providerColumn.number );
+		if ( ! isColumnIndex || ! (providerColumn.maxAccess === MaxAccess['not-accessible'] || providerColumn.maxAccess === MaxAccess['accessible-for-notify']) ) {
 			const rowValueIndex = foreignIndexOffset + i;
-			const isValidValue = ObjectTypeUtil.isValid(column.type, row[rowValueIndex]);
+			const isValidValue = ObjectTypeUtil.isValid(providerColumn.type, row[rowValueIndex], providerColumn.constraints);
 			if ( ! isValidValue ) {
-				throw new TypeError(`Invalid value for ${table} column ${column.name} (index ${rowValueIndex}): ${row[rowValueIndex]} (in row [${row}])`);
+				throw new TypeError(`Invalid value for ${table} column ${providerColumn.name} (index ${rowValueIndex}): ${row[rowValueIndex]} (in row [${row}])`);
 			}
 		}
 	}
@@ -4584,7 +4640,8 @@ Mib.prototype.setTableSingleCell = function (table, columnNumber, rowIndex, valu
 	const instanceAddress = this.getTableRowInstanceFromRowIndex (provider, rowIndex);
 	const columnNode = providerNode.children[columnNumber];
 	const instanceNode = columnNode.getInstanceNodeForTableRowIndex (instanceAddress);
-	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, value);
+	const providerColumn = this.getColumnForColumnNumberFromTableProvider (provider, columnNumber);
+	const isValidValue = ObjectTypeUtil.isValid(instanceNode.valueType, value, providerColumn?.constraints);
 	if ( ! isValidValue ) {
 		throw new TypeError(`Invalid value for ${table} column ${columnNumber} of type ${instanceNode.valueType}: ${value}`);
 	}
@@ -5297,10 +5354,10 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 
 						} else {
 							// No special handling required. Just save the new value.
-							let setResult = mibRequests[savedIndex].instanceNode.setValue (ObjectTypeUtil.castSetValue (
+							const setResult = mibRequests[savedIndex].instanceNode.setValue (
 								requestPdu.varbinds[savedIndex].type,
 								requestPdu.varbinds[savedIndex].value
-							));
+							);
 							if ( ! setResult ) {
 								if ( typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError ) {
 									responsePdu.errorStatus = ErrorStatus.WrongValue;

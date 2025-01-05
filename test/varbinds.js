@@ -1,6 +1,6 @@
-const ber    = require ('asn1-ber').Ber;
 const assert = require('assert');
-const snmp   = require('../');
+const ber = require ('asn1-ber').Ber;
+const snmp = require('../');
 
 describe('parseInt()', function() {
 	describe('given a negative integer', function() {
