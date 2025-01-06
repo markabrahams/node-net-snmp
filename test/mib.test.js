@@ -115,4 +115,15 @@ describe('MIB', function () {
         });
     });
 
+    describe('registerProvider() - scalar defVal', function () {
+        it('adds a scalar value on registration', function () {
+            const options = {
+                addScalarDefaultsOnRegistration: true
+            };
+            mib = snmp.createMib(options);
+            mib.registerProviders(mibProviders);
+            assert.equal(mib.getScalarValue('testScalarIntegerDefval'), 49);
+        });
+    });
+
 });

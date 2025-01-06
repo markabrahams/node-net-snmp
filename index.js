@@ -4025,10 +4025,11 @@ MibNode.oidIsDescended = function (oid, ancestor) {
 	return isAncestor;
 };
 
-var Mib = function () {
+var Mib = function (options) {
 	var providersByOid;
 	this.root = new MibNode ([], null);
 	this.providerNodes = {};
+	this.options = options;
 
 	// this.providers will be modified throughout this code.
 	// Keep this.providersByOid in sync with it
@@ -4197,7 +4198,13 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 
 Mib.prototype.registerProvider = function (provider) {
 	this.providers[provider.name] = provider;
-	if ( provider.type == MibProviderType.Table ) {
+	if ( provider.type == MibProviderType.Scalar ) {
+		if ( this.options?.addScalarDefaultsOnRegistration ) {
+			if ( provider.defVal ) {
+				this.setScalarValue (provider.name, provider.defVal);
+			}
+		}
+	} else if ( provider.type == MibProviderType.Table ) {
 		if ( provider.tableAugments ) {
 			if ( provider.tableAugments == provider.name ) {
 				throw new Error ("Table " + provider.name + " cannot augment itself");
@@ -4762,8 +4769,8 @@ Mib.getSubOidFromBaseOid = function (oid, base) {
 	return oid.substring (base.length + 1);
 };
 
-Mib.create = function () {
-	return new Mib (); 
+Mib.create = function (options) {
+	return new Mib (options);
 };
 
 var MibRequest = function (requestDefinition) {

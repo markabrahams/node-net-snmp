@@ -2055,7 +2055,7 @@ constraints: {
     ]
 }
 ```
-## snmp.createMib ()
+## snmp.createMib (options)
 
 The `createMib()` function instantiates and returns an instance of the
 `Mib` class. The new Mib does not have any nodes (except for a single
@@ -2068,6 +2068,12 @@ might be useful are:
  * where you want to pre-populate a `Mib` instance with providers and scalar/tabular data
  before creating the `Agent` instance itself.
  * where you want to swap out an agent's existing `Mib` instance for an entirely new one.
+
+The `options` object is optional.  If supplied, a single key is supported:
+ * `addScalarDefaultsOnRegistration` - if `true`, automatically adds to the MIB a scalar with a
+ default value (`defVal`) in its provider definition upon registration of the provider.
+ The default value is `false`, which means the MIB is unchanged on registration of the provider,
+ even if a `defVal` is present in the provider definition.
 
 ## mib.registerProvider (definition)
 
@@ -3439,6 +3445,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.17.0 - 01/01/2025
 
  * Relax validation of unknown object types
+
+## Version 3.18.0 - 06/01/2025
+
+ * Add MIB option to add scalar MIB object on scalar provider registration
 
 # License
 
