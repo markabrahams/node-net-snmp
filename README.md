@@ -1598,7 +1598,8 @@ var options = {
     accessControlModelType: snmp.AccessControlModelType.None,
     engineID: "8000B98380XXXXXXXXXXXXXXXXXXXXXXXX", // where the X's are random hex digits
     address: null,
-    transport: "udp4"
+    transport: "udp4",
+    mibOptions: {}
 };
 
 var callback = function (error, data) {
@@ -1634,6 +1635,8 @@ an object, possibly empty, and can contain the following fields:
  * `sockets` - an array of objects containing triples of `transport`, `address` and `port` that
  can be used to specify multiple socket listeners.  This option overrides any individual
  `transport`, `address` and `port` options.
+ * `mibOptions` - an MIB options object that is passed to the `Mib` instance - see the MIB section
+ for further details on this - defaults to the empty object.
 
 The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
 If not supplied, the agent creates itself a new empty `Mib` singleton.  If supplied,
@@ -3449,6 +3452,10 @@ Example programs are included under the module's `example` directory.
 ## Version 3.18.0 - 06/01/2025
 
  * Add MIB option to add scalar MIB object on scalar provider registration
+
+## Version 3.18.1 - 06/01/2025
+
+ * Add agent option key for MIB options
 
 # License
 

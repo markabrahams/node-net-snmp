@@ -4798,7 +4798,8 @@ var Agent = function (options, callback, mib) {
 	this.engine = new Engine (options.engineID);
 	this.authorizer = new Authorizer (options);
 	this.callback = callback || function () {};
-	this.mib = mib || new Mib ();
+	const mibOptions = mib?.options || options?.mibOptions || {};
+	this.mib = mib || new Mib (mibOptions);
 	this.context = "";
 	this.forwarder = new Forwarder (this.listener, this.callback);
 };
