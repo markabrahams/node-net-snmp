@@ -3457,6 +3457,10 @@ Example programs are included under the module's `example` directory.
 
  * Add agent option key for MIB options
 
+## Version 3.18.2 - 06/01/2025
+
+ * Add conversion of scalar defVal enumeration name to number on assignment
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

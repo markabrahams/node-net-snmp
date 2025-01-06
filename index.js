@@ -783,6 +783,15 @@ ObjectTypeUtil.doesStringMeetConstraints = function (value, constraints) {
 	return true;
 };
 
+ObjectTypeUtil.getEnumerationNumberFromName = function (enumeration, name) {
+	for ( const [enumNumber, enumName] of Object.entries (enumeration) ) {
+		if ( enumName === name ) {
+			return Number (enumNumber);
+		}
+	}
+	return null;
+};
+
 /*****************************************************************************
  ** PDU class definitions
  **/
@@ -4199,10 +4208,15 @@ Mib.prototype.populateIndexEntryFromColumn = function (localProvider, indexEntry
 Mib.prototype.registerProvider = function (provider) {
 	this.providers[provider.name] = provider;
 	if ( provider.type == MibProviderType.Scalar ) {
-		if ( this.options?.addScalarDefaultsOnRegistration ) {
-			if ( provider.defVal ) {
-				this.setScalarValue (provider.name, provider.defVal);
+		if ( this.options?.addScalarDefaultsOnRegistration && provider.defVal ) {
+			let scalarValue;
+			// If the scalar has an enumeration, set the value to the enumeration number derived from the defVal name
+			if ( provider.constraints?.enumeration ) {
+				scalarValue = ObjectTypeUtil.getEnumerationNumberFromName (provider.constraints.enumeration, provider.defVal);
+			} else {
+				scalarValue = provider.defVal;
 			}
+			this.setScalarValue (provider.name, scalarValue);
 		}
 	} else if ( provider.type == MibProviderType.Table ) {
 		if ( provider.tableAugments ) {
