@@ -4527,11 +4527,7 @@ Mib.prototype.addTableRow = function (table, row) {
 };
 
 Mib.prototype.getTableColumnDefinitions = function (table) {
-	var providerNode;
-	var provider;
-
-	providerNode = this.getProviderNodeForTable (table);
-	provider = providerNode.provider;
+	const provider = this.providers[table];
 	return provider.tableColumns;
 };
 

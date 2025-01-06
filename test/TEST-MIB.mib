@@ -1,0 +1,210 @@
+TEST-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, IpAddress, TimeTicks
+        FROM SNMPv2-SMI
+    DisplayString, TEXTUAL-CONVENTION
+        FROM SNMPv2-TC;
+
+testMIB MODULE-IDENTITY
+    LAST-UPDATED "202501060000Z"
+    ORGANIZATION "Example Organization"
+    CONTACT-INFO "support@example.org"
+    DESCRIPTION "A test MIB for node-net-snmp library"
+    REVISION "202501060000Z"
+    DESCRIPTION "Initial version of the test MIB"
+    ::= { enterprises 99999 }
+
+-- Scalars
+testScalarInteger OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "An integer scalar"
+    ::= { testMIB 1 }
+
+testScalarEnum OBJECT-TYPE
+    SYNTAX INTEGER { up(1), down(2), unknown(3) }
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "An integer scalar with enumerated type"
+    ::= { testMIB 2 }
+
+testScalarRange OBJECT-TYPE
+    SYNTAX Integer32 (1..100)
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "An integer scalar with a range constraint"
+    ::= { testMIB 3 }
+
+testScalarString OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "A string scalar"
+    ::= { testMIB 4 }
+
+testScalarStringSize OBJECT-TYPE
+    SYNTAX OCTET STRING (SIZE(1..32))
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "A string scalar with a size constraint"
+    ::= { testMIB 5 }
+
+testScalarIntegerDefval OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "An integer scalar"
+    DEFVAL { 49 }
+    ::= { testMIB 6 }
+
+
+-- Tables
+testTable1 OBJECT-TYPE
+    SYNTAX SEQUENCE OF TestEntry1
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "A table with a single integer index"
+    ::= { testMIB 10 }
+
+testEntry1 OBJECT-TYPE
+    SYNTAX TestEntry1
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "An entry in testTable1"
+    INDEX { testTable1Index }
+    ::= { testTable1 1 }
+
+TestEntry1 ::= SEQUENCE {
+    testTable1Index Integer32,
+    testTable1Value DisplayString
+}
+
+testTable1Index OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "Index for testTable1"
+    ::= { testEntry1 1 }
+
+testTable1Value OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "Value in testTable1"
+    ::= { testEntry1 2 }
+
+testTable2 OBJECT-TYPE
+    SYNTAX SEQUENCE OF TestEntry2
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "A table with a string index"
+    ::= { testMIB 11 }
+
+testEntry2 OBJECT-TYPE
+    SYNTAX TestEntry2
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "An entry in testTable2"
+    INDEX { testTable2Index }
+    ::= { testTable2 1 }
+
+TestEntry2 ::= SEQUENCE {
+    testTable2Index DisplayString,
+    testTable2Value Integer32
+}
+
+testTable2Index OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "String index for testTable2"
+    ::= { testEntry2 1 }
+
+testTable2Value OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "Value in testTable2"
+    ::= { testEntry2 2 }
+
+testTableForeignKey OBJECT-TYPE
+    SYNTAX SEQUENCE OF TestEntryForeignKey
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "A table with a foreign key"
+    ::= { testMIB 12 }
+
+testEntryForeignKey OBJECT-TYPE
+    SYNTAX TestEntryForeignKey
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "An entry with a foreign key"
+    INDEX { testTable1Index }
+    ::= { testTableForeignKey 1 }
+
+TestEntryForeignKey ::= SEQUENCE {
+    testForeignKeyValue DisplayString
+}
+
+testForeignKeyValue OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "Foreign key value"
+    ::= { testEntryForeignKey 2 }
+
+testTableComposite OBJECT-TYPE
+    SYNTAX SEQUENCE OF TestEntryComposite
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "A table with a composite key"
+    ::= { testMIB 13 }
+
+testEntryComposite OBJECT-TYPE
+    SYNTAX TestEntryComposite
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "An entry in the composite key table"
+    INDEX { testTable1Index, testTable2Index }
+    ::= { testTableComposite 1 }
+
+TestEntryComposite ::= SEQUENCE {
+    testCompositeValue Integer32
+}
+
+testCompositeValue OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "Composite key value"
+    ::= { testEntryComposite 2 }
+
+testTableAugment OBJECT-TYPE
+    SYNTAX SEQUENCE OF TestEntryAugment
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "A table that augments testTable1"
+    ::= { testMIB 14 }
+
+testEntryAugment OBJECT-TYPE
+    SYNTAX TestEntryAugment
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION "An augmented entry"
+    AUGMENTS { testEntry1 }
+    ::= { testTableAugment 1 }
+
+TestEntryAugment ::= SEQUENCE {
+    testAugmentValue TimeTicks
+}
+
+testAugmentValue OBJECT-TYPE
+    SYNTAX TimeTicks
+    MAX-ACCESS read-write
+    STATUS current
+    DESCRIPTION "Augmented value"
+    ::= { testEntryAugment 2 }
+
+END

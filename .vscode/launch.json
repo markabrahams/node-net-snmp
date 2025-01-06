@@ -3,40 +3,37 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [    
+    "configurations": [
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP community get",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-get.js",
-            "args": [
-                "-v", "2c",
-                "-c", "public",
-                "-s", "1162",
-                "127.0.0.1",
-                "1.3.6.1.2.1.31.1.1.1.6.1"
-            ]
+            "args": ["-v", "2c", "-c", "public", "-s", "1162", "127.0.0.1", "1.3.6.1.2.1.31.1.1.1.6.1"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP user get",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-get.js",
             "args": [
                 "-d",
-                "-v", "3",
-                "-l", "authPriv",
-                "-u", "wilma",
-                "-a", "sha",
-                "-A", "illhavesomeauth",
-                "-x", "des",
-                "-X", "andsomepriv",
+                "-v",
+                "3",
+                "-l",
+                "authPriv",
+                "-u",
+                "wilma",
+                "-a",
+                "sha",
+                "-A",
+                "illhavesomeauth",
+                "-x",
+                "des",
+                "-X",
+                "andsomepriv",
                 "127.0.0.1",
                 "1.3.6.1.2.1.1.1.0"
             ]
@@ -45,115 +42,73 @@
             "type": "node",
             "request": "launch",
             "name": "SNMP community get bulk",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-get-bulk.js",
-            "args": [
-                "-v", "2c",
-                "-c", "public",
-                "-o", "1",
-                "-r", "20",
-                "127.0.0.1",
-                "1.3.6.1.2.1.1.9",
-                "1.3.6.1.2.1.2"
-            ]
+            "args": ["-v", "2c", "-c", "public", "-o", "1", "-r", "20", "127.0.0.1", "1.3.6.1.2.1.1.9", "1.3.6.1.2.1.2"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP community subtree",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-subtree.js",
-            "args": [
-                "-v", "2c",
-                "-c", "public",
-                "127.0.0.1",
-                "1.3.6.1.6.3.16.1.5.2.1.6.9"
-            ]
+            "args": ["-v", "2c", "-c", "public", "127.0.0.1", "1.3.6.1.6.3.16.1.5.2.1.6.9"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP community walk",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-walk.js",
-            "args": [
-                "-v", "2c",
-                "-c", "public",
-                "127.0.0.1",
-                "1.3.6.1.6.3.16.1.5.2.1.6.9"
-            ]
+            "args": ["-v", "2c", "-c", "public", "127.0.0.1", "1.3.6.1.6.3.16.1.5.2.1.6.9"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP user walk",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-walk.js",
-            "args": [
-                "-v", "3",
-                "-u", "noauth",
-                "-l", "noAuthNoPriv",
-                "127.0.0.1",
-                "1.3.6.1.6.3.16.1.5"
-            ]
+            "args": ["-v", "3", "-u", "noauth", "-l", "noAuthNoPriv", "127.0.0.1", "1.3.6.1.6.3.16.1.5"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP community set",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-set.js",
-            "args": [
-                "-v", "2c",
-                "-c", "private",
-                "127.0.0.1",
-                "1.3.6.1.2.1.1.7.0",
-                "Integer",
-                "40"
-            ]
+            "args": ["-v", "2c", "-c", "private", "127.0.0.1", "1.3.6.1.2.1.1.7.0", "Integer", "40"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP community trap",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-trap.js",
-            "args": [
-                "-v", "2c",
-                "-c", "public",
-                "127.0.0.1",
-                "1.3.6.1.6.3.1.1.5.1"
-            ]
+            "args": ["-v", "2c", "-c", "public", "127.0.0.1", "1.3.6.1.6.3.1.1.5.1"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP user trap",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-trap.js",
             "args": [
-                "-e", "0x010203040a",
-                "-v", "3",
-                "-u", "barney",
-                "-l", "authPriv",
-                "-a", "sha",
-                "-A", "illhavesomeauth",
-                "-x", "aes",
-                "-X", "andsomepriv",
+                "-e",
+                "0x010203040a",
+                "-v",
+                "3",
+                "-u",
+                "barney",
+                "-l",
+                "authPriv",
+                "-a",
+                "sha",
+                "-A",
+                "illhavesomeauth",
+                "-x",
+                "aes",
+                "-X",
+                "andsomepriv",
                 "127.0.0.1",
                 "1.3.6.1.6.3.1.1.5.1"
             ]
@@ -162,18 +117,23 @@
             "type": "node",
             "request": "launch",
             "name": "SNMP user inform",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-inform.js",
             "args": [
-                "-v", "3",
-                "-u", "informerpriv",
-                "-l", "authPriv",
-                "-a", "md5",
-                "-A", "testing123",
-                "-x", "des",
-                "-X", "testing123",
+                "-v",
+                "3",
+                "-u",
+                "informerpriv",
+                "-l",
+                "authPriv",
+                "-a",
+                "md5",
+                "-A",
+                "testing123",
+                "-x",
+                "des",
+                "-X",
+                "testing123",
                 "127.0.0.1",
                 "1.3.6.1.6.3.1.1.5.1"
             ]
@@ -182,113 +142,108 @@
             "type": "node",
             "request": "launch",
             "name": "SNMP user table columns",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-table-columns.js",
             "args": [
-                "-v", "3",
-                "-u", "wilma",
-                "-l", "authPriv",
-                "-a", "sha",
-                "-A", "illhavesomeauth",
-                "-x", "des",
-                "-X", "andsomepriv",
+                "-v",
+                "3",
+                "-u",
+                "wilma",
+                "-l",
+                "authPriv",
+                "-a",
+                "sha",
+                "-A",
+                "illhavesomeauth",
+                "-x",
+                "des",
+                "-X",
+                "andsomepriv",
                 "127.0.0.1",
-                "1.3.6.1.2.1.2.2", "2"
+                "1.3.6.1.2.1.2.2",
+                "2"
             ]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP receiver",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-receiver.js",
-            "args": [
-                "-p", "162"
-            ]
+            "args": ["-p", "162"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "Receiver LCD",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "program": "${workspaceFolder}/example/receiver-lcd.js",
+            "skipFiles": ["<node_internals>/**"],
+            "program": "${workspaceFolder}/example/receiver-lcd.js"
         },
         {
             "type": "node",
             "request": "launch",
             "name": "AgentX subagent",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/agentx-subagent.js",
-            "args": [
-                "-d"
-            ]
+            "args": ["-d"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP agent",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-agent.js",
             "args": [
                 //"-d",
-                "-p", "1161"
+                "-p",
+                "1161"
             ]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "MIB parser",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/mib-parser.js",
-            "args": [
-                "-n",
-                "-p", "1161"
-            ]
+            "args": ["-n", "-p", "1161"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "SNMP proxy",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/snmp-proxy.js",
-            "args": [
-                "-p", "1161"
-            ]
+            "args": ["-p", "1161"]
         },
         {
             "type": "node",
             "request": "launch",
             "name": "test",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
+            "skipFiles": ["<node_internals>/**"],
             "program": "${workspaceFolder}/example/test.js",
-            "args": [
-                "-p", "1161"
-            ]
+            "args": ["-p", "1161"]
         },
         {
             "type": "node",
             "request": "attach",
             "name": "SNMP attach",
             "port": 9222,
-            "skipFiles": [
-                "<node_internals>/**"
-            ]
+            "skipFiles": ["<node_internals>/**"]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Mocha",
+            "program": "${workspaceFolder}/node_modules/mocha/bin/mocha.js",
+            "args": [
+                "--timeout",
+                "999999",
+                "--colors",
+                "${workspaceFolder}/test/**/*.test.js" // Adjust the test file pattern
+            ],
+            "internalConsoleOptions": "openOnSessionStart",
+            "cwd": "${workspaceFolder}",
+            "skipFiles": ["<node_internals>/**"]
         }
     ]
 }
