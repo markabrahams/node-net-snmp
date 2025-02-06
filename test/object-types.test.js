@@ -85,6 +85,22 @@ describe('Object Types', function() {
 				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.OctetString, Buffer.from('1.3.6.1.2.3.4.5')), true);
 			});
 		});
+		describe('A string with a length of 6 is valid for a size range of 2 - 7', function() {
+			it('returns true', function() {
+				const sizes = [
+					{ min: 2, max: 7 },
+				];
+				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.OctetString, 'sixlet', { sizes }), true);
+			});
+		});
+		describe('A string with a length of 6 is not valid for a size range of 2 - 5', function() {
+			it('returns true', function() {
+				const sizes = [
+					{ min: 2, max: 5 },
+				];
+				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.OctetString, 'sixlet', { sizes }), false);
+			});
+		});
 	});
 
 	describe('isValid() - OID', function() {

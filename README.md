@@ -3461,6 +3461,10 @@ Example programs are included under the module's `example` directory.
 
  * Add conversion of scalar defVal enumeration name to number on assignment
 
+## Version 3.19.0 - 06/02/2025
+
+ * Remove deprecated isArray call and fix agent string constraints check
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

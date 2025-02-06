@@ -682,7 +682,7 @@ ObjectTypeUtil.isValid = function (type, value, constraints) {
 			if ( typeof value != "string" && ! (value instanceof Buffer) ) {
 				return false;
 			}
-			if ( constraints && ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
+			if ( constraints && ! ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
 				return false;
 			}
 			return true;
@@ -4723,7 +4723,7 @@ Mib.convertOidToAddress = function (oid) {
 	var oidArray;
 	var i;
 
-	if (typeof (oid) === 'object' && util.isArray(oid)) {
+	if (typeof (oid) === 'object' && Array.isArray(oid)) {
 		address = oid;
 	} else if (typeof (oid) === 'string') {
 		address = oid.split('.');
