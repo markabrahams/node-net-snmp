@@ -672,7 +672,7 @@ ObjectTypeUtil.isValid = function (type, value, constraints) {
 			if ( isNaN(parsedValue) || ! Number.isInteger(parsedValue) || parsedValue < MIN_SIGNED_INT32 || parsedValue > MAX_SIGNED_INT32 ) {
 				return false;
 			}
-			if ( constraints && ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
+			if ( constraints && ! ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
 				return false;
 			}
 			return true;

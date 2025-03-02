@@ -3465,6 +3465,10 @@ Example programs are included under the module's `example` directory.
 
  * Remove deprecated isArray call and fix agent string constraints check
 
+## Version 3.19.1 - 03/03/2025
+
+ * Fix integer constraints check
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

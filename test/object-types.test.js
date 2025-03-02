@@ -72,6 +72,17 @@ describe('Object Types', function() {
 				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.Integer, 2147483648), false);
 			});
 		});
+		// Tests for constraints
+		describe('An integer at the bottom of the valid range is a valid Integer type', function() {
+			it('returns true', function() {
+				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.Integer, 0, { ranges: [{ min: 0, max: 10 }] }), true);
+			});
+		});
+		describe('An integer outside the valid range is not an valid Integer type', function() {
+			it('returns false', function() {
+				assert.equal(snmp.ObjectTypeUtil.isValid(snmp.ObjectType.Integer, 11, { ranges: [{ min: 0, max: 10 }] }), false);
+			});
+		});
 	});
 
 	describe('isValid() - OctetString', function() {
