@@ -3473,6 +3473,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix integer and string constraints check on cast
 
+# Version 3.20.0 - 06/03/2025
+
+ * Fix set value for counter, gauge and unsigned integer types
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

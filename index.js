@@ -15,6 +15,7 @@ var MIN_SIGNED_INT32 = -2147483648;
 var MAX_SIGNED_INT32 = 2147483647;
 var MIN_UNSIGNED_INT32 = 0;
 var MAX_UNSIGNED_INT32 = 4294967295;
+var MAX_UNSIGNED_INT64 = 18446744073709551615;
 
 function debug (line) {
 	if ( DEBUG ) {
@@ -611,7 +612,7 @@ ObjectTypeUtil.castSetValue = function (type, value, constraints) {
 		}
 
 		case ObjectType.OctetString: {
-			if ( ! value instanceof Buffer && typeof value != "string" ) {
+			if ( ! ( value instanceof Buffer || typeof value == "string" ) ) {
 				throw new Error("Invalid OctetString", value);
 			}
 			if ( constraints && ! ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
@@ -635,18 +636,58 @@ ObjectTypeUtil.castSetValue = function (type, value, constraints) {
 		case ObjectType.Counter32:
 		case ObjectType.Gauge:
 		case ObjectType.Gauge32:
-		case ObjectType.Unsigned32:
-		case ObjectType.Counter64: {
+		case ObjectType.Unsigned32: {
 			// Counters should be initialized to 0 (RFC2578, end of section 7.9)
 			// We'll do so.
-			return 0;
+			// return 0;
+			// That ^^^ was fine when castSetValue was used only for DEFVAL
+			// But now it's used in other set value scenarios
+			// So we need to cast the given value to a whole number
+			const parsedValue = parseInt(value, 10);
+			if ( isNaN(parsedValue) ) {
+				throw new Error(`Invalid Integer for ${type}`, value);
+			}
+			if ( parsedValue < 0 ) {
+				throw new Error(`Integer is negative for ${type}`, value);
+			}
+			if ( parsedValue > MAX_UNSIGNED_INT32 ) {
+				throw new Error(`Integer is greater than max unsigned int32 for ${type}`, value);
+			}
+			return parsedValue;
+		}
+
+		case ObjectType.Counter64: {
+			if ( value instanceof Buffer ) {
+				if ( value.length !== 8 ) {
+					throw new Error(`Counter64 buffer is not 8 bytes`, value);
+				}
+				return value;
+			}
+			const parsedValue = parseInt(value, 10);
+			if ( isNaN(parsedValue) ) {
+				throw new Error(`Invalid Integer for Counter64`, value);
+			}
+			if ( parsedValue < 0 ) {
+				throw new Error(`Integer is negative for Counter64`, value);
+			}
+			if ( parsedValue > MAX_UNSIGNED_INT64 ) {
+				throw new Error(`Integer is greater than max unsigned int64 for Counter64`, value);
+			}
+			return parsedValue;
 		}
 
 		case ObjectType.IpAddress: {
-			// A 32-bit internet address represented as OCTET STRING of length 4
-			var bytes = value.split(".");
-			if ( typeof value != "string" || bytes.length != 4 ) {
+			const octets = value.split (".");
+			if ( typeof value != "string" || octets.length != 4 ) {
 				throw new Error("Invalid IpAddress", value);
+			}
+			for ( const octet of octets ) {
+				if ( isNaN (octet) ) {
+					throw new Error("Invalid IpAddress", value);
+				}
+				if ( parseInt (octet) < 0 || parseInt (octet) > 255) {
+					throw new Error("Invalid IpAddress", value);
+				}
 			}
 			return value;
 		}
