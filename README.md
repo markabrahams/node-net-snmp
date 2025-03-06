@@ -3469,6 +3469,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix integer constraints check
 
+# Version 3.19.2 - 06/03/2025
+
+ * Fix integer and string constraints check on cast
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

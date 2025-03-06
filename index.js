@@ -604,7 +604,7 @@ ObjectTypeUtil.castSetValue = function (type, value, constraints) {
 			if ( isNaN(parsedValue) ) {
 				throw new Error("Invalid Integer", value);
 			}
-			if ( constraints && ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
+			if ( constraints && ! ObjectTypeUtil.doesIntegerMeetConstraints (parsedValue, constraints) ) {
 				throw new Error("Integer does not meet constraints", value);
 			}
 			return parsedValue;
@@ -614,7 +614,7 @@ ObjectTypeUtil.castSetValue = function (type, value, constraints) {
 			if ( ! value instanceof Buffer && typeof value != "string" ) {
 				throw new Error("Invalid OctetString", value);
 			}
-			if ( constraints && ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
+			if ( constraints && ! ObjectTypeUtil.doesStringMeetConstraints (value, constraints) ) {
 				throw new Error("OctetString does not meet constraints", value);
 			}
 			if ( value instanceof Buffer ) {
