@@ -1,0 +1,11 @@
+[
+    {
+        "Name": "node-net-snmp",
+        "License": "MIT License",
+        "License File": " LICENSE ",
+        "Version Number": "3.12.1",
+        "Owner" : "xiafeng@huawei.com",
+        "Upstream URL": "https://github.com/markabrahams/node-net-snmp",
+        "Description": "node-net-snmp is implements versions 1, 2c and 3 of the Simple Network Management Protocol (SNMP)."
+    }
+]
