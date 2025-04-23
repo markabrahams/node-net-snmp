@@ -17,9 +17,12 @@ var MIN_UNSIGNED_INT32 = 0;
 var MAX_UNSIGNED_INT32 = 4294967295;
 var MAX_UNSIGNED_INT64 = 18446744073709551615;
 
-function debug (line) {
+// Use test harness trace or debug functions falling back to console.debug in normal mode.
+var debugfn = typeof(global.debug) === 'function'? global.trace ?? global.debug : console.debug;
+
+function debug () {
 	if ( DEBUG ) {
-		console.debug (line);
+		debugfn.apply (this, arguments);
 	}
 }
 
@@ -2019,7 +2022,7 @@ var Session = function (target, authenticator, options) {
             ? options.reportOidMismatchErrors
             : false;
 
-	DEBUG = options.debug;
+	DEBUG |= options.debug;
 
 	this.engine = new Engine (options.engineID);
 	this.reqs = {};
@@ -3333,7 +3336,7 @@ SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, se
  **/
 
 var Receiver = function (options, callback) {
-	DEBUG = options.debug;
+	DEBUG |= options.debug;
 	this.authorizer = new Authorizer (options);
 	this.engine = new Engine (options.engineID);
 
@@ -4848,7 +4851,7 @@ MibRequest.prototype.isTabular = function () {
 };
 
 var Agent = function (options, callback, mib) {
-	DEBUG = options.debug;
+	DEBUG |= options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine (options.engineID);
 	this.authorizer = new Authorizer (options);
@@ -4967,7 +4970,7 @@ Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 	}
 
 	// Request processing
-	// debug (JSON.stringify (message.pdu, null, 2));
+	debug (message.pdu);
 	if ( message.pdu.contextName && message.pdu.contextName != "" ) {
 		this.onProxyRequest (socket, message, rinfo);
 	} else if ( message.pdu.type == PduType.GetRequest ) {
@@ -6070,7 +6073,7 @@ AgentXPdu.readVarbinds = function (buffer, payloadLength) {
 AgentXPdu.packetID = 1;
 
 var Subagent = function (options) {
-	DEBUG = options.debug;
+	DEBUG |= options.debug;
 	this.mib = new Mib ();
 	this.master = options.master || 'localhost';
 	this.masterPort = options.masterPort || 705;
