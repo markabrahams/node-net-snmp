@@ -196,6 +196,8 @@ var AgentXPduType = {
 	17: "RemoveAgentCaps",
 	18: "Response"
 };
+const agentXPduTypesRequiringReadAccess = [5,6,7];
+const agentXPduTypesRequiringWriteAccess = [8,9,10,11,14,15,16,17];
 
 _expandConstantObject (AgentXPduType);
 
@@ -3907,17 +3909,9 @@ MibNode.prototype.getConstraintsFromProvider = function () {
 	}
 };
 
-MibNode.prototype.setValue = function (typeFromSet, valueFromSet) {
+MibNode.prototype.validateValue = function (typeFromSet, valueFromSet) {
 	const constraints = this.getConstraintsFromProvider ();
-	try {
-		const castValue = ObjectTypeUtil.castSetValue (typeFromSet, valueFromSet, constraints);
-		this.value = castValue;
-		return true;
-	} catch (error) {
-		console.error ("Error setting value: " + error.message);
-		return false;
-	}
-
+	return ObjectTypeUtil.isValid (typeFromSet, valueFromSet, constraints);
 };
 
 MibNode.prototype.getInstanceNodeForTableRow = function () {
@@ -5168,10 +5162,11 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 	var varbindsLength = requestPdu.varbinds.length;
 	var responsePdu = requestPdu.getResponsePduForRequest ();
 	var mibRequests = [];
-	var handlers = [];
 	var createResult = [];
 	var oldValues = [];
 	var securityName = requestMessage.version == Version3 ? requestMessage.user.name : requestMessage.community;
+
+	const isSetRequest = requestPdu.type === PduType.SetRequest;
 
 	for ( let i = 0; i < requestPdu.varbinds.length; i++ ) {
 		let instanceNode = this.mib.lookup (requestPdu.varbinds[i].oid);
@@ -5202,7 +5197,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 			});
 			const ancestorProvider = this.mib.getAncestorProviderFromOid(requestPdu.varbinds[i].oid);
 			if ( ancestorProvider ) {
-				handlers[i] = function getNsiHandler (mibRequestForNsi) {
+				mibRequests[i].handler = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
 						type: ObjectType.NoSuchInstance,
@@ -5210,7 +5205,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					});
 				};
 			} else {
-				handlers[i] = function getNsoHandler (mibRequestForNso) {
+				mibRequests[i].handler = function getNsoHandler (mibRequestForNso) {
 					mibRequestForNso.done ({
 						errorStatus: ErrorStatus.NoError,
 						type: ObjectType.NoSuchObject,
@@ -5225,7 +5220,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					operation: requestPdu.type,
 					oid: requestPdu.varbinds[i].oid
 				});
-				handlers[i] = function getNsiHandler (mibRequestForNsi) {
+				mibRequests[i].handler = function getNsiHandler (mibRequestForNsi) {
 					mibRequestForNsi.done ({
 						errorStatus: ErrorStatus.NoError,
 						type: ObjectType.NoSuchInstance,
@@ -5238,7 +5233,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					operation: requestPdu.type,
 					oid: requestPdu.varbinds[i].oid
 				});
-				handlers[i] = function getRanaHandler (mibRequestForRana) {
+				mibRequests[i].handler = function getRanaHandler (mibRequestForRana) {
 					mibRequestForRana.done ({
 						errorStatus: ErrorStatus.NoAccess,
 						type: ObjectType.Null,
@@ -5252,14 +5247,14 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					operation: requestPdu.type,
 					oid: requestPdu.varbinds[i].oid
 				});
-				handlers[i] = function getAccessDeniedHandler (mibRequestForAccessDenied) {
+				mibRequests[i].handler = function getAccessDeniedHandler (mibRequestForAccessDenied) {
 					mibRequestForAccessDenied.done ({
 						errorStatus: ErrorStatus.NoAccess,
 						type: ObjectType.Null,
 						value: null
 					});
 				};
-			} else if ( requestPdu.type === PduType.SetRequest &&
+			} else if ( isSetRequest &&
 					providerNode.provider.type == MibProviderType.Table &&
 					typeof (rowStatusColumn = providerNode.provider.tableColumns.reduce(
 								(acc, current) => current.rowStatus ? current.number : acc, null )) == "number" &&
@@ -5295,7 +5290,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 								operation: requestPdu.type,
 								oid: requestPdu.varbinds[i].oid
 							});
-							handlers[i] = getIcsHandler;
+							mibRequests[i].handler = getIcsHandler;
 						}
 						break;
 
@@ -5309,7 +5304,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 								operation: requestPdu.type,
 								oid: requestPdu.varbinds[i].oid
 							});
-							handlers[i] = getIcsHandler;
+							mibRequests[i].handler = getIcsHandler;
 						}
 						break;
 
@@ -5330,16 +5325,16 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 							operation: requestPdu.type,
 							oid: requestPdu.varbinds[i].oid
 						});
-						handlers[i] = getIcsHandler;
+						mibRequests[i].handler = getIcsHandler;
 						break;
 				}
 			}
 
-			if ( requestPdu.type === PduType.SetRequest && ! createResult[i] ) {
+			if ( isSetRequest && ! createResult[i] ) {
 				oldValues[i] = instanceNode.value;
 			}
 
-			if ( ! handlers[i] ) {
+			if ( ! mibRequests[i] ) {
 				mibRequests[i] = new MibRequest ({
 					operation: requestPdu.type,
 					providerNode: providerNode,
@@ -5347,38 +5342,68 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					oid: requestPdu.varbinds[i].oid
 				});
 
-				if ( requestPdu.type == PduType.SetRequest ) {
-					mibRequests[i].setType = requestPdu.varbinds[i].type;
-					mibRequests[i].setValue = requestPdu.varbinds[i].requestValue || requestPdu.varbinds[i].value;
+				mibRequests[i].handler = providerNode.provider.handler;
+
+				if ( isSetRequest ) {
+					mibRequests[i].setType = instanceNode.valueType;
+					mibRequests[i].setValue = requestPdu.varbinds[i].requestValue ?? requestPdu.varbinds[i].value;
+					try {
+						mibRequests[i].setValue =
+							ObjectTypeUtil.castSetValue (mibRequests[i].setType, mibRequests[i].setValue);
+
+						if ( ! mibRequests[i].instanceNode.validateValue (mibRequests[i].setType, mibRequests[i].setValue) ) {
+							mibRequests[i].handler = function badValueHandler (request) {
+								request.done ({
+									errorStatus: ErrorStatus.BadValue,
+									type: ObjectType.Null,
+									value: null,
+								});
+							};
+						}
+					}
+					catch (e) {
+						debug('Invalid value for type', e, mibRequests[i]);
+						mibRequests[i].handler = function wrongTypeHandler (request) {
+							request.done ({
+								errorStatus: ErrorStatus.WrongType,
+								type: ObjectType.Null,
+								value: null,
+							});
+						};
+					}
 				}
-				handlers[i] = providerNode.provider.handler;
 			}
 		}
 
 		(function (savedIndex) {
-			let responseVarbind;
-			mibRequests[savedIndex].done = function (error) {
+			const mibRequest = mibRequests[savedIndex];
+			mibRequest.done = function (error) {
+				mibRequest.error = error ?? { errorStatus: ErrorStatus.NoError };
+				let responseVarbind;
 				let rowIndex = null;
 				let row = null;
 				let deleted = false;
 				let column = -1;
 				responseVarbind = {
-					oid: mibRequests[savedIndex].oid
+					oid: mibRequest.oid
 				};
 				if ( error ) {
-					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError)
+					      && error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
 						responsePdu.errorIndex = savedIndex + 1;
 					}
 					responseVarbind.type = error.type || ObjectType.Null;
-					responseVarbind.value = error.value || null;
+					responseVarbind.value = error.value ?? null;
 					//responseVarbind.errorStatus: error.errorStatus
 					if ( error.errorStatus != ErrorStatus.NoError ) {
 						responseVarbind.errorStatus = error.errorStatus;
 					}
 				} else {
-					let provider = providerNode ? providerNode.provider : null;
-					let providerName = provider ? provider.name : null;
+					const instanceNode = mibRequest.instanceNode;
+					const providerNode = mibRequest.providerNode;
+					const provider = providerNode ? providerNode.provider : null;
+					const providerName = provider ? provider.name : null;
 					let subOid;
 					let subAddr;
 					if ( providerNode && providerNode.provider && providerNode.provider.type == MibProviderType.Table ) {
@@ -5389,7 +5414,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 						rowIndex = Mib.getRowIndexFromOid( subAddr.join("."), provider.tableIndex );
 						row = me.mib.getTableRowCells ( providerName, rowIndex );
 					}
-					if ( requestPdu.type == PduType.SetRequest ) {
+					if ( isSetRequest && mibRequest.commitSet ) {
 						// Is this a RowStatus column with a value of 6 (delete)?
 						let rowStatusColumn = provider.type == MibProviderType.Table
 							? provider.tableColumns.reduce( (acc, current) => current.rowStatus ? current.number : acc, null )
@@ -5413,26 +5438,16 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 
 						} else {
 							// No special handling required. Just save the new value.
-							const setResult = mibRequests[savedIndex].instanceNode.setValue (
-								requestPdu.varbinds[savedIndex].type,
-								requestPdu.varbinds[savedIndex].value
-							);
-							if ( ! setResult ) {
-								if ( typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError ) {
-									responsePdu.errorStatus = ErrorStatus.WrongValue;
-									responsePdu.errorIndex = savedIndex + 1;
-								}
-								responseVarbind.errorStatus = ErrorStatus.WrongValue;
-							}
+							mibRequest.instanceNode.value = mibRequest.setValue;
 						}
 					}
 					if ( ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetBulkRequest ) &&
 							requestPdu.varbinds[savedIndex].type == ObjectType.EndOfMibView ) {
 						responseVarbind.type = ObjectType.EndOfMibView;
 					} else {
-						responseVarbind.type = mibRequests[savedIndex].instanceNode.valueType;
+						responseVarbind.type = mibRequest.instanceNode.valueType;
 					}
-					responseVarbind.value = mibRequests[savedIndex].instanceNode.value;
+					responseVarbind.value = mibRequest.instanceNode.value;
 					if ( responseVarbind.value === undefined || responseVarbind.value === null ) {
 						responseVarbind.type = ObjectType.NoSuchInstance;
 					}
@@ -5443,16 +5458,19 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 				if ( requestPdu.type == PduType.GetNextRequest || requestPdu.type == PduType.GetNextRequest ) {
 					responseVarbind.previousOid = requestPdu.varbinds[savedIndex].previousOid;
 				}
-				if ( requestPdu.type == PduType.SetRequest ) {
+				const isTestSet = mibRequest.testSet;
+				if ( isSetRequest ) {
+					if ( mibRequest.testSet ) {
+						delete mibRequest.testSet;
+						mibRequest.commitSet = true;
+						if ( mibRequest.error.errorStatus === ErrorStatus.NoError )
+							delete mibRequest.error;
+					}
 					if ( oldValues[savedIndex] !== undefined ) {
 						responseVarbind.oldValue = oldValues[savedIndex];
 					}
-					responseVarbind.requestType = requestPdu.varbinds[savedIndex].type;
-					if ( requestPdu.varbinds[savedIndex].requestValue ) {
-						responseVarbind.requestValue = ObjectTypeUtil.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].requestValue);
-					} else {
-						responseVarbind.requestValue = ObjectTypeUtil.castSetValue (requestPdu.varbinds[savedIndex].type, requestPdu.varbinds[savedIndex].value);
-					}
+					responseVarbind.requestType = mibRequests[savedIndex].setType;
+					responseVarbind.requestValue = mibRequests[savedIndex].setValue;
 				}
 				if ( createResult[savedIndex] ) {
 					responseVarbind.autoCreated = true;
@@ -5470,17 +5488,58 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 				}
 				me.setSingleVarbind (responsePdu, savedIndex, responseVarbind);
 				if ( ++varbindsCompleted == varbindsLength) {
+					// If all varbind have been tested, apply
+					// the handlers again in commit mode.
+					if (isTestSet && !responsePdu.errorIndex) {
+						varbindsCompleted = 0;
+						setImmediate(() => applySetHandlers(/*testSet=*/false));
+						return;
+					}
 					me.sendResponse.call (me, socket, rinfo, requestMessage, responsePdu);
 				}
 			};
+			if ( isSetRequest )
+				mibRequest.testSet = true;
 		})(i);
-		if ( handlers[i] ) {
-			handlers[i] (mibRequests[i]);
-		} else {
-			mibRequests[i].done ();
-		}
 	}
+	const applyHandlers = testSet => {
+		for ( const mibRequest of mibRequests ) {
+		  if ( mibRequest.error === undefined && testSet === !!mibRequest.testSet ) {
+		    if ( mibRequest.handler ) {
+		      mibRequest.handler (mibRequest);
+		    } else {
+		      mibRequest.done ();
+		    }
+		  }
+		}
+	};
+	const applySetHandlers = testSet => {
+		if ( this.bulkSetHandler ) {
+		  const errorStatus = this.bulkSetHandler( mibRequests, this.mib, testSet ) ?? ErrorStatus.NoError;
+		  if ( errorStatus !== ErrorStatus.NoError ) {
+		    for ( const mibRequest of mibRequests ) {
+		      if ( mibRequest.error === undefined ) {
+			mibRequest.done ({
+			  errorStatus,
+			  type: ObjectType.Null,
+			  value: null
+		        });
+		      }
+		    }
+		    return;
+		  }
+		}
+		applyHandlers(testSet);
+	};
+	if ( isSetRequest )
+		applySetHandlers(/*testSet=*/true);
+	else
+		applyHandlers(false);
 };
+
+Agent.prototype.setBulkSetHandler = function setBulkSetHandler(cb) {
+	this.bulkSetHandler = cb;
+}
 
 Agent.prototype.getRequest = function (socket, requestMessage, rinfo) {
 	this.request (socket, requestMessage, rinfo);
@@ -6254,35 +6313,40 @@ Subagent.prototype.onMsg = function (buffer, rinfo) {
 	debug ("Received AgentX " + AgentXPduType[pdu.pduType] + " PDU");
 	debug (pdu);
 
-	switch (pdu.pduType) {
-		case AgentXPduType.Response:
-			this.response (pdu);
-			break;
-		case AgentXPduType.Get:
-			this.getRequest (pdu);
-			break;
-		case AgentXPduType.GetNext:
-			this.getNextRequest (pdu);
-			break;
-		case AgentXPduType.GetBulk:
-			this.getBulkRequest (pdu);
-			break;
-		case AgentXPduType.TestSet:
-			this.testSet (pdu);
-			break;
-		case AgentXPduType.CommitSet:
-			this.commitSet (pdu);
-			break;
-		case AgentXPduType.UndoSet:
-			this.undoSet (pdu);
-			break;
-		case AgentXPduType.CleanupSet:
-			this.cleanupSet (pdu);
-			break;
-		default:
-			// Unknown PDU type - shouldn't happen as master agents shouldn't send administrative PDUs
-			throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
-					+ "' in request");
+	try {
+		switch (pdu.pduType) {
+			case AgentXPduType.Response:
+				this.response (pdu);
+				break;
+			case AgentXPduType.Get:
+				this.getRequest (pdu);
+				break;
+			case AgentXPduType.GetNext:
+				this.getNextRequest (pdu);
+				break;
+			case AgentXPduType.GetBulk:
+				this.getBulkRequest (pdu);
+				break;
+			case AgentXPduType.TestSet:
+				this.testSet (pdu);
+				break;
+			case AgentXPduType.CommitSet:
+				this.commitSet (pdu);
+				break;
+			case AgentXPduType.UndoSet:
+				this.undoSet (pdu);
+				break;
+			case AgentXPduType.CleanupSet:
+				this.cleanupSet (pdu);
+				break;
+			default:
+				// Unknown PDU type - shouldn't happen as master agents shouldn't send administrative PDUs
+				throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
+						+ "' in request");
+		}
+	}
+	catch (e) {
+		console.error(e);
 	}
 };
 
@@ -6321,82 +6385,142 @@ Subagent.prototype.response = function (pdu) {
 	}
 };
 
+Subagent.prototype.isAllowed = function (pduType, provider, instanceNode) {
+	const requestedAccess =
+		agentXPduTypesRequiringReadAccess.includes(pduType)? MaxAccess["read-only"] :
+		agentXPduTypesRequiringWriteAccess.includes(pduType)? MaxAccess["read-write"] :
+		undefined;
+
+	if (requestedAccess === undefined)
+		return true;
+
+	if (provider.type === MibProviderType.Scalar)
+		return provider.maxAccess >= requestedAccess;
+
+	// It's a table column. Use that column's maxAccess.
+	const column = instanceNode.getTableColumnFromInstanceNode();
+
+	// In the typical case, we could use (column - 1) to index
+	// into tableColumns to get to the correct entry. There is no
+	// guarantee, however, that column numbers in the OID are
+	// necessarily consecutive; theoretically some could be
+	// missing. We'll therefore play it safe and search for the
+	// specified column entry.
+
+	const columnEntry = provider.tableColumns.find(entry => entry.number === column);
+	const maxAccess = columnEntry ? columnEntry.maxAccess || MaxAccess['not-accessible'] : MaxAccess['not-accessible'];
+	return maxAccess >= requestedAccess;
+};
+
+
 Subagent.prototype.request = function (pdu, requestVarbinds) {
 	const me = this;
 	const varbindsLength = requestVarbinds.length;
 	const responseVarbinds = [];
 	const responsePdu = pdu.getResponsePduForRequest ();
+	const mibRequests = [];
 	let varbindsCompleted = 0;
+	let firstVarbindError;
+	const isTestSet = pdu.pduType == AgentXPduType.TestSet;
+	const isSetRequest = isTestSet ||
+		pdu.pduType == AgentXPduType.CommitSet ||
+		pdu.pduType == AgentXPduType.UndoSet;
 
 	for ( let i = 0; i < varbindsLength; i++ ) {
 		const requestVarbind = requestVarbinds[i];
-		var instanceNode = this.mib.lookup (requestVarbind.oid);
-		var providerNode;
-		var mibRequest;
-		var handler;
-		var responseVarbindType;
+		const instanceNode = this.mib.lookup (requestVarbind.oid);
+		let providerNode;
+		let responseVarbindType;
 
 		if ( ! instanceNode ) {
-			mibRequest = new MibRequest ({
+			mibRequests[i] = new MibRequest ({
 				operation: pdu.pduType,
 				oid: requestVarbind.oid
 			});
-			handler = function getNsoHandler (mibRequestForNso) {
-				mibRequestForNso.done ({
+			mibRequests[i].error = {
 					errorStatus: ErrorStatus.NoError,
 					errorIndex: 0,
 					type: ObjectType.NoSuchObject,
 					value: null
-				});
 			};
 		} else {
 			providerNode = this.mib.getProviderNodeForInstance (instanceNode);
 			if ( ! providerNode ) {
-				mibRequest = new MibRequest ({
+				mibRequests[i] = new MibRequest ({
 					operation: pdu.pduType,
 					oid: requestVarbind.oid
 				});
-				handler = function getNsiHandler (mibRequestForNsi) {
-					mibRequestForNsi.done ({
+				mibRequests[i].error = {
 						errorStatus: ErrorStatus.NoError,
 						errorIndex: 0,
 						type: ObjectType.NoSuchInstance,
 						value: null
-					});
 				};
 			} else {
-				mibRequest = new MibRequest ({
+				mibRequests[i] = new MibRequest ({
 					operation: pdu.pduType,
 					providerNode: providerNode,
 					instanceNode: instanceNode,
-					oid: requestVarbind.oid
+					oid: requestVarbind.oid,
 				});
-				if ( pdu.pduType == AgentXPduType.TestSet ) {
-					mibRequest.setType = requestVarbind.type;
-					mibRequest.setValue = requestVarbind.value;
+				mibRequests[i].handler = providerNode.provider.handler;
+				if ( ! me.isAllowed(pdu.pduType, mibRequests[i].providerNode?.provider, mibRequests[i].instanceNode) ) {
+					mibRequests[i].error = {
+						errorStatus: ErrorStatus.NoAccess,
+						errorIndex: i + 1,
+						type: ObjectType.Null,
+						value: null
+					};
 				}
-				handler = providerNode.provider.handler;
+				if ( isSetRequest ) {
+					mibRequests[i].setType = instanceNode.valueType;
+					mibRequests[i].setValue = requestVarbind.requestValue ?? requestVarbind.value;
+					mibRequests[i].requestIndex = i + 1;
+					try {
+						mibRequests[i].setValue =
+							ObjectTypeUtil.castSetValue (mibRequests[i].setType, mibRequests[i].setValue);
+
+						if ( ! mibRequests[i].instanceNode.validateValue (mibRequests[i].setType, mibRequests[i].setValue) ) {
+							mibRequests[i].error = {
+								errorStatus: ErrorStatus.BadValue,
+								errorIndex: i + 1,
+								type: mibRequests[i].setType,
+								value: mibRequests[i].setValue,
+							};
+						}
+					}
+					catch (e) {
+						debug('Invalid value for type', e, mibRequests[i]);
+						mibRequests[i].error = {
+							errorStatus: ErrorStatus.WrongType,
+							errorIndex: i + 1,
+							type: mibRequests[i].setType,
+							value: mibRequests[i].setValue,
+						};
+					}
+				}
 			}
 		}
 
 		(function (savedIndex) {
+			const mibRequest = mibRequests[savedIndex];
+			const requestVarbind = requestVarbinds[savedIndex];
 			mibRequest.done = function (error) {
+				mibRequest.error = error ?? { errorStatus: ErrorStatus.NoError };
 				let responseVarbind;
 				if ( error ) {
 					responseVarbind = {
 						oid: mibRequest.oid,
 						type: error.type || ObjectType.Null,
-						value: error.value || null
+						value: error.value ?? null
 					};
-					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) && error.errorStatus != ErrorStatus.NoError ) {
-						responsePdu.error = error.errorStatus;
-						responsePdu.index = savedIndex + 1;
-					}
+					error.errorIndex = savedIndex + 1;
+					firstVarbindError = firstVarbindError ?? error;
 					if ( error.errorStatus != ErrorStatus.NoError ) {
 						responseVarbind.errorStatus = error.errorStatus;
 					}
 				} else {
-					if ( pdu.pduType == AgentXPduType.TestSet ) {
+					if ( isTestSet ) {
 						// more tests?
 					} else if ( pdu.pduType == AgentXPduType.CommitSet ) {
 						me.setTransactions[pdu.transactionID].originalValue = mibRequest.instanceNode.value;
@@ -6416,24 +6540,55 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 						value: mibRequest.instanceNode.value
 					};
 				}
-				responseVarbinds[savedIndex] = responseVarbind;
-				if ( ++varbindsCompleted == varbindsLength) {
-					if ( pdu.pduType == AgentXPduType.TestSet || pdu.pduType == AgentXPduType.CommitSet
-							|| pdu.pduType == AgentXPduType.UndoSet) {
+				responseVarbinds[savedIndex] = mibRequest.response = responseVarbind;
+				if ( ++varbindsCompleted == varbindsLength ) {
+					if ( isSetRequest ) {
+						responsePdu.error = firstVarbindError?.errorStatus ?? 0;
+						responsePdu.index = firstVarbindError?.errorIndex ?? 0;
 						me.sendResponse.call (me, responsePdu);
 					} else {
 						me.sendResponse.call (me, responsePdu, responseVarbinds);
 					}
 				}
 			};
+			if ( isTestSet )
+				mibRequests[i].testSet = true;
+			else if ( pdu.pduType == AgentXPduType.CommitSet )
+				mibRequests[i].commitSet = true;
+			if ( mibRequest.error )
+				mibRequest.done(mibRequest.error);
 		})(i);
-		if ( handler ) {
-			handler (mibRequest);
-		} else {
-			mibRequest.done ();
+	}
+	if ( isSetRequest && this.bulkSetHandler ) {
+		const errorStatus = this.bulkSetHandler( mibRequests, this.mib, isTestSet ) ?? ErrorStatus.NoError;
+		if ( errorStatus !== ErrorStatus.NoError ) {
+			for ( const mibRequest of mibRequests ) {
+				if ( !mibRequest.response ) {
+					mibRequest.done ({
+						errorStatus,
+						type: ObjectType.Null,
+						value: null
+					});
+				}
+			}
+			return;
+		}
+	}
+	for ( let i = 0; i < requestVarbinds.length; i++ ) {
+		if ( !mibRequests[i].response ) {
+			const handler = mibRequests[i].handler;
+			if ( handler ) {
+				handler (mibRequests[i]);
+			} else {
+				mibRequests[i].done ();
+			}
 		}
 	}
 };
+
+Subagent.prototype.setBulkSetHandler = function setBulkSetHandler(cb) {
+	this.bulkSetHandler = cb;
+}
 
 Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	var startNode;
