@@ -3521,6 +3521,10 @@ Example programs are included under the module's `example` directory.
 
  * Add AgentX subagent mib and mibOptions on initialization
 
+# Version 3.21.1 - 26/04/2025
+
+ * Add better defval type handling, improved debug handling and simple agent example
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
