@@ -91,7 +91,7 @@ for each shown in this table:
  * SNMP proxy forwarder for agent
  * AgentX subagent
  * IPv4 and IPv6
- 
+
 # Standards Compliance
 
 This module aims to be fully compliant with the following RFCs:
@@ -257,6 +257,34 @@ Security Model RFC (RFC 3414); 128-bit AES for SNMPv3 was added later in RFC 382
 256-bit AES has *not* been standardized, and as such comes with two varieties of key
 localization.  Cisco and a number of other vendors commonly use the "Reeder" key
 localization variant.  Other encryption algorithms are not supported.
+
+### Compatibility note on DES and recent Node.js versions
+
+When using SNMPv3 with DES as the privacy protocol (`snmp.PrivProtocols.des`) on Node.js v17 or later, you may encounter the following error:
+
+```
+"error": {
+        "library": "digital envelope routines",
+        "reason": "unsupported",
+        "code": "ERR_OSSL_EVP_UNSUPPORTED",
+        "message": "error:0308010C:digital envelope routines::unsupported",
+        "stack": ["Error: error:0308010C:digital envelope routines::unsupported",
+           "at Cipheriv.createCipherBase (node:internal/crypto/cipher:121:19)",
+        ...
+}
+```
+
+This occurs because newer versions of Node.js have deprecated support for the DES algorithm in OpenSSL for security reasons. 
+
+**Workaround:**
+If you need to communicate with legacy devices that only support DES for SNMPv3, you can run Node.js with the `--openssl-legacy-provider` flag:
+
+```bash
+node --openssl-legacy-provider your-app.js
+```
+
+Whenever possible, it's recommended to use more secure encryption methods like AES (`snmp.PrivProtocols.aes`) instead of DES.
+
 
 ## snmp.AgentXPduType
 
@@ -3476,6 +3504,10 @@ Example programs are included under the module's `example` directory.
 # Version 3.20.0 - 06/03/2025
 
  * Fix set value for counter, gauge and unsigned integer types
+
+# Version 3.20.1 - 26/04/2025
+
+ * Update documentation with compatibility note on DES and recent Node.js versions
 
 # License
 

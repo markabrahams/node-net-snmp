@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "3.20.0",
+  "version": "3.20.1",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "main": "index.js",
   "directories": {

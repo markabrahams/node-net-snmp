@@ -1,21 +1,25 @@
 
 // Copyright 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
-var ber = require ("asn1-ber").Ber;
-var smartbuffer = require ("smart-buffer");
-var dgram = require ("dgram");
-var net = require ("net");
-var events = require ("events");
-var util = require ("util");
-var crypto = require ("crypto");
-var mibparser = require ("./lib/mib");
+const ber = require ("asn1-ber").Ber;
+const smartbuffer = require ("smart-buffer");
+const dgram = require ("dgram");
+const net = require ("net");
+const events = require ("events");
+const util = require ("util");
+const crypto = require ("crypto");
+const mibparser = require ("./lib/mib");
+const Buffer = require('buffer').Buffer;
+
 var DEBUG = false;
 
-var MIN_SIGNED_INT32 = -2147483648;
-var MAX_SIGNED_INT32 = 2147483647;
-var MIN_UNSIGNED_INT32 = 0;
-var MAX_UNSIGNED_INT32 = 4294967295;
-var MAX_UNSIGNED_INT64 = 18446744073709551615;
+const MIN_SIGNED_INT32 = -2147483648;
+const MAX_SIGNED_INT32 = 2147483647;
+const MIN_UNSIGNED_INT32 = 0;
+const MAX_UNSIGNED_INT32 = 4294967295;
+const MAX_UNSIGNED_INT64 = 18446744073709551615;
+
+const DES_IMPLEMENTATION = 'library';
 
 function debug (line) {
 	if ( DEBUG ) {
@@ -1378,7 +1382,6 @@ Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, auth
 	var paddedScopedPduLength;
 	var paddedScopedPdu;
 	var encryptedPdu;
-	var cipher;
 
 	encryptionKey = Encryption.generateLocalizedKey (des, authProtocol, privPassword, engine.engineID);
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
@@ -1396,7 +1399,7 @@ Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, auth
 	for (i = 0; i < iv.length; i++) {
 		iv[i] = preIv[i] ^ salt[i];
 	}
-	
+
 	if (scopedPdu.length % des.BLOCK_LENGTH == 0) {
 		paddedScopedPdu = scopedPdu;
 	} else {
@@ -1404,9 +1407,14 @@ Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, auth
 		paddedScopedPdu = Buffer.alloc (paddedScopedPduLength);
 		scopedPdu.copy (paddedScopedPdu, 0, 0, scopedPdu.length);
 	}
-	cipher = crypto.createCipheriv (des.CRYPTO_ALGORITHM, encryptionKey, iv);
-	encryptedPdu = cipher.update (paddedScopedPdu);
-	encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
+
+	if (DES_IMPLEMENTATION === 'native') {
+		// TODO: Implement native encryption
+	} else {
+		const cipher = crypto.createCipheriv (des.CRYPTO_ALGORITHM, encryptionKey, iv);
+		encryptedPdu = cipher.update (paddedScopedPdu);
+		encryptedPdu = Buffer.concat ([encryptedPdu, cipher.final()]);
+	}
 	// Encryption.debugEncrypt (encryptionKey, iv, paddedScopedPdu, encryptedPdu);
 
 	return {
@@ -1424,7 +1432,6 @@ Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters,
 	var iv;
 	var i;
 	var decryptedPdu;
-	var decipher;
 
 	privLocalizedKey = Authentication.passwordToKey (authProtocol, privPassword, engine.engineID);
 	decryptionKey = Buffer.alloc (des.KEY_LENGTH);
@@ -1437,11 +1444,15 @@ Encryption.decryptPduDes = function (encryptedPdu, privProtocol, privParameters,
 	for (i = 0; i < iv.length; i++) {
 		iv[i] = preIv[i] ^ salt[i];
 	}
-	
-	decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
-	decipher.setAutoPadding(false);
-	decryptedPdu = decipher.update (encryptedPdu);
-	decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+
+	if (DES_IMPLEMENTATION === 'native') {
+		// TODO: Implement native decryption
+	} else {
+		const decipher = crypto.createDecipheriv (des.CRYPTO_ALGORITHM, decryptionKey, iv);
+		decipher.setAutoPadding (false);
+		decryptedPdu = decipher.update (encryptedPdu);
+		decryptedPdu = Buffer.concat ([decryptedPdu, decipher.final()]);
+	}
 	// Encryption.debugDecrypt (decryptionKey, iv, encryptedPdu, decryptedPdu);
 
 	return decryptedPdu;
@@ -2021,7 +2032,9 @@ var Session = function (target, authenticator, options) {
 
 	DEBUG = options.debug;
 
-	this.engine = new Engine (options.engineID);
+	this.engine = new Engine ({
+		engineId: options.engineID
+	});
 	this.reqs = {};
 	this.reqCount = 0;
 
@@ -2990,7 +3003,8 @@ Session.createV3 = function (target, user, options) {
 	return new Session (target, user, options);
 };
 
-var Engine = function (engineID, engineBoots, engineTime) {
+var Engine = function (engineOptions) {
+	const { engineID } = engineOptions;
 	if ( engineID ) {
 		if ( ! (engineID instanceof Buffer) ) {
 			engineID = engineID.replace('0x', '');
@@ -3335,7 +3349,9 @@ SimpleAccessControlModel.prototype.isAccessAllowed = function (securityModel, se
 var Receiver = function (options, callback) {
 	DEBUG = options.debug;
 	this.authorizer = new Authorizer (options);
-	this.engine = new Engine (options.engineID);
+	this.engine = new Engine ({
+		engineId: options.engineID
+	});
 
 	this.engineBoots = 0;
 	this.engineTime = 10;
@@ -4850,7 +4866,9 @@ MibRequest.prototype.isTabular = function () {
 var Agent = function (options, callback, mib) {
 	DEBUG = options.debug;
 	this.listener = new Listener (options, this);
-	this.engine = new Engine (options.engineID);
+	this.engine = new Engine ({
+		engineId: options.engineID
+	});
 	this.authorizer = new Authorizer (options);
 	this.callback = callback || function () {};
 	const mibOptions = mib?.options || options?.mibOptions || {};
