@@ -3525,6 +3525,10 @@ Example programs are included under the module's `example` directory.
 
  * Add better defval type handling, improved debug handling and simple agent example
 
+# Version 3.21.2 - 27/04/2025
+
+ * Add custom base module list
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

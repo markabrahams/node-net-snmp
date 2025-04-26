@@ -3456,7 +3456,7 @@ Receiver.create = function (options, callback) {
 };
 
 var ModuleStore = function (baseModules) {
-	this.baseModules = baseModules;
+	this.baseModules = baseModules ?? ModuleStore.BASE_MODULES;
 	this.parser = mibparser ();
 	this.translations = {
 		oidToPath: {},
