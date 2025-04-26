@@ -264,7 +264,7 @@ mib.dump ({
 // var data = mib.getTableColumnCells ("ifTable", 2);
 // var data = mib.getTableRowCells ("ifTable", [1]);
 // mib.setTableSingleCell ("ifTable", 2, [2], "changed!");
-mib.setTableSingleCell ("ifTable", 3, [2], 99);
+mib.setTableSingleCell ("ifTable", 3, [2], 24);
 var data = mib.getTableSingleCell ("ifTable", 3, [2]);
 // var data = mib.getScalarValue ("sysDescr");
 
