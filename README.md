@@ -3517,6 +3517,10 @@ Example programs are included under the module's `example` directory.
 
  * Update documentation with compatibility note on DES and recent Node.js versions
 
+# Version 3.21.0 - 26/04/2025
+
+ * Add AgentX subagent mib and mibOptions on initialization
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
