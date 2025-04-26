@@ -3455,7 +3455,8 @@ Receiver.create = function (options, callback) {
 	return receiver;
 };
 
-var ModuleStore = function () {
+var ModuleStore = function (baseModules) {
+	this.baseModules = baseModules;
 	this.parser = mibparser ();
 	this.translations = {
 		oidToPath: {},
@@ -3545,7 +3546,7 @@ ModuleStore.prototype.getModule = function (moduleName) {
 ModuleStore.prototype.getModules = function (includeBase) {
 	var modules = {};
 	for ( var moduleName of Object.keys(this.parser.Modules) ) {
-		if ( includeBase || ModuleStore.BASE_MODULES.indexOf (moduleName) == -1 ) {
+		if ( includeBase || this.baseModules.indexOf (moduleName) == -1 ) {
 			modules[moduleName] = this.parser.Modules[moduleName];
 		}
 	}
@@ -3555,7 +3556,7 @@ ModuleStore.prototype.getModules = function (includeBase) {
 ModuleStore.prototype.getModuleNames = function (includeBase) {
 	var modules = [];
 	for ( var moduleName of Object.keys(this.parser.Modules) ) {
-		if ( includeBase || ModuleStore.BASE_MODULES.indexOf (moduleName) == -1 ) {
+		if ( includeBase || this.baseModules.indexOf (moduleName) == -1 ) {
 			modules.push (moduleName);
 		}
 	}
@@ -3729,7 +3730,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 };
 
 ModuleStore.prototype.loadBaseModules = function () {
-	for ( var mibModule of ModuleStore.BASE_MODULES ) {
+	for ( var mibModule of this.baseModules ) {
 		this.parser.Import (__dirname + "/lib/mibs/" + mibModule + ".mib");
 	}
 	this.parser.Serialize ();
@@ -3813,8 +3814,8 @@ ModuleStore.prototype.translate = function (name, destinationFormat) {
 	}
 };
 
-ModuleStore.create = function () {
-	var store = new ModuleStore ();
+ModuleStore.create = function (options) {
+	const store = new ModuleStore (options?.baseModules ?? ModuleStore.BASE_MODULES);
 	store.loadBaseModules ();
 	return store;
 };
