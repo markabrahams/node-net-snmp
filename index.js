@@ -6090,7 +6090,7 @@ AgentXPdu.packetID = 1;
 
 var Subagent = function (options) {
 	DEBUG = options.debug;
-	this.mib = new Mib ();
+	this.mib = options?.mib ?? new Mib (options?.mibOptions);
 	this.master = options.master || 'localhost';
 	this.masterPort = options.masterPort || 705;
 	this.timeout = options.timeout || 0;

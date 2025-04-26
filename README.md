@@ -1663,7 +1663,7 @@ an object, possibly empty, and can contain the following fields:
  * `sockets` - an array of objects containing triples of `transport`, `address` and `port` that
  can be used to specify multiple socket listeners.  This option overrides any individual
  `transport`, `address` and `port` options.
- * `mibOptions` - an MIB options object that is passed to the `Mib` instance - see the MIB section
+ * `mibOptions` - a MIB options object that is passed to the `Mib` instance - see the MIB section
  for further details on this - defaults to the empty object.
 
 The `mib` parameter is optional, and sets the agent's singleton `Mib` instance.
@@ -2689,7 +2689,9 @@ var options = {
     master: "localhost",
     masterPort: 705,
     timeout: 0,
-    description: "Node net-snmp AgentX sub-agent"
+    description: "Node net-snmp AgentX sub-agent",
+    mibOptions: {},
+    mib: undefined
 };
 
 subagent = snmp.createSubagent (options);
@@ -2704,6 +2706,12 @@ The `options` parameter is a mandatory object, possibly empty, and can contain t
  * `timeout` - set the session-wide timeout on the master agent - defaults to 0, which
  means no session-wide timeout is set.
  * `description` - a textual description of the subagent.
+ * `mibOptions` - n MIB options object that is passed to the `Mib` instance - see the MIB section
+ for further details on this - defaults to the empty object.
+ * `mib` - sets the agent's singleton `Mib` instance.  If not supplied, the agent creates itself
+ a new empty `Mib` singleton.  If supplied, the `Mib` instance needs to be created and populated as
+ per the [Mib Module](#mib-module) section.
+
 
 ## subagent.getMib ()
 
