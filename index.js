@@ -1400,6 +1400,7 @@ Encryption.encryptPduDes = function (scopedPdu, privProtocol, privPassword, auth
 		iv[i] = preIv[i] ^ salt[i];
 	}
 
+
 	if (scopedPdu.length % des.BLOCK_LENGTH == 0) {
 		paddedScopedPdu = scopedPdu;
 	} else {
@@ -2040,7 +2041,7 @@ var Session = function (target, authenticator, options) {
 
 	this.dgram = dgram.createSocket (this.transport);
 	this.dgram.unref();
-	
+
 	var me = this;
 	this.dgram.on ("message", me.onMsg.bind (me));
 	this.dgram.on ("close", me.onClose.bind (me));
@@ -2268,7 +2269,7 @@ Session.prototype.inform = function () {
 
 	/**
 	 ** Support the following signatures:
-	 ** 
+	 **
 	 **    typeOrOid, varbinds, options, callback
 	 **    typeOrOid, varbinds, callback
 	 **    typeOrOid, options, callback
@@ -2346,7 +2347,7 @@ Session.prototype.inform = function () {
 		};
 		pduVarbinds.push (varbind);
 	}
-	
+
 	options.port = this.trapPort;
 
 	this.simpleGet (InformRequestPdu, feedCb, pduVarbinds, responseCb, options);
@@ -2466,7 +2467,7 @@ Session.prototype.registerRequest = function (req) {
 Session.prototype.send = function (req, noWait) {
 	try {
 		var me = this;
-		
+
 		var buffer = req.message.toBuffer ();
 
 		this.dgram.send (buffer, 0, buffer.length, req.port, this.target,
@@ -2484,7 +2485,7 @@ Session.prototype.send = function (req, noWait) {
 	} catch (error) {
 		req.responseCb (error);
 	}
-	
+
 	return this;
 };
 
@@ -2736,7 +2737,7 @@ Session.prototype.trap = function () {
 
 	/**
 	 ** Support the following signatures:
-		** 
+		**
 		**    typeOrOid, varbinds, options, callback
 		**    typeOrOid, varbinds, agentAddr, callback
 		**    typeOrOid, varbinds, callback
@@ -2779,7 +2780,7 @@ Session.prototype.trap = function () {
 		};
 		pduVarbinds.push (varbind);
 	}
-	
+
 	var id = _generateId (this.idBitsSize);
 
 	if (this.version == Version2c || this.version == Version3 ) {
@@ -3070,7 +3071,7 @@ Listener.prototype.startListening = function () {
 
 Listener.prototype.send = function (message, rinfo, socket) {
 	// var me = this;
-	
+
 	var buffer = message.toBuffer ();
 
 	socket.send (buffer, 0, buffer.length, rinfo.port, rinfo.address, function (error, bytes) {
@@ -3678,7 +3679,7 @@ ModuleStore.prototype.getProvidersForModule = function (moduleName) {
 							// (See lib/mibs/SNMPv2-TC.mib#L186.)
 							if ( syntax == "RowStatus" &&
 									"IMPORTS" in mibModule &&
-									Array.isArray(mibModule.IMPORTS["SNMPv2-TC"]) && 
+									Array.isArray(mibModule.IMPORTS["SNMPv2-TC"]) &&
 									mibModule.IMPORTS["SNMPv2-TC"].includes("RowStatus") ) {
 
 								// Mark this column as being rowStatus
@@ -4027,7 +4028,7 @@ MibNode.prototype.getNextInstanceNode = function () {
 		childrenAddresses = Object.keys (node.children).sort ( (a, b) => a - b);
 		node = node.children[childrenAddresses[0]];
 		if ( ! node ) {
-			// unexpected 
+			// unexpected
 			return null;
 		}
 	}
@@ -4690,7 +4691,7 @@ Mib.prototype.getTableCells = function (table, byRows, includeInstances) {
 	} else {
 		return data;
 	}
-	
+
 };
 
 Mib.prototype.getTableSingleCell = function (table, columnNumber, rowIndex) {
@@ -5088,7 +5089,7 @@ Agent.prototype.tryCreateInstance = function (varbind, requestType) {
 					typeof rowStatusColumn == "number" &&
 					column === rowStatusColumn ) {
 
-				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) && 
+				if ( (varbind.value === RowStatus["createAndGo"] || varbind.value === RowStatus["createAndWait"]) &&
 						provider.createHandler !== null ) {
 
 					// The create handler will return an array
@@ -5572,7 +5573,7 @@ Agent.prototype.getBulkRequest = function (socket, requestMessage, rinfo) {
 	}
 
 	if ( requestPdu.nonRepeaters < requestVarbinds.length ) {
-	
+
 		for (var v = requestPdu.nonRepeaters ; v < requestVarbinds.length ; v++ ) {
 			startOid.push (requestVarbinds[v].oid);
 		}
@@ -5784,7 +5785,7 @@ AgentXPdu.prototype.readHeader = function (buffer) {
 	this.version = buffer.readUInt8 ();
 	this.pduType = buffer.readUInt8 ();
 	this.flags = buffer.readUInt8 ();
-	buffer.readUInt8 ();   // reserved byte 
+	buffer.readUInt8 ();   // reserved byte
 	this.sessionID = buffer.readUInt32BE ();
 	this.transactionID = buffer.readUInt32BE ();
 	this.packetID = buffer.readUInt32BE ();
@@ -5854,7 +5855,7 @@ AgentXPdu.createFromVariables = function (vars) {
 					+ "' in created PDU");
 
 	}
-	
+
 	return pdu;
 };
 
