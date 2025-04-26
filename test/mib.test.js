@@ -122,7 +122,7 @@ describe('MIB', function () {
             };
             mib = snmp.createMib(options);
             mib.registerProviders(mibProviders);
-            assert.equal(mib.getScalarValue('testScalarIntegerDefval'), 49);
+            assert.strictEqual(mib.getScalarValue('testScalarIntegerDefval'), 49);
         });
     });
 

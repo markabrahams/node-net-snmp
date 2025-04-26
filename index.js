@@ -4276,7 +4276,8 @@ Mib.prototype.registerProvider = function (provider) {
 			if ( provider.constraints?.enumeration ) {
 				scalarValue = ObjectTypeUtil.getEnumerationNumberFromName (provider.constraints.enumeration, provider.defVal);
 			} else {
-				scalarValue = provider.defVal;
+				// Remove quotes from strings and resolve numeric strings to integers
+				scalarValue = JSON.parse(provider.defVal);
 			}
 			this.setScalarValue (provider.name, scalarValue);
 		}
