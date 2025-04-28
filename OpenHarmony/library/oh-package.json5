@@ -1,0 +1,25 @@
+{
+  "name": "@ohos/net-snmp",
+  "version": "1.0.1",
+  "description": "this is a implements versions 1, 2c and 3 of the Simple Network Management Protocol (SNMP).",
+  "main": "Index.js",
+  "homepage": "https://gitcode.com/openharmony-tpc/openharmony_tpc_samples/tree/master/net_snmp",
+  "repository": "https://gitcode.com/openharmony-tpc/openharmony_tpc_samples/tree/master/net_snmp",
+  "author": "ohos_tpc",
+  "ohos": {
+    "org": "opensource"
+  },
+  "keywords": [
+    "OpenHarmony",
+    "net-snmp",
+    "HarmonyOS"
+  ],
+  "license": "MIT License",
+  "dependencies": {
+    "@ohos/node-polyfill": "^1.0.0",
+    "@ohos/smart-buffer": "^1.0.0",
+    "@ohos/asn1-ber": "^1.0.0",
+
+  },
+  "devDependencies": {}
+}
