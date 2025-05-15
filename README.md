@@ -2493,6 +2493,27 @@ pre-loaded "base" modules is:
  * SNMPv2-TC
  * SNMPv2-MIB
 
+By default, the `createModuleStore()` function creates a new `ModuleStore` instance with all the base modules pre-loaded. 
+However, you can now customize which base modules are loaded by passing an options object:
+
+```js
+// Example of selecting only SNMPv2 MIBs
+const store = snmp.createModuleStore({
+  baseModules: [
+    'SNMPv2-SMI',
+    'SNMPv2-CONF',
+    'SNMPv2-TC',
+    'SNMPv2-MIB',
+  ],
+});
+```
+
+The `options` object can contain:
+
+* `baseModules` - An array of module names to use as the base modules. This allows you to explicitly control which MIBs are loaded, which can be useful to avoid unexpected type overrides that might occur with the full set of base modules.
+
+This feature is helpful when dealing with constraints for SNMPv2-TC defined textual conventions like DisplayString that might get preempted by subsequent definitions as plain OCTET STRING in RFC MIBs.
+
 ## store.loadFromFile (fileName)
 
 Loads all MIB modules in the given file into the module store.  By convention, there is
@@ -3554,3 +3575,28 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+## snmp.createModuleStore (options)
+
+By default, the `createModuleStore()` function creates a new `ModuleStore` instance with all the base modules pre-loaded. 
+However, you can now customize which base modules are loaded by passing an options object:
+
+```js
+// Example of selecting only SNMPv2 MIBs
+const store = snmp.createModuleStore({
+  baseModules: [
+    'SNMPv2-SMI',
+    'SNMPv2-CONF',
+    'SNMPv2-TC',
+    'SNMPv2-MIB',
+  ],
+});
+```
+
+The `options` object can contain:
+
+* `baseModules` - An array of module names to use as the base modules. This allows you to explicitly control which MIBs are loaded, which can be useful to avoid unexpected type overrides that might occur with the full set of base modules.
+
+This feature is helpful when dealing with constraints for SNMPv2-TC defined textual conventions like DisplayString that might get preempted by subsequent definitions as plain OCTET STRING in RFC MIBs.
+
+## store.loadFromFile (fileName)

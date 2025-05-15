@@ -3008,7 +3008,7 @@ Session.createV3 = function (target, user, options) {
 };
 
 var Engine = function (engineOptions) {
-	const { engineID } = engineOptions;
+	let { engineID } = engineOptions;
 	if ( engineID ) {
 		if ( ! (engineID instanceof Buffer) ) {
 			engineID = engineID.replace('0x', '');
