@@ -1,0 +1,68 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "snmp"
+    },
+    {
+      "name": "input_ip",
+      "value": "Please enter the IP address for the server."
+    },
+    {
+      "name": "snmp_get",
+      "value": "snmp_get"
+    },
+    {
+      "name": "snmp_get_bulk",
+      "value": "snmp_get_bulk"
+    },
+    {
+      "name": "snmp_get_next",
+      "value": "snmp_get_next"
+    },
+    {
+      "name": "snmp_subtree",
+      "value": "snmp_subtree"
+    },
+    {
+      "name": "snmp_table",
+      "value": "snmp_table"
+    },
+    {
+      "name": "snmp_tableColumns",
+      "value": "snmp_tableColumns"
+    },
+    {
+      "name": "snmp_trap",
+      "value": "snmp_trap"
+    },
+    {
+      "name": "snmp_walk",
+      "value": "snmp_walk"
+    },
+    {
+      "name": "receiver_lcd",
+      "value": "receiver_lcd"
+    },
+    {
+      "name": "snmp_mib",
+      "value": "snmp_mib"
+    },
+    {
+      "name": "agentx_subagent",
+      "value": "agentx_subagent"
+    },
+    {
+      "name": "snmp_proxy",
+      "value": "snmp_proxy"
+    }
+  ]
+}
