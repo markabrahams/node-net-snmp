@@ -1,6 +1,6 @@
 {
   "name": "net-snmp",
-  "version": "3.21.2",
+  "version": "3.22.0",
   "description": "JavaScript implementation of the Simple Network Management Protocol (SNMP)",
   "author": "Mark Abrahams <mark@abrahams.co.nz>",
   "license": "MIT",
