@@ -1,4 +1,3 @@
-
 // Copyright 2013 Stephen Vickers <stephen.vickers.sv@gmail.com>
 
 const ber = require ("asn1-ber").Ber;
@@ -2038,7 +2037,7 @@ var Session = function (target, authenticator, options) {
 	DEBUG |= options.debug;
 
 	this.engine = new Engine ({
-		engineId: options.engineID
+		engineID: options.engineID
 	});
 	this.reqs = {};
 	this.reqCount = 0;
@@ -3355,7 +3354,7 @@ var Receiver = function (options, callback) {
 	DEBUG |= options.debug;
 	this.authorizer = new Authorizer (options);
 	this.engine = new Engine ({
-		engineId: options.engineID
+		engineID: options.engineID
 	});
 
 	this.engineBoots = 0;
@@ -4874,7 +4873,7 @@ var Agent = function (options, callback, mib) {
 	DEBUG |= options.debug;
 	this.listener = new Listener (options, this);
 	this.engine = new Engine ({
-		engineId: options.engineID
+		engineID: options.engineID
 	});
 	this.authorizer = new Authorizer (options);
 	this.callback = callback || function () {};
