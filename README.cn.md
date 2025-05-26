@@ -100,6 +100,7 @@ var session = snmp.createSession ("127.0.0.1", "public", options);
 * `version` - `snmp.Version1`或`snmp.Version2c`，默认为`snmp.Version1`。
 * "backwardsGetNexts"----允许进行GetNext操作的布尔值，以检索词法上在前的OIDs。
 * `idBitsSize` - `16`或`32`，默认为`32`。用来减少生成的id的大小，以便与一些旧设备兼容。
+* `dgramModule` – 一个与 Node.js [`dgram`](https://nodejs.org/api/dgram.html) 模块接口兼容的模块。您可以通过提供自定义或包装的 `dgram` 实现来扩展或覆盖默认的 UDP 套接字行为。
 
 当一个会话结束后，应该关闭它。
 
