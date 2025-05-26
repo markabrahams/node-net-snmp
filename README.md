@@ -344,7 +344,7 @@ Actions
 - `4 -  ECouldNotDecrypt`
 - `5 -  EAuthFailure`
 - `6 -  EReqResOidNoMatch`
-- `7 -  (no longer used)
+- `7 -  (no longer used)`
 - `8 -  EOutOfOrder`
 - `9 -  EVersionNoMatch`
 - `10 -  ECommunityNoMatch`
@@ -588,7 +588,8 @@ var options = {
     version: snmp.Version1,
     backwardsGetNexts: true,
     reportOidMismatchErrors: false,
-    idBitsSize: 32
+    idBitsSize: 32,
+    udpModule: dgram
 };
 
 var session = snmp.createSession ("127.0.0.1", "public", options);
@@ -620,6 +621,10 @@ is an object, and can contain the following items:
    requests and responses, defaults to `false`
  * `idBitsSize` - Either `16` or `32`, defaults to `32`.  Used to reduce the size
     of the generated id for compatibility with some older devices.
+ * `dgramModule` – A module that is interface-compatible with the Node.js [`dgram`](https://nodejs.org/api/dgram.html) module.
+    This can be used to extend or override the default UDP socket behavior by supplying
+    a custom or wrapped implementation of `dgram`.
+         
 
 When a session has been finished with it should be closed:
 

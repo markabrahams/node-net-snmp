@@ -2042,7 +2042,8 @@ var Session = function (target, authenticator, options) {
 	this.reqs = {};
 	this.reqCount = 0;
 
-	this.dgram = dgram.createSocket (this.transport);
+	const dgramMod = options.dgramModule || dgram;
+	this.dgram = dgramMod.createSocket (this.transport);
 	this.dgram.unref();
 
 	var me = this;
@@ -3060,7 +3061,8 @@ Listener.prototype.startListening = function () {
 	var me = this;
 	this.sockets = {};
 	for ( const socketOptions of this.socketOptions ) {
-		const socket = dgram.createSocket (socketOptions.transport);
+		const dgramMod = options.dgramModule || dgram;
+		const socket = dgramMod.createSocket (socketOptions.transport);
 		socket.on ("error", me.receiver.callback);
 		socket.bind (socketOptions.port, socketOptions.address);
 		socket.on ("message", me.callback.bind (me.receiver, socket));
