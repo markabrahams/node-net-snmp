@@ -589,7 +589,7 @@ var options = {
     backwardsGetNexts: true,
     reportOidMismatchErrors: false,
     idBitsSize: 32,
-    udpModule: dgram
+    dgramModule: dgram
 };
 
 var session = snmp.createSession ("127.0.0.1", "public", options);
