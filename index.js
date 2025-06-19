@@ -3039,6 +3039,7 @@ var Listener = function (options, receiver) {
 	// this.port = options.port || 161;
 	// this.address = options.address;
 	this.disableAuthorization = options.disableAuthorization || false;
+	this.dgramModule = options.dgramModule || dgram;
 	if ( options.sockets ) {
 		this.socketOptions = options.sockets;
 	} else {
@@ -3061,7 +3062,7 @@ Listener.prototype.startListening = function () {
 	var me = this;
 	this.sockets = {};
 	for ( const socketOptions of this.socketOptions ) {
-		const dgramMod = options.dgramModule || dgram;
+		const dgramMod = this.dgramModule;
 		const socket = dgramMod.createSocket (socketOptions.transport);
 		socket.on ("error", me.receiver.callback);
 		socket.bind (socketOptions.port, socketOptions.address);
