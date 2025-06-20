@@ -3035,9 +3035,6 @@ Engine.prototype.generateEngineID = function() {
 var Listener = function (options, receiver) {
 	this.receiver = receiver;
 	this.callback = receiver.onMsg;
-	// this.transport = options.transport || 'udp4';
-	// this.port = options.port || 161;
-	// this.address = options.address;
 	this.disableAuthorization = options.disableAuthorization || false;
 	this.dgramModule = options.dgramModule || dgram;
 	if ( options.sockets ) {

@@ -3561,6 +3561,10 @@ Example programs are included under the module's `example` directory.
 
  * Add custom base module list
 
+# Version 3.23.0 - 20/06/2025
+
+ * Add support for custom dgram module
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
