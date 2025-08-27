@@ -23,6 +23,8 @@ module.exports = [
                 setTimeout: 'readonly',
                 clearInterval: 'readonly',
                 clearTimeout: 'readonly',
+                setImmediate: 'readonly',
+                clearImmediate: 'readonly',
 
                 // Mocha globals
                 describe: 'readonly',

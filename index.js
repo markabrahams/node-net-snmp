@@ -213,8 +213,8 @@ var AgentXPduType = {
 	17: "RemoveAgentCaps",
 	18: "Response"
 };
-const agentXPduTypesRequiringReadAccess = [5,6,7];
-const agentXPduTypesRequiringWriteAccess = [8,9,10,11,14,15,16,17];
+const agentXPduTypesRequiringReadAccess = [ 5, 6, 7];
+const agentXPduTypesRequiringWriteAccess = [ 8, 9, 10, 11, 14, 15, 16, 17 ];
 
 _expandConstantObject (AgentXPduType);
 
@@ -5445,8 +5445,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 								});
 							};
 						}
-					}
-					catch (e) {
+					} catch (e) {
 						debug('Invalid value for type', e, mibRequests[i]);
 						mibRequests[i].handler = function wrongTypeHandler (request) {
 							request.done ({
@@ -5473,8 +5472,8 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 					oid: mibRequest.oid
 				};
 				if ( error ) {
-					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError)
-					      && error.errorStatus != ErrorStatus.NoError ) {
+					if ( (typeof responsePdu.errorStatus == "undefined" || responsePdu.errorStatus == ErrorStatus.NoError) &&
+							error.errorStatus != ErrorStatus.NoError ) {
 						responsePdu.errorStatus = error.errorStatus;
 						responsePdu.errorIndex = savedIndex + 1;
 					}
@@ -5589,30 +5588,29 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 	}
 	const applyHandlers = testSet => {
 		for ( const mibRequest of mibRequests ) {
-		  if ( mibRequest.error === undefined && testSet === !!mibRequest.testSet ) {
-		    if ( mibRequest.handler ) {
-		      mibRequest.handler (mibRequest);
-		    } else {
-		      mibRequest.done ();
-		    }
-		  }
+			if ( mibRequest.error === undefined && testSet === !!mibRequest.testSet ) {
+				if ( mibRequest.handler ) {
+					mibRequest.handler (mibRequest);
+				} else {
+					mibRequest.done ();
+				}
+			}
 		}
 	};
 	const applySetHandlers = testSet => {
 		if ( this.bulkSetHandler ) {
-		  const errorStatus = this.bulkSetHandler( mibRequests, this.mib, testSet ) ?? ErrorStatus.NoError;
-		  if ( errorStatus !== ErrorStatus.NoError ) {
-		    for ( const mibRequest of mibRequests ) {
-		      if ( mibRequest.error === undefined ) {
-			mibRequest.done ({
-			  errorStatus,
-			  type: ObjectType.Null,
-			  value: null
-		        });
-		      }
-		    }
-		    return;
-		  }
+			const errorStatus = this.bulkSetHandler( mibRequests, this.mib, testSet ) ?? ErrorStatus.NoError;
+			if ( errorStatus !== ErrorStatus.NoError ) {
+				for ( const mibRequest of mibRequests ) {
+					if ( mibRequest.error === undefined ) {
+						mibRequest.done ({
+							errorStatus,
+							type: ObjectType.Null,
+							value: null
+						});
+					}
+				}
+			}
 		}
 		applyHandlers(testSet);
 	};
@@ -5624,7 +5622,7 @@ Agent.prototype.request = function (socket, requestMessage, rinfo) {
 
 Agent.prototype.setBulkSetHandler = function setBulkSetHandler(cb) {
 	this.bulkSetHandler = cb;
-}
+};
 
 Agent.prototype.getRequest = function (socket, requestMessage, rinfo) {
 	this.request (socket, requestMessage, rinfo);
@@ -5973,6 +5971,13 @@ AgentXPdu.createFromVariables = function (vars) {
 			pdu.error = vars.error || 0;
 			pdu.index = vars.index || 0;
 			pdu.varbinds = vars.varbinds || null;
+			break;
+		case AgentXPduType.TestSet:
+			pdu.varbinds = vars.varbinds || null;
+			break;
+		case AgentXPduType.CommitSet:
+		case AgentXPduType.UndoSet:
+		case AgentXPduType.CleanupSet:
 			break;
 		default:
 			// unsupported PDU type - should never happen as we control these
@@ -6429,8 +6434,7 @@ Subagent.prototype.onMsg = function (buffer, rinfo) {
 				throw new RequestInvalidError ("Unknown PDU type '" + pdu.pduType
 						+ "' in request");
 		}
-	}
-	catch (e) {
+	} catch (e) {
 		console.error(e);
 	}
 };
@@ -6573,8 +6577,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 								value: mibRequests[i].setValue,
 							};
 						}
-					}
-					catch (e) {
+					} catch (e) {
 						debug('Invalid value for type', e, mibRequests[i]);
 						mibRequests[i].error = {
 							errorStatus: ErrorStatus.WrongType,
@@ -6673,7 +6676,7 @@ Subagent.prototype.request = function (pdu, requestVarbinds) {
 
 Subagent.prototype.setBulkSetHandler = function setBulkSetHandler(cb) {
 	this.bulkSetHandler = cb;
-}
+};
 
 Subagent.prototype.addGetNextVarbind = function (targetVarbinds, startOid) {
 	var startNode;
@@ -6835,6 +6838,7 @@ exports.ErrorStatus = ErrorStatus;
 exports.TrapType = TrapType;
 exports.ObjectType = ObjectType;
 exports.PduType = PduType;
+exports.AgentXPdu = AgentXPdu;
 exports.AgentXPduType = AgentXPduType;
 exports.MibProviderType = MibProviderType;
 exports.SecurityLevel = SecurityLevel;

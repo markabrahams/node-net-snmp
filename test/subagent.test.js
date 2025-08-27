@@ -357,7 +357,7 @@ describe('Subagent', function() {
                  subagent.getMib().setScalarValue('testScalar', 100);
              });
 
-            xit('manages set transactions correctly', function() {
+            it('manages set transactions correctly', function() {
                 // Create proper AgentXPdu objects using createFromVariables
                 const testSetPdu = snmp.AgentXPdu.createFromVariables({
                     pduType: snmp.AgentXPduType.TestSet,
@@ -383,7 +383,7 @@ describe('Subagent', function() {
                 assert(!subagent.setTransactions[123]);
             });
 
-            xit('handles unexpected transaction IDs', function() {
+            it('handles unexpected transaction IDs', function() {
                 const commitSetPdu = snmp.AgentXPdu.createFromVariables({
                     pduType: snmp.AgentXPduType.CommitSet,
                     sessionID: subagent.sessionID,
