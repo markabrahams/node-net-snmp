@@ -10,7 +10,7 @@
   },
   "scripts": {
     "lint": "eslint . ./**/*.js",
-    "test": "node --openssl-legacy-provider ./node_modules/mocha/bin/mocha.js"
+    "test": "node --openssl-legacy-provider ./node_modules/mocha/bin/mocha.js --exit"
   },
   "contributors": [
     {
