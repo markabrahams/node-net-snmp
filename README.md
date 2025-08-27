@@ -1947,6 +1947,8 @@ var myScalarProvider = {
        // e.g. can update the MIB data before responding to the request here
        mibRequest.done ();
     }
+    // Note: handler is optional for scalar providers - if omitted, 
+    // mibRequest.done() is called automatically
 };
 var mib = agent.getMib ();
 mib.registerProvider (myScalarProvider);
@@ -2157,6 +2159,8 @@ objects`, below, for details.
  * `handler` *(optional)* - an optional callback function, which is called before the request to the
  MIB is made.  This could update the MIB value(s) handled by this provider.  If not given,
  the values are simply returned from (or set in) the MIB without any other processing.
+ If no `handler` is provided, the system automatically calls `mibRequest.done()` to complete 
+ the request, making both scalar and table providers fully functional without explicit handlers.
  The callback function takes a `MibRequest` instance, which has a `done()` function.  This
  must be called when finished processing the request.  To signal an error, give a single error object
  in the form of `{errorStatus: <status>}`, where `<status>` is a value from ErrorStatus e.g.
@@ -2704,6 +2708,79 @@ to both register the provider on its internal `Mib` object, *and* send a Registe
 agent for the provider's MIB region.  The latter step is skipped if registering the provider directly
 on the MIB object.
 
+## Simplified Provider Example
+
+AgentX subagents provide automatic request handling for both scalar and table providers, making them simple to implement:
+
+```js
+// Both scalars and tables work with automatic request handling (no explicit handlers needed)
+var stringProvider = {
+    name: "scalarString",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.4.1.8072.9999.9999.1",
+    scalarType: snmp.ObjectType.OctetString,
+    maxAccess: snmp.MaxAccess["read-write"]
+    // No handler required - automatic fallback will call mibRequest.done()
+};
+
+var intProvider = {
+    name: "scalarInt",
+    type: snmp.MibProviderType.Scalar,
+    oid: "1.3.6.1.4.1.8072.9999.9999.3",
+    scalarType: snmp.ObjectType.Integer,
+    maxAccess: snmp.MaxAccess["read-write"]
+    // No handler required - automatic fallback will call mibRequest.done()
+};
+
+// Table providers also work without explicit handlers
+var tableProvider = {
+    name: "smallIfTable",
+    type: snmp.MibProviderType.Table,
+    oid: "1.3.6.1.4.1.8072.9999.9999.2",
+    maxAccess: snmp.MaxAccess['not-accessible'],
+    tableColumns: [
+        {
+            number: 1,
+            name: "ifIndex",
+            type: snmp.ObjectType.Integer,
+            maxAccess: snmp.MaxAccess['read-only']
+        },
+        {
+            number: 2,
+            name: "ifDescr",
+            type: snmp.ObjectType.OctetString,
+            maxAccess: snmp.MaxAccess['read-write']
+        }
+    ],
+    tableIndex: [
+        {
+            columnName: "ifIndex"
+        }
+    ]
+    // No handler required - automatic fallback works for tables too!
+};
+
+// Register providers and set values
+subagent.registerProvider(stringProvider, function(error, data) {
+    if (!error) {
+        subagent.getMib().setScalarValue("scalarString", "Hello World!");
+    }
+});
+
+subagent.registerProvider(intProvider, function(error, data) {
+    if (!error) {
+        subagent.getMib().setScalarValue("scalarInt", 42);
+    }
+});
+
+subagent.registerProvider(tableProvider, function(error, data) {
+    if (!error) {
+        subagent.getMib().addTableRow("smallIfTable", [1, "lo"]);
+        subagent.getMib().addTableRow("smallIfTable", [2, "eth0"]);
+    }
+});
+```
+
 ## snmp.createSubagent (options)
 
 The `createSubagent ()` function instantiates and returns an instance of the `Subagent`
@@ -2764,6 +2841,11 @@ subsequent `Response` PDU from the master to the `Register` PDU.  This is not to
 with the `handler` optional callback on the provider definition, which is invoked for any
 "request processing" PDU received by the subagent for MIB objects in the registered MIB region.
 
+**Note for AgentX subagents**: Neither scalar nor table providers require explicit `handler` functions.
+If no `handler` is provided, the subagent automatically calls `mibRequest.done()` to complete the request,
+allowing both scalar and table values to be served directly from the MIB without additional processing.
+This greatly simplifies provider definitions - you only need to specify the structure and `maxAccess` properties.
+
 ## subagent.unregisterProvider (name, callback)
 
 Unregisters a previously registered MIB region by the supplied name of the provider.  Sends
@@ -2813,6 +2895,48 @@ two varbinds.  The supplied `callback` is called on reception of the subsequent
 Sends a "ping" to the master agent using a `Ping` PDU, to confirm that the master agent is still
 responsive.  The supplied `callback` is called on reception of the subsequent
 `Response` PDU from the master to the `Ping` PDU.
+
+## subagent.setBulkSetHandler (callback)
+
+Sets a bulk set handler for the subagent that will be called for both **TestSet** and **CommitSet** 
+phases of SNMP SET operations. This provides atomic validation capabilities, allowing you to validate 
+all varbinds as a complete set before committing any changes.
+
+The handler callback function receives two arguments:
+* `testSet` - A boolean indicating the phase: `true` for TestSet phase, `false` for CommitSet phase
+* `varbinds` - An array of all varbinds in the SET request
+
+During the TestSet phase (`testSet = true`), you should validate all the requested changes but not 
+apply them. During the CommitSet phase (`testSet = false`), you should apply the previously validated changes.
+
+Example usage:
+
+```js
+subagent.setBulkSetHandler(function(testSet, varbinds) {
+    if (testSet) {
+        // TestSet phase - validate all varbinds atomically
+        console.log("Validating SET operation with", varbinds.length, "varbinds");
+        for (let varbind of varbinds) {
+            // Perform validation logic here
+            if (!isValidValue(varbind.oid, varbind.value)) {
+                throw new Error("Invalid value for " + varbind.oid);
+            }
+        }
+        console.log("All varbinds validated successfully");
+    } else {
+        // CommitSet phase - apply the changes
+        console.log("Committing SET operation");
+        for (let varbind of varbinds) {
+            // Apply the validated changes here
+            applyValue(varbind.oid, varbind.value);
+        }
+        console.log("All changes committed");
+    }
+});
+```
+
+This approach ensures atomic SET operations where either all varbinds in a request succeed or all fail, 
+maintaining data consistency across your MIB implementation.
 
 ## subagent.on ("close", callback)
 
@@ -3568,6 +3692,10 @@ Example programs are included under the module's `example` directory.
 # Version 3.24.0 - 28/08/2025
 
  * Improve USM error handling compliance with RFC 3414
+
+# Version 3.25.0 - 28/08/2025
+
+ * Add separate AgentX subagent TestSet and CommitSet phases
 
 # License
 
