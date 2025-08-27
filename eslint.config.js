@@ -27,6 +27,7 @@ module.exports = [
                 // Mocha globals
                 describe: 'readonly',
                 it: 'readonly',
+                xit: 'readonly',
                 before: 'readonly',
                 after: 'readonly',
                 beforeEach: 'readonly',

@@ -3142,6 +3142,13 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 						message.msgSecurityParameters.msgUserName));
 				return;
 			} else if ( message.hasAuthentication () ) {
+				if ( message.isReportable () ) {
+					return {
+						original: message,
+						report: true,
+						errorType: UsmErrorType.UNKNOWN_USER_NAME
+					};
+				}
 				callback (new RequestFailedError ("Local user not found and message requires authentication with user " +
 						message.msgSecurityParameters.msgUserName));
 				return;

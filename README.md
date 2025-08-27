@@ -3565,6 +3565,10 @@ Example programs are included under the module's `example` directory.
 
  * Add support for custom dgram module
 
+# Version 3.24.0 - 28/08/2025
+
+ * Improve USM error handling compliance with RFC 3414
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
