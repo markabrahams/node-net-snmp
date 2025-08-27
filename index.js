@@ -166,6 +166,16 @@ var UsmStats = {
 
 _expandConstantObject (UsmStats);
 
+// USM Error Type Constants for Report PDUs (RFC 3414 §3.2)
+var UsmErrorType = {
+	UNSUPPORTED_SECURITY_LEVEL: "1",
+	NOT_IN_TIME_WINDOW: "2",
+	UNKNOWN_USER_NAME: "3",
+	UNKNOWN_ENGINE_ID: "4",
+	WRONG_DIGESTS: "5",
+	DECRYPTION_ERROR: "6"
+};
+
 var MibProviderType = {
 	"1": "Scalar",
 	"2": "Table"
@@ -1795,7 +1805,7 @@ Message.prototype.hasAuthoritativeEngineID = function () {
 		this.msgSecurityParameters.msgAuthoritativeEngineID != "";
 };
 
-Message.prototype.createReportResponseMessage = function (engine, context) {
+Message.prototype.createReportResponseMessage = function (engine, context, errorType) {
 	var user = {
 		name: "",
 		level: SecurityLevel.noAuthNoPriv
@@ -1808,7 +1818,18 @@ Message.prototype.createReportResponseMessage = function (engine, context) {
 		msgAuthenticationParameters: "",
 		msgPrivacyParameters: ""
 	};
-	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, [], {});
+
+	// Create varbinds array with appropriate error
+	var varbinds = [];
+	if (errorType && UsmStats[errorType]) {
+		varbinds.push ({
+			oid: UsmStatsBase + "." + errorType + ".0",
+			type: ObjectType.Counter32,
+			value: 1
+		});
+	}
+
+	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, varbinds, {});
 	reportPdu.contextName = context;
 	var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, reportPdu);
 	responseMessage.msgGlobalData.msgID = this.msgGlobalData.msgID;
@@ -3110,6 +3131,13 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 		message.disableAuthentication = authorizer.disableAuthorization;
 		if ( ! message.user ) {
 			if ( message.msgSecurityParameters.msgUserName != "" && ! authorizer.disableAuthorization ) {
+				if ( message.isReportable () ) {
+					return {
+						original: message,
+						report: true,
+						errorType: UsmErrorType.UNKNOWN_USER_NAME
+					};
+				}
 				callback (new RequestFailedError ("Local user not found for message with user " +
 						message.msgSecurityParameters.msgUserName));
 				return;
@@ -3125,11 +3153,25 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 			}
 		}
 		if ( (message.user.level == SecurityLevel.authNoPriv || message.user.level == SecurityLevel.authPriv) && ! message.hasAuthentication() ) {
+			if ( message.isReportable () ) {
+				return {
+					original: message,
+					report: true,
+					errorType: UsmErrorType.WRONG_DIGESTS
+				};
+			}
 			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
 					" requires authentication but message does not provide it"));
 			return;
 		}
 		if ( message.user.level == SecurityLevel.authPriv && ! message.hasPrivacy() ) {
+			if ( message.isReportable () ) {
+				return {
+					original: message,
+					report: true,
+					errorType: UsmErrorType.WRONG_DIGESTS
+				};
+			}
 			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
 					" requires privacy but message does not provide it"));
 			return;
@@ -3390,6 +3432,12 @@ Receiver.prototype.onMsg = function (socket, buffer, rinfo) {
 		return;
 	}
 
+	if ( message.report && message.original ) {
+		let reportMessage = message.original.createReportResponseMessage (this.engine, this.context, message.errorType);
+		this.listener.send (reportMessage, rinfo, socket);
+		return;
+	}
+
 	// The only GetRequest PDUs supported are those used for SNMPv3 discovery
 	if ( message.pdu.type == PduType.GetRequest ) {
 		if ( message.version != Version3 ) {
@@ -3402,7 +3450,7 @@ Receiver.prototype.onMsg = function (socket, buffer, rinfo) {
 			this.callback (new RequestInvalidError ("Only discovery GetRequests are supported and this message does not have the reportable flag set"));
 			return;
 		}
-		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		let reportMessage = message.createReportResponseMessage (this.engine, this.context, UsmErrorType.UNKNOWN_ENGINE_ID);
 		this.listener.send (reportMessage, rinfo, socket);
 		return;
 	}
@@ -4982,10 +5030,16 @@ Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 		return;
 	}
 
+	if ( message.report && message.original ) {
+		let reportMessage = message.original.createReportResponseMessage (this.engine, this.context, message.errorType);
+		this.listener.send (reportMessage, rinfo, socket);
+		return;
+	}
+
 	// SNMPv3 discovery
 	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
 			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
-		let reportMessage = message.createReportResponseMessage (this.engine, this.context);
+		let reportMessage = message.createReportResponseMessage (this.engine, this.context, UsmErrorType.UNKNOWN_ENGINE_ID);
 		this.listener.send (reportMessage, rinfo, socket);
 		return;
 	}
