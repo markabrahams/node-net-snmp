@@ -3701,6 +3701,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix SNMPv3 agent unknown user crash
 
+# Version 3.25.2 - 11/09/2025
+
+ * Fix AgentX Counter64 writing
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

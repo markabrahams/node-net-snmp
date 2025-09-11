@@ -6087,7 +6087,7 @@ AgentXPdu.writeVarBind = function (buffer, varbind) {
 				buffer.writeOctetString (buffer, Buffer.from (bytes));
 				break;
 			case ObjectType.Counter64:
-				buffer.writeUint64 (varbind.value);
+				buffer.writeBigUInt64BE (BigInt(varbind.value));
 				break;
 			case ObjectType.Null:
 			case ObjectType.EndOfMibView:
