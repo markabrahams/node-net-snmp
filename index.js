@@ -1831,7 +1831,7 @@ Message.prototype.createReportResponseMessage = function (engine, context, error
 		});
 	}
 
-	var reportPdu = ReportPdu.createFromVariables (this.pdu.id, varbinds, {});
+	var reportPdu = ReportPdu.createFromVariables (this.getReqId(), varbinds, {});
 	reportPdu.contextName = context;
 	var responseMessage = Message.createRequestV3 (user, responseSecurityParameters, reportPdu);
 	responseMessage.msgGlobalData.msgID = this.msgGlobalData.msgID;

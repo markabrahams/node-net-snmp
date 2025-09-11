@@ -3697,6 +3697,10 @@ Example programs are included under the module's `example` directory.
 
  * Add separate AgentX subagent TestSet and CommitSet phases
 
+# Version 3.25.1 - 11/09/2025
+
+ * Fix SNMPv3 agent unknown user crash
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
