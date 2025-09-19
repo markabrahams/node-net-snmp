@@ -11,6 +11,7 @@ const mibparser = require ("./lib/mib");
 const Buffer = require('buffer').Buffer;
 
 var DEBUG = false;
+var STRICT_INT_RANGE_CHECKS = false;
 
 const MIN_SIGNED_INT32 = -2147483648;
 const MAX_SIGNED_INT32 = 2147483647;
@@ -408,7 +409,12 @@ function readInt32 (buffer) {
 		throw new TypeError('Value read as integer ' + parsedInt + ' is not an integer');
 	}
 	if ( parsedInt < MIN_SIGNED_INT32 || parsedInt > MAX_SIGNED_INT32 ) {
-		throw new RangeError('Read integer ' + parsedInt + ' is outside the signed 32-bit range');
+		const errorMessage = 'Read integer ' + parsedInt + ' is outside the signed 32-bit range';
+		if ( STRICT_INT_RANGE_CHECKS ) {
+			throw new RangeError(errorMessage);
+		} else {
+			debug(errorMessage);
+		}
 	}
 	return parsedInt;
 }
@@ -420,7 +426,12 @@ function readUint32 (buffer) {
 	}
 	parsedInt = (parsedInt>>>0);
 	if ( parsedInt < MIN_UNSIGNED_INT32 || parsedInt > MAX_UNSIGNED_INT32 ) {
-		throw new RangeError('Read integer ' + parsedInt + ' is outside the unsigned 32-bit range');
+		const errorMessage = 'Read integer ' + parsedInt + ' is outside the unsigned 32-bit range';
+		if ( STRICT_INT_RANGE_CHECKS ) {
+			throw new RangeError(errorMessage);
+		} else {
+			debug(errorMessage);
+		}
 	}
 	return parsedInt;
 }
@@ -2056,6 +2067,11 @@ var Session = function (target, authenticator, options) {
 	this.reportOidMismatchErrors = (typeof options.reportOidMismatchErrors !== 'undefined')
             ? options.reportOidMismatchErrors
             : false;
+
+	// Enable/disable min/max checks on readInt32/readUint32
+	if ( options?.strictIntRangeChecks !== undefined ) {
+		STRICT_INT_RANGE_CHECKS = !!options.strictIntRangeChecks;
+	}
 
 	DEBUG |= options.debug;
 

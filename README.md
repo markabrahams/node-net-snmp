@@ -589,7 +589,8 @@ var options = {
     backwardsGetNexts: true,
     reportOidMismatchErrors: false,
     idBitsSize: 32,
-    dgramModule: dgram
+    dgramModule: dgram,
+    strictIntRangeChecks: false
 };
 
 var session = snmp.createSession ("127.0.0.1", "public", options);
@@ -624,6 +625,10 @@ is an object, and can contain the following items:
  * `dgramModule` – A module that is interface-compatible with the Node.js [`dgram`](https://nodejs.org/api/dgram.html) module.
     This can be used to extend or override the default UDP socket behavior by supplying
     a custom or wrapped implementation of `dgram`.
+ * `strictIntRangeChecks` - boolean to enable min/max range checks in `readInt32` and `readUint32`.
+   When set to `true`, out-of-range values will throw, otherwise they will be logged via debug if `debug` is enabled.
+   Note that the option is toggled at module level when a session is created. If you create multiple sessions 
+   with conflicting settings, the most recently created session’s setting will apply process-wide.
          
 
 When a session has been finished with it should be closed:
@@ -650,7 +655,8 @@ var options = {
     backwardsGetNexts: true,
     reportOidMismatchErrors: false,
     idBitsSize: 32,
-    context: ""
+    context: "",
+    strictIntRangeChecks: false
 };
 
 // Example user
