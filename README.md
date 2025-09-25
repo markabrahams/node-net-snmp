@@ -3711,6 +3711,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix AgentX Counter64 writing
 
+# Version 3.26.0 - 25/09/2025
+
+ * Add strict integer range checking as optional
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
