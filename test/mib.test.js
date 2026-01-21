@@ -113,6 +113,16 @@ describe('MIB', function () {
             const data = mib.getTableCells('testEntry1', true, true);
             assert.deepEqual(data, [[ [2], 'CellValue2']]);
         });
+
+        it('deletes a table row with string index', function () {
+            const row1 = ['ABC', 100];
+            const row2 = ['XYZ', 200];
+            mib.addTableRow('testEntry2', row1);
+            mib.addTableRow('testEntry2', row2);
+            mib.deleteTableRow('testEntry2', 'ABC');
+            const data = mib.getTableCells('testEntry2', true, true);
+            assert.deepEqual(data, [[ ['XYZ'], 200]]);
+        });
     });
 
     describe('registerProvider() - scalar defVal', function () {

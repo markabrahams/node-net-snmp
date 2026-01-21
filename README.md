@@ -3715,6 +3715,10 @@ Example programs are included under the module's `example` directory.
 
  * Add strict integer range checking as optional
 
+# Version 3.26.1 - 21/01/2026
+
+ * Fix deleteTableRow string index handling
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>

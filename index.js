@@ -4619,7 +4619,13 @@ Mib.prototype.getTableRowInstanceFromRowIndex = function (provider, rowIndex) {
 	var keyPart;
 	for ( var i = 0; i < provider.tableIndex.length ; i++ ) {
 		indexPart = provider.tableIndex[i];
-		keyPart = rowIndex[i];
+		// If rowIndex is a string and there's only one index part, use the string directly
+		// Otherwise, use rowIndex[i] (for arrays or when there are multiple index parts)
+		if ( typeof rowIndex === 'string' && provider.tableIndex.length === 1 ) {
+			keyPart = rowIndex;
+		} else {
+			keyPart = rowIndex[i];
+		}
 		rowIndexOid = rowIndexOid.concat (this.getOidAddressFromValue (keyPart, indexPart));
 	}
 	return rowIndexOid;

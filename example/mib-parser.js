@@ -58,7 +58,7 @@ var ifEntryRow1 = mib.getTableRowCells ("ifEntry", [2]);
 // ifXEntry
 // AUGMENTS ifEntry - meaning a single integer foreign key
 mib.addTableRow ("ifXEntry", [1, "eth0", 10, 2, 20, 4, counter64(1000), counter64(100), counter64(50), counter64(20),
-        counter64(2000), counter64(200), counter64(100), counter64(40), 1, 1000, 0, 1, "myeth0", 10]);
+        counter64(2000), counter64(200), counter64(100), counter64(40), 1, 1000, 1, 1, "myeth0", 10]);
 var ifXEntryRow1 = mib.getTableRowCells ("ifXEntry", [1]);
 // console.log (ifXEntryRow1);
 var ifXEntryData1 = mib.getTableCells ("ifXEntry", false, false);
@@ -83,7 +83,7 @@ var ifStackEntryCell1 = mib.getTableSingleCell ("ifStackEntry", 3, [1, 2]);
 
 // ifRcvAddressEntry
 // Composite index - one foreign integer column, one local string column
-mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 6]);
+mib.addTableRow ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c", 1, 1]);
 var ifRcvAddressEntryRow1 = mib.getTableRowCells ("ifRcvAddressEntry", [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryCell1 = mib.getTableSingleCell ("ifRcvAddressEntry", 3, [1, "24:41:8c:08:87:5c"]);
 var ifRcvAddressEntryData1 = mib.getTableCells ("ifRcvAddressEntry", false, false);
@@ -114,7 +114,7 @@ mib.addTableRow ("sysOREntry", [1, "1.3.6.1.4.1.47491.42.43.44.45", "I've dreame
 // mib.dump ();
 
 var modules = store.getModules (true);
-var one = store.getModule ("SNMPv2-MIB");
+var one = store.getModule ("SNMPv2-SMI");
 var names = store.getModuleNames (true);
 
 // console.log("All modules: ", JSON.stringify(modules, '', 2));
