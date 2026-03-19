@@ -389,6 +389,7 @@ function oidFollowsOid (oidString, nextString) {
 }
 
 function oidInSubtree (oidString, nextString) {
+	if (!nextString) return false;
 	var oid = oidString.split (".");
 	var next = nextString.split (".");
 
