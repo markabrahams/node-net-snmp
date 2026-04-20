@@ -1,4 +1,4 @@
-node_modules
-package-lock.json
-notes.txt
-example/test.js
+/node_modules
+/notes.txt
+/example/test.js
+/.claude
