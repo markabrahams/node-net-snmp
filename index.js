@@ -1308,7 +1308,7 @@ Authentication.calculateDigest = function (messageBuffer, authProtocol, authPass
 	var hmacAlgorithm = crypto.createHmac (cryptoAlgorithm, authKey);
 	hmacAlgorithm.update (messageBuffer);
 	var digest = hmacAlgorithm.digest ();
-	return digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH);
+	return Buffer.from(digest.subarray (0, Authentication.algorithms[authProtocol].AUTHENTICATION_CODE_LENGTH));
 };
 
 var Encryption = {};
@@ -1779,9 +1779,9 @@ Message.prototype.checkAuthentication = function (user, responseCb) {
 Message.prototype.setMsgFlags = function (bitPosition, flag) {
 	if ( this.msgGlobalData && this.msgGlobalData !== undefined && this.msgGlobalData !== null ) {
 		if ( flag ) {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | ( 2 ** bitPosition );
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags | ( Math.pow(2, bitPosition) );
 		} else {
-			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - 2 ** bitPosition );
+			this.msgGlobalData.msgFlags = this.msgGlobalData.msgFlags & ( 255 - Math.pow(2, bitPosition) );
 		}
 	}
 };
