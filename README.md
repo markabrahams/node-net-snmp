@@ -1950,7 +1950,12 @@ var myScalarProvider = {
     scalarType: snmp.ObjectType.OctetString,
     maxAccess: snmp.MaxAccess["read-write"],
     handler: function (mibRequest) {
-       // e.g. can update the MIB data before responding to the request here
+       // For a dynamically-calculated read-only scalar, publish the current value
+       // by assigning to the instance node before calling done().  For read-write scalars,
+       // the agent has already cast and validated mibRequest.setValue by the
+       // time the handler runs, and will commit it on your behalf — the handler
+       // usually just needs to call done().
+       mibRequest.instanceNode.value = yourFunctionToComputeCurrentValue ();
        mibRequest.done ();
     }
     // Note: handler is optional for scalar providers - if omitted, 
@@ -2174,6 +2179,29 @@ objects`, below, for details.
  with the instance OID being operated on, and an `operation` field with the request type from
  `snmp.PduType`.  If the `MibRequest` is for a `SetRequest` PDU, then variables `setValue` and
  `setType` contain the value and type received in the `SetRequest` varbind.
+
+ How the handler should interact with the MIB value depends on the request type:
+
+ * For `GetRequest`, `GetNextRequest` and `GetBulkRequest`, the response varbind is taken
+   from `mibRequest.instanceNode.value` at the moment `done()` is called.  A handler that
+   serves a dynamically-computed read-only scalar (e.g. `sysUpTime`) should therefore
+   assign the current value to `mibRequest.instanceNode.value` before calling `done()`.
+   Equivalent and validated alternative: call `mib.setScalarValue(providerName, value)`
+   from the handler, which casts and constraint-checks the value before storing it.
+   For table columns the pattern is the same — assign to `mibRequest.instanceNode.value`.
+ * For `SetRequest`, the agent has already cast and validated the incoming value into
+   `mibRequest.setValue` before the handler runs, and will commit it to
+   `mibRequest.instanceNode.value` on your behalf during the commit pass.  A handler
+   typically only needs to call `done()` (or `done({errorStatus: ...})` to reject the set).
+   You generally don't need to assign to `instanceNode.value` yourself on the set path.
+
+ If you do need to validate an externally-supplied value inside a handler, three helpers
+ are exposed on the public API: `ObjectTypeUtil.castSetValue(type, value, constraints)`
+ casts and range/constraint-checks a value (throwing on bad input);
+ `MibNode#validateValue(type, value)` returns a boolean against the node's provider
+ constraints; and `MibNode#getConstraintsFromProvider()` returns the constraints object
+ for the current instance node.
+
  * `constraints` *(optional for scalar types)* - an optional object to specify constraints for
  integer-based enumerated types, integer range restrictions and string size restrictions.  Note that
  table columns can specify such `constraints` in an identical way, except that these are stored under
@@ -3722,6 +3750,10 @@ Example programs are included under the module's `example` directory.
 # Version 3.26.2 - 21/04/2026
 
  * Fix TypeError in oidInSubtree when varbind OID is null
+
+# Version 3.26.3 - 21/04/2026
+
+ * Document how MIB scalar and table handlers should interact with `mibRequest.instanceNode.value` for Get vs Set operations
 
 # License
 
