@@ -5,37 +5,45 @@ const snmp = require('..');
 describe('Subagent', function() {
     let subagent;
     let mockSocket;
-    let mockServer;
+    let originalSocket;
+
+    function MockSocket() {
+        this.connect = () => {};
+        this.on = () => this;
+        this.write = () => {};
+        this.end = () => {};
+        this.destroy = () => {};
+    }
 
     beforeEach(function() {
-        // Create a mock server to simulate master agent
-        mockServer = net.createServer();
+        // Stub net.Socket so createSubagent does not open a real TCP connection
+        originalSocket = net.Socket;
+        net.Socket = MockSocket;
+
         mockSocket = {
             connect: () => {},
             on: () => {},
             write: () => {},
             end: () => {}
         };
-        
-        // Use the factory method instead of constructor
+
         subagent = snmp.createSubagent({
             master: 'localhost',
             masterPort: 705,
             timeout: 5,
             description: 'Test Subagent'
         });
-        
-        // Mock socket connection to avoid actual networking
+
         subagent.socket = mockSocket;
         subagent.sessionID = 123;
     });
 
     afterEach(function() {
-        if (mockServer) {
-            mockServer.close();
-        }
         if (subagent && typeof subagent.close === 'function') {
             subagent.close();
+        }
+        if (originalSocket) {
+            net.Socket = originalSocket;
         }
     });
 
