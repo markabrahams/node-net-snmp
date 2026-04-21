@@ -389,6 +389,9 @@ function oidFollowsOid (oidString, nextString) {
 }
 
 function oidInSubtree (oidString, nextString) {
+	if ( ! nextString ) {
+		return false;
+	}
 	var oid = oidString.split (".");
 	var next = nextString.split (".");
 
@@ -6885,6 +6888,9 @@ exports.ObjectParser = {
 	readInt32: readInt32,
 	readUint32: readUint32,
 	readVarbindValue: readVarbindValue
+};
+exports.OidUtil = {
+	oidInSubtree: oidInSubtree
 };
 exports.ObjectTypeUtil = ObjectTypeUtil;
 exports.Authentication = Authentication;

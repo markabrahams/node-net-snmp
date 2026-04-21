@@ -3719,6 +3719,10 @@ Example programs are included under the module's `example` directory.
 
  * Fix deleteTableRow string index handling
 
+# Version 3.26.2 - 21/04/2026
+
+ * Fix TypeError in oidInSubtree when varbind OID is null
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
