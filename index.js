@@ -9,6 +9,7 @@ const util = require ("util");
 const crypto = require ("crypto");
 const mibparser = require ("./lib/mib");
 const Buffer = require('buffer').Buffer;
+const { performance } = require ('perf_hooks');
 
 var DEBUG = false;
 var STRICT_INT_RANGE_CHECKS = false;
@@ -2439,6 +2440,7 @@ Session.prototype.onMsg = function (buffer) {
 			msgAuthoritativeEngineBoots: message.msgSecurityParameters.msgAuthoritativeEngineBoots,
 			msgAuthoritativeEngineTime: message.msgSecurityParameters.msgAuthoritativeEngineTime
 		};
+		this.setEngineTime (message);
 		if ( this.proxy ) {
 			this.msgSecurityParameters.msgUserName = this.proxy.user.name;
 			this.msgSecurityParameters.msgAuthenticationParameters = "";
@@ -2459,6 +2461,7 @@ Session.prototype.onMsg = function (buffer) {
 	} else if ( this.proxy ) {
 		this.onProxyResponse (req, message);
 	} else if (message.pdu.type == PduType.GetResponse) {
+		this.setEngineTime (message);
 		req.onResponse (req, message);
 	} else {
 		req.responseCb (new ResponseInvalidError ("Unknown PDU type '"
@@ -2974,7 +2977,43 @@ Session.prototype.walk  = function () {
 	return this;
 };
 
+Session.prototype.setEngineTime = function (message) {
+	var params = message.msgSecurityParameters;
+	if (!params)
+		return;
+	if (!this.user || this.user.level < SecurityLevel.authNoPriv)
+		return;
+	var boots = params.msgAuthoritativeEngineBoots;
+	if (this.engineTimeBoots != null && boots < this.engineTimeBoots)
+		return;
+	var time = params.msgAuthoritativeEngineTime;
+	var now = performance.now ();
+	var elapsedSeconds = Math.floor ((now - this.engineTimeReceivedAt) / 1000);
+	var estimate = this.engineTimeBase + elapsedSeconds;
+	if (this.engineTimeBoots != null && boots == this.engineTimeBoots && time <= estimate)
+		return;
+	this.engineTimeBase = time;
+	this.engineTimeBoots = boots;
+	this.engineTimeReceivedAt = now;
+};
+
+Session.prototype.advanceEngineTime = function () {
+	if (!this.msgSecurityParameters || this.engineTimeReceivedAt == null)
+		return;
+	var elapsedSeconds = Math.floor ((performance.now () - this.engineTimeReceivedAt) / 1000);
+	var totalSeconds = this.engineTimeBase + elapsedSeconds;
+	var boots = this.engineTimeBoots;
+	if (totalSeconds > MAX_SIGNED_INT32) {
+		var rollovers = Math.floor (totalSeconds / (MAX_SIGNED_INT32 + 1));
+		totalSeconds = totalSeconds % (MAX_SIGNED_INT32 + 1);
+		boots = Math.min (boots + rollovers, MAX_SIGNED_INT32);
+	}
+	this.msgSecurityParameters.msgAuthoritativeEngineTime = totalSeconds;
+	this.msgSecurityParameters.msgAuthoritativeEngineBoots = boots;
+};
+
 Session.prototype.sendV3Req = function (pdu, feedCb, responseCb, options, port, allowReport) {
+	this.advanceEngineTime ();
 	var message = Message.createRequestV3 (this.user, this.msgSecurityParameters, pdu);
 	var reqOptions = options || {};
 	var req = new Req (this, message, feedCb, responseCb, reqOptions);
