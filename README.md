@@ -1555,7 +1555,11 @@ an object, possibly empty, and can contain the following fields:
 
 The `callback` parameter is a callback function of the form
 `function (error, notification)`.  On an error condition, the `notification`
-parameter is set to `null`.  On successful reception of a notification, the error
+parameter is set to `null`.  Where the error was produced while processing a
+received packet - such as an authorization failure for a community or user
+not in the receiver's local authorization lists - the error will include an
+`rinfo` attribute containing the sender socket details of the offending packet.
+On successful reception of a notification, the error
 parameter is set to `null`, and the `notification` parameter is set as an object
 with the notification PDU details in the `pdu` field and the sender socket details
 in the `rinfo` field.  For example:
@@ -1723,7 +1727,9 @@ receiver's community authorization list, the receiver will not accept the notifi
 instead returning a error of class `RequestFailedError` to the supplied callback
 function.  Similarly, if a v3 notification is received with a user whose name is
 not in the receiver's user authorization list, the receiver will return a
-`RequestFailedError`.  If the `disableAuthorization` option is supplied for the
+`RequestFailedError`.  These errors include an `rinfo` attribute containing the
+sender socket details of the unauthorized packet, so that its origin can be
+identified.  If the `disableAuthorization` option is supplied for the
 receiver on start-up, then these local authorization list checks are disabled for
 community notifications and noAuthNoPriv user notifications.  Note that even with
 this setting, the user list is *still checked* for authNoPriv and authPriv notifications,
@@ -3754,6 +3760,10 @@ Example programs are included under the module's `example` directory.
 # Version 3.26.3 - 21/04/2026
 
  * Document how MIB scalar and table handlers should interact with `mibRequest.instanceNode.value` for Get vs Set operations
+
+# Version 3.26.4 - 09/07/2026
+
+ * Add rinfo to receiver and agent authorization failure errors
 
 # License
 

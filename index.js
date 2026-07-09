@@ -3141,7 +3141,15 @@ Listener.formatCallbackData = function (pdu, rinfo) {
 	};
 };
 
-Listener.processIncoming = function (buffer, authorizer, callback) {
+Listener.processIncoming = function (buffer, authorizer, rinfo, callback) {
+	// Annotate errors with the packet origin, so that callback consumers can
+	// identify the source of unauthorized or invalid messages
+	var callbackWithRinfo = function (error, data) {
+		if ( error && rinfo && ! error.rinfo ) {
+			error.rinfo = rinfo;
+		}
+		callback (error, data);
+	};
 	var message = Message.createFromBuffer (buffer);
 	var community;
 
@@ -3159,7 +3167,7 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 						errorType: UsmErrorType.UNKNOWN_USER_NAME
 					};
 				}
-				callback (new RequestFailedError ("Local user not found for message with user " +
+				callbackWithRinfo (new RequestFailedError ("Local user not found for message with user " +
 						message.msgSecurityParameters.msgUserName));
 				return;
 			} else if ( message.hasAuthentication () ) {
@@ -3170,7 +3178,7 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 						errorType: UsmErrorType.UNKNOWN_USER_NAME
 					};
 				}
-				callback (new RequestFailedError ("Local user not found and message requires authentication with user " +
+				callbackWithRinfo (new RequestFailedError ("Local user not found and message requires authentication with user " +
 						message.msgSecurityParameters.msgUserName));
 				return;
 			} else {
@@ -3188,7 +3196,7 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 					errorType: UsmErrorType.WRONG_DIGESTS
 				};
 			}
-			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+			callbackWithRinfo (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
 					" requires authentication but message does not provide it"));
 			return;
 		}
@@ -3200,17 +3208,17 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 					errorType: UsmErrorType.WRONG_DIGESTS
 				};
 			}
-			callback (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
+			callbackWithRinfo (new RequestFailedError ("Local user " + message.msgSecurityParameters.msgUserName +
 					" requires privacy but message does not provide it"));
 			return;
 		}
-		if ( ! message.processIncomingSecurity (message.user, callback) ) {
+		if ( ! message.processIncomingSecurity (message.user, callbackWithRinfo) ) {
 			return;
 		}
 	} else {
 		community = authorizer.communities.filter( localCommunity => localCommunity == message.community )[0];
 		if ( ! community && ! authorizer.disableAuthorization ) {
-			callback (new RequestFailedError ("Local community not found for message with community " + message.community));
+			callbackWithRinfo (new RequestFailedError ("Local community not found for message with community " + message.community));
 			return;
 		}
 	}
@@ -3450,7 +3458,7 @@ Receiver.prototype.onMsg = function (socket, buffer, rinfo) {
 	let message;
 
 	try {
-		message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+		message = Listener.processIncoming (buffer, this.authorizer, rinfo, this.callback);
 	} catch (error) {
 		this.callback (new ProcessingError ("Failure to process incoming message", error, rinfo, buffer));
 		return;
@@ -5046,7 +5054,7 @@ Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 	let message;
 
 	try {
-		message = Listener.processIncoming (buffer, this.authorizer, this.callback);
+		message = Listener.processIncoming (buffer, this.authorizer, rinfo, this.callback);
 	} catch (error) {
 		this.callback (new ProcessingError ("Failure to process incoming message", error, rinfo, buffer));
 		return;
