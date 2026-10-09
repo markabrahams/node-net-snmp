@@ -305,7 +305,8 @@ var ResponseInvalidCode = {
 	11: "EUnexpectedReport",
 	12: "EResponseNotHandled",
 	13: "EUnexpectedResponse",
-	14: "ENotInTimeWindow"
+	14: "ENotInTimeWindow",
+	15: "EBadVarbindList"
 };
 
 _expandConstantObject (ResponseInvalidCode);
@@ -496,6 +497,9 @@ function readVarbindValue (buffer, type) {
 		value = null;
 	} else if (type == ObjectType.OID) {
 		value = buffer.readOID ();
+		if (value == null)
+			throw new ResponseInvalidError ("Truncated OID in varbind list",
+					ResponseInvalidCode.EBadVarbindList);
 	} else if (type == ObjectType.IpAddress) {
 		value = readIpAddress (buffer);
 	} else if (type == ObjectType.Counter) {
@@ -531,10 +535,14 @@ function readVarbinds (buffer, varbinds) {
 	buffer.readSequence ();
 
 	while (1) {
-		buffer.readSequence ();
+		if ( buffer.readSequence () == null )
+			break;
 		if ( buffer.peek () != ObjectType.OID )
 			break;
 		var oid = buffer.readOID ();
+		if (oid == null)
+			throw new ResponseInvalidError ("Truncated OID in varbind list",
+					ResponseInvalidCode.EBadVarbindList);
 		var type = buffer.peek ();
 
 		if (type == null)

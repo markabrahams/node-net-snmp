@@ -3812,6 +3812,10 @@ Example programs are included under the module's `example` directory.
 
  * Upgrade the Mocha test framework to version 12, clearing the outstanding `serialize-javascript` and `diff` security advisories from the dependency tree - both were development-only transitive dependencies of the test toolchain and were never part of the published package, so no user of the library was exposed. Running the test suite now requires Node.js `^20.19.0 || >=22.12.0`; the library itself is unaffected
 
+# Version 3.29.2 - 09/10/2026
+
+ * Reject a varbind list that ends with a truncated OID instead of looping forever - a short unauthenticated UDP packet whose varbind carried a lone OID tag with no length byte sent the varbind parser into an infinite loop, spinning the CPU at 100% or exhausting memory. Such packets are now rejected with a `ResponseInvalidError` carrying the new `EBadVarbindList` code, closing a network-reachable denial-of-service on agents, receivers, and session clients
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
