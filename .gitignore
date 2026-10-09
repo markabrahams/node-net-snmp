@@ -2,3 +2,5 @@
 /notes.txt
 /example/test.js
 /.claude
+# Local npm auth (token supplied via NPM_TOKEN_NETSNMP env var)
+.npmrc
