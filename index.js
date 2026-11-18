@@ -6506,6 +6506,7 @@ var Subagent = function (options) {
 util.inherits (Subagent, events.EventEmitter);
 
 Subagent.prototype.onClose = function () {
+	this.receiveBuffer = Buffer.alloc (0);
 	this.emit ("close");
 };
 
@@ -6519,12 +6520,13 @@ Subagent.prototype.getMib = function () {
 
 Subagent.prototype.connectSocket = function () {
 	var me = this;
+	this.receiveBuffer = Buffer.alloc (0);
 	this.socket = new net.Socket ();
 	this.socket.connect (this.masterPort, this.master, function () {
 		debug ("Connected to '" + me.master + "' on port " + me.masterPort);
 	});
 
-	this.socket.on ("data", me.onMsg.bind (me));
+	this.socket.on ("data", me.onData.bind (me));
 	this.socket.on ("error", me.onError.bind (me));
 	this.socket.on ("close", me.onClose.bind (me));
 };
@@ -6666,6 +6668,19 @@ Subagent.prototype.sendPdu = function (pdu, callback) {
 	// 	}
 	// }, this.timeout);
 
+};
+
+Subagent.prototype.onData = function (buffer) {
+	this.receiveBuffer = this.receiveBuffer.length ? Buffer.concat ([this.receiveBuffer, buffer]) : buffer;
+	while (this.receiveBuffer.length >= 20) {
+		var length = 20 + this.receiveBuffer.readUInt32BE (16);
+		if (this.receiveBuffer.length < length) {
+			break;
+		}
+		var message = this.receiveBuffer.subarray (0, length);
+		this.receiveBuffer = this.receiveBuffer.length == length ? Buffer.alloc (0) : this.receiveBuffer.subarray (length);
+		this.onMsg (message);
+	}
 };
 
 Subagent.prototype.onMsg = function (buffer, rinfo) {
