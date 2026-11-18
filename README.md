@@ -3816,6 +3816,12 @@ Example programs are included under the module's `example` directory.
 
  * Reject a varbind list that ends with a truncated OID instead of looping forever - a short unauthenticated UDP packet whose varbind carried a lone OID tag with no length byte sent the varbind parser into an infinite loop, spinning the CPU at 100% or exhausting memory. Such packets are now rejected with a `ResponseInvalidError` carrying the new `EBadVarbindList` code, closing a network-reachable denial-of-service on agents, receivers, and session clients
 
+# Version 3.29.3 - 19/11/2026
+
+ * Reject SNMPv3 messages with an empty user name except for engine ID discovery - a message with a zero-length user name and no authentication was accepted by agents and receivers as if it came from a configured user, letting an unauthenticated sender read and write an agent's objects (under the default access control model), reach proxied devices, and inject traps and informs into a receiver (GHSA-pg9p-672x-44jc). Such messages are now treated as coming from an unknown user, as RFC 3414 requires. Applications that relied on empty user names being accepted can restore that with the `disableAuthorization` option
+
+ * Enforce the Simple access control model on requests forwarded to a proxy - a request carrying a proxy context name was forwarded without checking the requesting user's access level, so a read-only user could write to a proxied device (GHSA-jjpx-x4gm-m546). Requests the user is not allowed to make are now answered with `noAccess` and are not forwarded
+
 # License
 
 Copyright (c) 2020 Mark Abrahams <mark@abrahams.co.nz>
