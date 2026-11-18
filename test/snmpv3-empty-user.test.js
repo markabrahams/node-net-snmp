@@ -2,7 +2,8 @@ const assert = require('assert');
 const snmp = require('../');
 
 // End-to-end checks over loopback UDP that a zero-length SNMPv3 user name is
-// only accepted for engine ID discovery (RFC 3414 section 2.4).
+// only accepted for engine ID discovery (RFC 3414 section 2.4), and that proxied
+// requests are subject to the requesting user's access level.
 
 const OID = '1.3.6.1.4.1.99999.1.0';
 
@@ -13,6 +14,15 @@ const fred = {
 	authKey: 'fred-auth-key',
 	privProtocol: snmp.PrivProtocols.aes,
 	privKey: 'fred-priv-key'
+};
+
+const operator = {
+	name: 'operator',
+	level: snmp.SecurityLevel.authPriv,
+	authProtocol: snmp.AuthProtocols.sha,
+	authKey: 'operator-auth-key',
+	privProtocol: snmp.PrivProtocols.aes,
+	privKey: 'operator-priv-key'
 };
 
 const emptyUser = { name: '', level: snmp.SecurityLevel.noAuthNoPriv };
@@ -78,6 +88,12 @@ function assertUnknownUserName (result) {
 	assert.ok (result.error instanceof snmp.ResponseInvalidError, result.error.message);
 	assert.strictEqual (result.error.code, snmp.ResponseInvalidCode.EAuthFailure);
 	assert.match (result.error.message, /Unknown User Name/);
+}
+
+function assertNoAccess (result) {
+	assert.ok (result.error, 'expected the request to be refused');
+	assert.ok (result.error instanceof snmp.RequestFailedError, result.error.message);
+	assert.strictEqual (result.error.status, snmp.ErrorStatus.NoAccess);
 }
 
 describe ('SNMPv3 empty user name', function () {
@@ -253,5 +269,61 @@ describe ('SNMPv3 empty user name', function () {
 			await new Promise (resolve => setTimeout (resolve, 100));
 			assert.strictEqual (notifications.length, 2);
 		});
+	});
+});
+
+describe ('Proxy forwarder access control', function () {
+
+	this.timeout (5000);
+
+	const backendPort = 17266;
+	const frontPort = 17267;
+	let backend;
+	let front;
+
+	beforeEach (function (done) {
+		backend = createAgent (backendPort, {}, [fred]);
+		front = createAgent (frontPort, { accessControlModelType: snmp.AccessControlModelType.Simple }, [fred, operator]);
+		// operator keeps the default ReadOnly level given by addUser
+		front.getAuthorizer ().getAccessControlModel ().setUserAccess ('fred', snmp.AccessLevel.ReadWrite);
+		front.getForwarder ().addProxy ({
+			context: 'devB',
+			transport: 'udp4',
+			target: '127.0.0.1',
+			port: backendPort,
+			user: fred
+		});
+		// allow the forwarder's discovery of the backend to complete
+		setTimeout (done, 300);
+	});
+
+	afterEach (function (done) {
+		front.close (() => backend.close (() => done ()));
+	});
+
+	it ('forwards a get from a read-only user', async function () {
+		const result = await get (frontPort, operator, { context: 'devB' });
+		assert.ifError (result.error);
+		assert.strictEqual (result.varbinds[0].value.toString (), 'ORIGINAL');
+	});
+
+	it ('refuses a set from a read-only user without forwarding it', async function () {
+		assertNoAccess (await set (frontPort, operator, 'CHANGED', { context: 'devB' }));
+		const result = await get (backendPort, fred);
+		assert.ifError (result.error);
+		assert.strictEqual (result.varbinds[0].value.toString (), 'ORIGINAL');
+	});
+
+	it ('forwards a set from a read-write user', async function () {
+		const result = await set (frontPort, fred, 'CHANGED', { context: 'devB' });
+		assert.ifError (result.error);
+		const check = await get (backendPort, fred);
+		assert.ifError (check.error);
+		assert.strictEqual (check.varbinds[0].value.toString (), 'CHANGED');
+	});
+
+	it ('rejects a request from an empty user name', async function () {
+		assertUnknownUserName (await get (frontPort, emptyUser, { context: 'devB' }));
+		assertUnknownUserName (await set (frontPort, emptyUser, 'CHANGED', { context: 'devB' }));
 	});
 });

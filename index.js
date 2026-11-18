@@ -6002,6 +6002,20 @@ Agent.prototype.onProxyRequest = function (socket, message, rinfo) {
 		this.callback (new RequestFailedError ("No proxy found for message received with context " + contextName));
 		return;
 	}
+	// The proxied request is sent with the proxy's own credentials, so the
+	// requesting user's access level must be enforced here before forwarding
+	if ( ! this.authorizer.isAccessAllowed (message.version, message.user.name, message.pdu.type) ) {
+		var responsePdu = message.pdu.getResponsePduForRequest ();
+		responsePdu.varbinds = message.pdu.varbinds.map (varbind => ({
+			oid: varbind.oid,
+			type: ObjectType.Null,
+			value: null
+		}));
+		responsePdu.errorStatus = ErrorStatus.NoAccess;
+		responsePdu.errorIndex = 1;
+		this.sendResponse (socket, rinfo, message, responsePdu);
+		return;
+	}
 	if ( ! proxy.session.msgSecurityParameters ) {
 		// Discovery required - but chaining not implemented from here yet
 		proxy.session.sendV3Discovery (null, null, this.callback, {});
