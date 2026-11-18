@@ -15,6 +15,9 @@ requests](#pull-requests).  Please prefer the issue tracker over
 emailing individual project contributors as your first engagement
 with the project.
 
+Security vulnerabilities are the exception: please report them privately
+as described in [SECURITY.md](SECURITY.md), not in the issue tracker.
+
 ## What to always do
 
 1. Please respect the hundreds of hours developers have spent writing and testing
