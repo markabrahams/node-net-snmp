@@ -1854,6 +1854,13 @@ Message.prototype.hasAuthoritativeEngineID = function () {
 		this.msgSecurityParameters.msgAuthoritativeEngineID != "";
 };
 
+// An SNMPv3 engine ID discovery request (RFC 3414 section 4): a reportable
+// GetRequest that does not yet name the authoritative engine
+Message.prototype.isEngineDiscovery = function () {
+	return this.version == Version3 && !! this.pdu && this.pdu.type == PduType.GetRequest &&
+		! this.hasAuthoritativeEngineID () && !! this.isReportable ();
+};
+
 Message.prototype.createReportResponseMessage = function (engine, context, errorType) {
 	var user = {
 		name: "",
@@ -3329,6 +3336,18 @@ Listener.processIncoming = function (buffer, authorizer, callback) {
 				}
 				callback (new RequestFailedError ("Local user not found and message requires authentication with user " +
 						message.msgSecurityParameters.msgUserName));
+				return;
+			} else if ( ! authorizer.disableAuthorization && ! message.isEngineDiscovery () ) {
+				// RFC 3414 section 2.4: a zero-length userName does not match any
+				// user, and may only be used for snmpEngineID discovery
+				if ( message.isReportable () ) {
+					return {
+						original: message,
+						report: true,
+						errorType: UsmErrorType.UNKNOWN_USER_NAME
+					};
+				}
+				callback (new RequestFailedError ("Local user not found for message with empty user name"));
 				return;
 			} else {
 				message.user = {
@@ -5254,8 +5273,7 @@ Agent.prototype.onMsg = function (socket, buffer, rinfo) {
 	}
 
 	// SNMPv3 discovery
-	if ( message.version == Version3 && message.pdu.type == PduType.GetRequest &&
-			! message.hasAuthoritativeEngineID() && message.isReportable () ) {
+	if ( message.isEngineDiscovery () ) {
 		let reportMessage = message.createReportResponseMessage (this.engine, this.context, UsmErrorType.UNKNOWN_ENGINE_ID);
 		this.listener.send (reportMessage, rinfo, socket);
 		return;
